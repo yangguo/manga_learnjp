@@ -5,18 +5,21 @@ import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, FileImage, Loader2, CheckCircle, AlertCircle, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { SUPPORTED_IMAGE_TYPES, type AnalysisResult } from '@/lib/types'
+import { SUPPORTED_IMAGE_TYPES, type AnalysisResult, type MangaAnalysisResult } from '@/lib/types'
 import { useAIProviderStore } from '@/lib/store'
 
 interface ImageUploaderProps {
   onAnalysisComplete: (result: AnalysisResult) => void
+  onMangaAnalysisComplete: (result: MangaAnalysisResult) => void
+  onError: (errorMessage: string) => void
+  isMangaMode: boolean
 }
 
-export default function ImageUploader({ onAnalysisComplete }: ImageUploaderProps) {
+export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisComplete, onError, isMangaMode }: ImageUploaderProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
-  const { selectedProvider, openaiFormatSettings } = useAIProviderStore()
+  const { selectedProvider, openaiFormatSettings, modelSettings, apiKeySettings } = useAIProviderStore()
 
   const processImage = useCallback(async (file: File) => {
     if (!file) return
@@ -43,6 +46,9 @@ export default function ImageUploader({ onAnalysisComplete }: ImageUploaderProps
             body: JSON.stringify({
               imageBase64,
               provider: selectedProvider,
+              modelSettings,
+              apiKeySettings,
+              mangaMode: isMangaMode,
               ...(selectedProvider === 'openai-format' && { openaiFormatSettings }),
             }),
           })
@@ -54,25 +60,30 @@ export default function ImageUploader({ onAnalysisComplete }: ImageUploaderProps
             throw new Error(errorData.error || 'Failed to analyze image')
           }
 
-          const result: AnalysisResult = await response.json()
+          const result: AnalysisResult | MangaAnalysisResult = await response.json()
           setProgress(100)
 
           // Show success message
           toast.success(`✅ Image analyzed successfully using ${result.provider?.toUpperCase()}!`)
           
-          // Pass result to parent component
-          onAnalysisComplete(result)
+          // Pass result to appropriate parent component handler
+          if (isMangaMode && 'panels' in result) {
+            onMangaAnalysisComplete(result as MangaAnalysisResult)
+          } else {
+            onAnalysisComplete(result as AnalysisResult)
+          }
 
         } catch (error) {
           console.error('Analysis error:', error)
-          toast.error(error instanceof Error ? error.message : 'Failed to analyze image')
+          const errorMessage = error instanceof Error ? error.message : 'Failed to analyze image'
+          onError(errorMessage)
           setIsAnalyzing(false)
           setProgress(0)
         }
       }
 
       reader.onerror = () => {
-        toast.error('Failed to read image file')
+        onError('Failed to read image file')
         setIsAnalyzing(false)
       }
 
@@ -80,11 +91,11 @@ export default function ImageUploader({ onAnalysisComplete }: ImageUploaderProps
 
     } catch (error) {
       console.error('Image processing error:', error)
-      toast.error('Failed to process image')
+      onError('Failed to process image')
       setIsAnalyzing(false)
       setProgress(0)
     }
-  }, [selectedProvider, onAnalysisComplete])
+  }, [selectedProvider, openaiFormatSettings, modelSettings, apiKeySettings, isMangaMode, onAnalysisComplete, onMangaAnalysisComplete, onError])
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -122,11 +133,11 @@ export default function ImageUploader({ onAnalysisComplete }: ImageUploaderProps
   const getStatusText = () => {
     if (isAnalyzing) {
       if (progress < 40) return 'Reading image...'
-      if (progress < 70) return 'Extracting Japanese text...'
-      if (progress < 100) return 'Analyzing with AI...'
+      if (progress < 70) return isMangaMode ? 'Identifying manga panels...' : 'Extracting Japanese text...'
+      if (progress < 100) return isMangaMode ? 'Analyzing panels with AI...' : 'Analyzing with AI...'
     }
     if (progress === 100) return 'Analysis complete!'
-    return 'Upload manga image'
+    return isMangaMode ? 'Upload manga page for panel analysis' : 'Upload manga image'
   }
 
   return (

@@ -18,6 +18,21 @@ export interface OpenAIFormatSettings {
   apiKey?: string
 }
 
+export interface APIKeySettings {
+  openai?: string
+  gemini?: string
+}
+
+export interface ModelSettings {
+  openai: {
+    textModel: string
+    visionModel: string
+  }
+  gemini: {
+    model: string
+  }
+}
+
 export type AIProvider = 'openai' | 'gemini' | 'openai-format'
 
 export interface AnalysisResult {
@@ -60,4 +75,26 @@ export const cleanExtractedText = (text: string): string => {
 export const formatJapaneseText = (text: string): string => {
   // Basic formatting for Japanese text display
   return text.replace(/([。！？])/g, '$1\n').trim()
+}
+
+export interface MangaPanel {
+  panelNumber: number
+  position: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+  extractedText: string
+  translation: string
+  words: WordAnalysis[]
+  grammar: GrammarPattern[]
+  context: string
+}
+
+export interface MangaAnalysisResult {
+  panels: MangaPanel[]
+  overallSummary: string
+  readingOrder: number[]
+  provider?: string
 }

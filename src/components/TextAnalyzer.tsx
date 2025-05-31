@@ -125,7 +125,7 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
             </div>
           </div>
           <div className="p-6">
-            <p className="text-white text-lg leading-relaxed font-japanese">
+            <p className="text-gray-900 text-lg leading-relaxed font-japanese bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
               {analysisResult.extractedText}
             </p>
           </div>
@@ -164,7 +164,7 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
           </div>
         </div>
         <div className="p-6">
-          <p className="text-white leading-relaxed">{analysisResult.translation}</p>
+          <p className="text-gray-900 leading-relaxed bg-white p-4 rounded-lg border border-gray-200 shadow-sm">{analysisResult.translation}</p>
         </div>
       </motion.div>
 
@@ -188,7 +188,7 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
             </div>
           </div>
           <div className="p-6">
-            <p className="text-gray-300 leading-relaxed">{analysisResult.summary}</p>
+            <p className="text-gray-900 leading-relaxed bg-white p-4 rounded-lg border border-gray-200 shadow-sm">{analysisResult.summary}</p>
           </div>
         </motion.div>
       )}
@@ -225,31 +225,29 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
                   initial={{ opacity: 0, x: -20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: 0.1 * index }}
-                  className="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-gray-700"
-                >
+                  className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-300 shadow-sm">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">
-                      <span className="text-lg font-semibold text-white font-japanese">
+                      <span className="text-lg font-semibold text-gray-900 font-japanese">
                         {word.word}
                       </span>
-                      <span className="text-gray-400 font-japanese">
+                      <span className="text-gray-600 font-japanese">
                         ({word.reading})
                       </span>
                       <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(word.difficulty)}`}>
                         {getDifficultyIcon(word.difficulty)} {word.difficulty}
                       </span>
                     </div>
-                    <p className="text-gray-300 mb-1">{word.meaning}</p>
-                    <p className="text-gray-500 text-sm">{word.partOfSpeech}</p>
+                    <p className="text-gray-800 mb-1">{word.meaning}</p>
+                    <p className="text-gray-600 text-sm">{word.partOfSpeech}</p>
                   </div>
                   <button
                     onClick={() => copyToClipboard(`${word.word} (${word.reading}) - ${word.meaning}`, `word-${index}`)}
-                    className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                  >
+                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                     {copiedText === `word-${index}` ? (
-                      <Check className="w-4 h-4 text-green-400" />
+                      <Check className="w-4 h-4 text-green-500" />
                     ) : (
-                      <Copy className="w-4 h-4 text-gray-400" />
+                      <Copy className="w-4 h-4 text-gray-500" />
                     )}
                   </button>
                 </motion.div>
@@ -291,29 +289,27 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 * index }}
-                  className="p-4 bg-white/5 rounded-xl border border-gray-700"
-                >
+                  className="p-4 bg-white rounded-xl border border-gray-300 shadow-sm">
                   <div className="flex items-start justify-between mb-3">
-                    <h4 className="text-lg font-semibold text-white font-japanese">
+                    <h4 className="text-lg font-semibold text-gray-900 font-japanese">
                       {grammar.pattern}
                     </h4>
                     <button
                       onClick={() => copyToClipboard(`${grammar.pattern}\n\n${grammar.explanation}\n\nExample: ${grammar.example}`, `grammar-${index}`)}
-                      className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
-                    >
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
                       {copiedText === `grammar-${index}` ? (
-                        <Check className="w-4 h-4 text-green-400" />
+                        <Check className="w-4 h-4 text-green-500" />
                       ) : (
-                        <Copy className="w-4 h-4 text-gray-400" />
+                        <Copy className="w-4 h-4 text-gray-500" />
                       )}
                     </button>
                   </div>
-                  <p className="text-gray-300 mb-3 leading-relaxed">
+                  <p className="text-gray-800 mb-3 leading-relaxed">
                     {grammar.explanation}
                   </p>
-                  <div className="p-3 bg-gray-800/50 rounded-lg border-l-4 border-orange-500">
-                    <p className="text-gray-400 text-sm mb-1">Example:</p>
-                    <p className="text-white font-japanese">{grammar.example}</p>
+                  <div className="p-3 bg-orange-50 rounded-lg border-l-4 border-orange-500">
+                    <p className="text-gray-600 text-sm mb-1">Example:</p>
+                    <p className="text-gray-900 font-japanese">{grammar.example}</p>
                   </div>
                 </motion.div>
               ))}
