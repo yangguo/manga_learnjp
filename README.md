@@ -106,17 +106,19 @@ You can use any OpenAI-compatible API endpoint:
 ## Usage
 
 1. **Upload Image**: Drag and drop a manga page or click to select from your computer
-2. **OCR Processing**: The app will automatically extract Japanese text from the image
+2. **AI Vision Analysis**: The app will automatically extract Japanese text from the image using advanced AI vision models
 3. **AI Analysis**: Get detailed explanations of vocabulary and grammar patterns
 4. **Learn**: Study the breakdown of words, meanings, and sentence structures
 
 ## Features in Detail
 
-### OCR Text Extraction
+### AI Vision Text Extraction
 - Supports multiple image formats (PNG, JPG, WebP, BMP)
-- Uses Tesseract.js with Japanese language models
+- Uses advanced LLM vision models (GPT-4 Vision, Gemini Vision)
+- Single-step text extraction and analysis for better accuracy
 - Real-time progress feedback
 - Automatic text cleaning and formatting
+- Context-aware Japanese text recognition optimized for manga
 
 ### AI Analysis
 - Vocabulary breakdown with hiragana readings
@@ -185,8 +187,9 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- Tesseract.js for OCR functionality
-- OpenAI for GPT-4 API
+- OpenAI for GPT-4 Vision API
+- Google for Gemini Vision API
+- The open-source AI community for OpenAI-compatible APIs
 - The Japanese language learning community
 - Manga creators and publishers
 
