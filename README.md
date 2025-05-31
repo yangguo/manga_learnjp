@@ -85,6 +85,22 @@ npm run dev
 
 6. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+## Model Configuration
+
+You can configure specific models for each AI provider in the Settings panel:
+
+### OpenAI Models
+- **Text Analysis**: Choose between GPT-4 Turbo, GPT-4, or GPT-3.5 Turbo
+- **Vision Analysis**: Select GPT-4 Vision, GPT-4o, or GPT-4o Mini
+
+### Gemini Models  
+- **Unified Model**: Choose Gemini 1.5 Pro (recommended), Gemini 1.5 Flash, or Gemini Pro Vision
+
+### Model Recommendations
+- **Best Accuracy**: OpenAI GPT-4 Vision + GPT-4 Turbo
+- **Best Speed**: Gemini 1.5 Flash or GPT-4o Mini  
+- **Best Value**: GPT-3.5 Turbo + GPT-4o Mini
+
 ## Using Custom AI APIs (Ollama, LM Studio, etc.)
 
 You can use any OpenAI-compatible API endpoint:

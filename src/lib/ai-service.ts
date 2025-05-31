@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import type { AIProvider, OpenAIFormatSettings } from './types'
+import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult } from './types'
 
 export interface AnalysisRequest {
   text: string
@@ -69,11 +69,82 @@ Focus on:
 
 Make sure the response is valid JSON format.`
 
+const MANGA_PANEL_ANALYSIS_PROMPT = () => `
+You are a Japanese language learning assistant specialized in manga analysis. Analyze this manga image by identifying individual panels and extracting text from each panel separately.
+
+IMPORTANT: Manga panels are read from RIGHT to LEFT, TOP to BOTTOM. Please identify panels in the correct reading order.
+
+Please provide a JSON response with the following structure:
+{
+  "panels": [
+    {
+      "panelNumber": 1,
+      "position": {
+        "x": 0,
+        "y": 0,
+        "width": 100,
+        "height": 100
+      },
+      "extractedText": "Japanese text from this specific panel",
+      "translation": "English translation of this panel's text",
+      "words": [
+        {
+          "word": "Japanese word",
+          "reading": "hiragana/katakana reading",
+          "meaning": "English meaning",
+          "partOfSpeech": "noun/verb/adjective/etc",
+          "difficulty": "beginner/intermediate/advanced"
+        }
+      ],
+      "grammar": [
+        {
+          "pattern": "Grammar pattern found in this panel",
+          "explanation": "Detailed explanation of the grammar pattern",
+          "example": "Example sentence using this pattern"
+        }
+      ],
+      "context": "What's happening in this specific panel"
+    }
+  ],
+  "overallSummary": "Overall summary of the entire manga page/scene",
+  "readingOrder": [1, 2, 3, 4]
+}
+
+Focus on:
+1. Identifying individual manga panels (speech bubbles, panel borders, distinct scenes)
+2. Reading order: RIGHT to LEFT, TOP to BOTTOM (traditional Japanese manga layout)
+3. Extracting text from each panel separately
+4. Analyzing vocabulary and grammar for each panel individually
+5. Providing context for each panel's content
+6. Including sound effects (onomatopoeia) and their meanings
+7. Recognizing different types of text (dialogue, thoughts, narration, sound effects)
+8. Difficulty levels: beginner (JLPT N5-N4), intermediate (N3-N2), advanced (N1+)
+
+Make sure the response is valid JSON format.`
+
+// Helper function to clean JSON responses that might be wrapped in markdown
+function cleanJsonResponse(content: string): string {
+  // Remove markdown code block wrappers if present
+  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/
+  const match = content.match(codeBlockRegex)
+  
+  if (match) {
+    return match[1].trim()
+  }
+  
+  // If no code blocks found, return original content trimmed
+  return content.trim()
+}
+
 export class OpenAIService {
   private apiKey: string
+  private textModel: string
+  private visionModel: string
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, textModel = 'gpt-4-turbo-preview', visionModel = 'gpt-4-vision-preview') {
     this.apiKey = apiKey
+    this.textModel = textModel
+    this.visionModel = visionModel
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
@@ -84,7 +155,7 @@ export class OpenAIService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4-turbo-preview',
+        model: this.textModel,
         messages: [
           {
             role: 'system',
@@ -111,7 +182,7 @@ export class OpenAIService {
       throw new Error('No content received from OpenAI')
     }
 
-    const analysisResult = JSON.parse(content)
+    const analysisResult = JSON.parse(cleanJsonResponse(content))
     return {
       ...analysisResult,
       provider: 'openai' as AIProvider
@@ -126,7 +197,7 @@ export class OpenAIService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'gpt-4-vision-preview',
+        model: this.visionModel,
         messages: [
           {
             role: 'system',
@@ -164,7 +235,60 @@ export class OpenAIService {
       throw new Error('No content received from OpenAI')
     }
 
-    const analysisResult = JSON.parse(content)
+    const analysisResult = JSON.parse(cleanJsonResponse(content))
+    return {
+      ...analysisResult,
+      provider: 'openai' as AIProvider
+    }
+  }
+
+  async analyzeMangaImage(imageBase64: string): Promise<MangaAnalysisResult> {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.visionModel,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful Japanese language learning assistant specialized in manga analysis. You can identify manga panels and extract text from each panel separately following traditional right-to-left, top-to-bottom reading order. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: MANGA_PANEL_ANALYSIS_PROMPT()
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/jpeg;base64,${imageBase64}`
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const content = data.choices[0]?.message?.content
+
+    if (!content) {
+      throw new Error('No content received from OpenAI')
+    }
+
+    const analysisResult = JSON.parse(cleanJsonResponse(content))
     return {
       ...analysisResult,
       provider: 'openai' as AIProvider
@@ -176,9 +300,9 @@ export class GeminiService {
   private genAI: GoogleGenerativeAI
   private model: any
 
-  constructor(apiKey: string) {
+  constructor(apiKey: string, modelName = 'gemini-1.5-pro') {
     this.genAI = new GoogleGenerativeAI(apiKey)
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-pro' })
+    this.model = this.genAI.getGenerativeModel({ model: modelName })
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
@@ -197,13 +321,7 @@ export class GeminiService {
       throw new Error('No content received from Gemini')
     }
 
-    // Clean up the response to extract JSON
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('Invalid JSON response from Gemini')
-    }
-
-    const analysisResult = JSON.parse(jsonMatch[0])
+    const analysisResult = JSON.parse(cleanJsonResponse(content))
     return {
       ...analysisResult,
       provider: 'gemini' as AIProvider
@@ -233,13 +351,37 @@ export class GeminiService {
       throw new Error('No content received from Gemini')
     }
 
-    // Clean up the response to extract JSON
-    const jsonMatch = content.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error('Invalid JSON response from Gemini')
+    const analysisResult = JSON.parse(cleanJsonResponse(content))
+    return {
+      ...analysisResult,
+      provider: 'gemini' as AIProvider
+    }
+  }
+
+  async analyzeMangaImage(imageBase64: string): Promise<MangaAnalysisResult> {
+    const prompt = MANGA_PANEL_ANALYSIS_PROMPT()
+    
+    // Convert base64 to format Gemini expects
+    const imagePart = {
+      inlineData: {
+        data: imageBase64,
+        mimeType: 'image/jpeg'
+      }
     }
 
-    const analysisResult = JSON.parse(jsonMatch[0])
+    const result = await this.model.generateContent([
+      prompt,
+      imagePart
+    ])
+
+    const response = await result.response
+    const content = response.text()
+
+    if (!content) {
+      throw new Error('No content received from Gemini')
+    }
+
+    const analysisResult = JSON.parse(cleanJsonResponse(content))
     return {
       ...analysisResult,
       provider: 'gemini' as AIProvider
@@ -284,7 +426,14 @@ export class OpenAIFormatService {
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI-format API error: ${response.status} - ${await response.text()}`)
+      const errorText = await response.text()
+      console.error(`OpenAI-format API error: ${response.status}`, { 
+        endpoint: `${this.settings.endpoint}/chat/completions`,
+        model: this.settings.model,
+        hasApiKey: !!this.settings.apiKey,
+        error: errorText 
+      })
+      throw new Error(`OpenAI-format API error: ${response.status} - ${errorText}`)
     }
 
     const data = await response.json()
@@ -294,14 +443,10 @@ export class OpenAIFormatService {
       throw new Error('No content received from OpenAI-format API')
     }
 
-    try {
-      const analysisResult = JSON.parse(content)
-      return {
-        ...analysisResult,
-        provider: 'openai-format' as AIProvider
-      }
-    } catch (error) {
-      throw new Error(`Failed to parse JSON response: ${content}`)
+    const analysisResult = JSON.parse(cleanJsonResponse(content))
+    return {
+      ...analysisResult,
+      provider: 'openai-format' as AIProvider
     }
   }
 
@@ -346,7 +491,14 @@ export class OpenAIFormatService {
     })
 
     if (!response.ok) {
-      throw new Error(`OpenAI-format API error: ${response.status} - ${await response.text()}`)
+      const errorText = await response.text()
+      console.error(`OpenAI-format API error: ${response.status}`, { 
+        endpoint: `${this.settings.endpoint}/chat/completions`,
+        model: this.settings.model,
+        hasApiKey: !!this.settings.apiKey,
+        error: errorText 
+      })
+      throw new Error(`OpenAI-format API error: ${response.status} - ${errorText}`)
     }
 
     const data = await response.json()
@@ -356,14 +508,75 @@ export class OpenAIFormatService {
       throw new Error('No content received from OpenAI-format API')
     }
 
-    try {
-      const analysisResult = JSON.parse(content)
-      return {
-        ...analysisResult,
-        provider: 'openai-format' as AIProvider
-      }
-    } catch (error) {
-      throw new Error(`Failed to parse JSON response: ${content}`)
+    const analysisResult = JSON.parse(cleanJsonResponse(content))
+    return {
+      ...analysisResult,
+      provider: 'openai-format' as AIProvider
+    }
+  }
+
+  async analyzeMangaImage(imageBase64: string): Promise<MangaAnalysisResult> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    
+    if (this.settings.apiKey) {
+      headers['Authorization'] = `Bearer ${this.settings.apiKey}`
+    }
+
+    const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: this.settings.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful Japanese language learning assistant specialized in manga analysis. You can identify manga panels and extract text from each panel separately following traditional right-to-left, top-to-bottom reading order. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: MANGA_PANEL_ANALYSIS_PROMPT()
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/jpeg;base64,${imageBase64}`
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`OpenAI-format API error: ${response.status}`, { 
+        endpoint: `${this.settings.endpoint}/chat/completions`,
+        model: this.settings.model,
+        hasApiKey: !!this.settings.apiKey,
+        error: errorText 
+      })
+      throw new Error(`OpenAI-format API error: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    const content = data.choices[0]?.message?.content
+
+    if (!content) {
+      throw new Error('No content received from OpenAI-format API')
+    }
+
+    const analysisResult = JSON.parse(cleanJsonResponse(content))
+    return {
+      ...analysisResult,
+      provider: 'openai-format' as AIProvider
     }
   }
 }
@@ -373,13 +586,28 @@ export class AIAnalysisService {
   private geminiService?: GeminiService
   private openaiFormatService?: OpenAIFormatService
 
-  constructor(openaiKey?: string, geminiKey?: string, openaiFormatSettings?: OpenAIFormatSettings) {
-    if (openaiKey) {
+  constructor(
+    openaiKey?: string, 
+    geminiKey?: string, 
+    openaiFormatSettings?: OpenAIFormatSettings,
+    modelSettings?: ModelSettings
+  ) {
+    if (openaiKey && modelSettings?.openai) {
+      this.openaiService = new OpenAIService(
+        openaiKey, 
+        modelSettings.openai.textModel, 
+        modelSettings.openai.visionModel
+      )
+    } else if (openaiKey) {
       this.openaiService = new OpenAIService(openaiKey)
     }
-    if (geminiKey) {
+    
+    if (geminiKey && modelSettings?.gemini) {
+      this.geminiService = new GeminiService(geminiKey, modelSettings.gemini.model)
+    } else if (geminiKey) {
       this.geminiService = new GeminiService(geminiKey)
     }
+    
     if (openaiFormatSettings) {
       this.openaiFormatService = new OpenAIFormatService(openaiFormatSettings)
     }
@@ -404,6 +632,18 @@ export class AIAnalysisService {
       return await this.geminiService.analyzeImage(imageBase64)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
       return await this.openaiFormatService.analyzeImage(imageBase64)
+    } else {
+      throw new Error(`${provider} service not available or not configured`)
+    }
+  }
+
+  async analyzeMangaImage(imageBase64: string, provider: AIProvider = 'openai'): Promise<MangaAnalysisResult> {
+    if (provider === 'openai' && this.openaiService) {
+      return await this.openaiService.analyzeMangaImage(imageBase64)
+    } else if (provider === 'gemini' && this.geminiService) {
+      return await this.geminiService.analyzeMangaImage(imageBase64)
+    } else if (provider === 'openai-format' && this.openaiFormatService) {
+      return await this.openaiFormatService.analyzeMangaImage(imageBase64)
     } else {
       throw new Error(`${provider} service not available or not configured`)
     }

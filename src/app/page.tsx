@@ -3,16 +3,46 @@
 import { useState } from 'react'
 import ImageUploader from '@/components/ImageUploader'
 import TextAnalyzer from '@/components/TextAnalyzer'
+import MangaAnalyzer from '@/components/MangaAnalyzer'
 import Header from '@/components/Header'
 import DemoSection from '@/components/DemoSection'
-import { motion } from 'framer-motion'
-import { AnalysisResult } from '@/lib/types'
+import { motion, AnimatePresence } from 'framer-motion'
+import { AnalysisResult, MangaAnalysisResult } from '@/lib/types'
+import { AlertCircle, X, BookOpen, FileText } from 'lucide-react'
 
 export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
+  const [mangaAnalysisResult, setMangaAnalysisResult] = useState<MangaAnalysisResult | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [isMangaMode, setIsMangaMode] = useState(true)
 
   const handleAnalysisComplete = (result: AnalysisResult) => {
     setAnalysisResult(result)
+    setMangaAnalysisResult(null)
+    setError(null) // Clear any previous errors
+  }
+
+  const handleMangaAnalysisComplete = (result: MangaAnalysisResult) => {
+    setMangaAnalysisResult(result)
+    setAnalysisResult(null)
+    setError(null) // Clear any previous errors
+  }
+
+  const handleError = (errorMessage: string) => {
+    setError(errorMessage)
+    setAnalysisResult(null) // Clear any previous results
+    setMangaAnalysisResult(null)
+  }
+
+  const clearError = () => {
+    setError(null)
+  }
+
+  const toggleMode = () => {
+    setIsMangaMode(!isMangaMode)
+    setAnalysisResult(null)
+    setMangaAnalysisResult(null)
+    setError(null)
   }
 
   return (
@@ -29,18 +59,91 @@ export default function Home() {
           <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">
             Learn Japanese Through Manga
           </h1>
-          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto">
+          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-8">
             Upload manga pages and let AI extract and analyze Japanese text with detailed explanations
+          </p>
+          
+          {/* Mode Toggle */}
+          <div className="flex items-center justify-center gap-4">
+            <button
+              onClick={toggleMode}
+              className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all ${
+                isMangaMode
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <BookOpen size={20} />
+              Panel Analysis
+            </button>
+            <button
+              onClick={toggleMode}
+              className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all ${
+                !isMangaMode
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <FileText size={20} />
+              Simple Analysis
+            </button>
+          </div>
+          
+          <p className="text-sm text-gray-500 mt-4">
+            {isMangaMode
+              ? 'Extract text from individual manga panels in proper reading order'
+              : 'Extract and analyze all text from the entire image at once'
+            }
           </p>
         </motion.div>
 
         <div className="space-y-8 max-w-7xl mx-auto">
+          {/* Error Display */}
+          <AnimatePresence>
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -20, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, y: -20, height: 0 }}
+                transition={{ duration: 0.3 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-red-50 border border-red-200 rounded-2xl p-4 shadow-lg backdrop-blur-md">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <AlertCircle className="w-5 h-5 text-red-500 mt-0.5" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-medium text-red-800 mb-1">
+                        Analysis Failed
+                      </h3>
+                      <div className="text-sm text-red-700 whitespace-pre-line">
+                        {error}
+                      </div>
+                    </div>
+                    <button
+                      onClick={clearError}
+                      className="flex-shrink-0 p-1 hover:bg-red-100 rounded-full transition-colors"
+                    >
+                      <X className="w-4 h-4 text-red-500" />
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <ImageUploader onAnalysisComplete={handleAnalysisComplete} />
+            <ImageUploader 
+              onAnalysisComplete={handleAnalysisComplete}
+              onMangaAnalysisComplete={handleMangaAnalysisComplete}
+              onError={handleError}
+              isMangaMode={isMangaMode}
+            />
           </motion.div>
 
           <motion.div
@@ -48,7 +151,11 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
-            <TextAnalyzer analysisResult={analysisResult} />
+            {mangaAnalysisResult ? (
+              <MangaAnalyzer analysisResult={mangaAnalysisResult} />
+            ) : (
+              <TextAnalyzer analysisResult={analysisResult} />
+            )}
           </motion.div>
         </div>
 
