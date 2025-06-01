@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult } from './types'
+import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel } from './types'
+import { PanelSegmentationService } from './panel-segmentation-service'
 
 export interface AnalysisRequest {
   text: string
@@ -585,27 +586,30 @@ export class AIAnalysisService {
   private openaiService?: OpenAIService
   private geminiService?: GeminiService
   private openaiFormatService?: OpenAIFormatService
+  private panelSegmentationService: PanelSegmentationService
 
   constructor(
-    openaiKey?: string, 
-    geminiKey?: string, 
+    openaiApiKey?: string, 
+    geminiApiKey?: string, 
     openaiFormatSettings?: OpenAIFormatSettings,
     modelSettings?: ModelSettings
   ) {
-    if (openaiKey && modelSettings?.openai) {
+    this.panelSegmentationService = new PanelSegmentationService()
+    
+    if (openaiApiKey && modelSettings?.openai) {
       this.openaiService = new OpenAIService(
-        openaiKey, 
+        openaiApiKey, 
         modelSettings.openai.textModel, 
         modelSettings.openai.visionModel
       )
-    } else if (openaiKey) {
-      this.openaiService = new OpenAIService(openaiKey)
+    } else if (openaiApiKey) {
+      this.openaiService = new OpenAIService(openaiApiKey)
     }
     
-    if (geminiKey && modelSettings?.gemini) {
-      this.geminiService = new GeminiService(geminiKey, modelSettings.gemini.model)
-    } else if (geminiKey) {
-      this.geminiService = new GeminiService(geminiKey)
+    if (geminiApiKey && modelSettings?.gemini) {
+      this.geminiService = new GeminiService(geminiApiKey, modelSettings.gemini.model)
+    } else if (geminiApiKey) {
+      this.geminiService = new GeminiService(geminiApiKey)
     }
     
     if (openaiFormatSettings) {
@@ -638,6 +642,74 @@ export class AIAnalysisService {
   }
 
   async analyzeMangaImage(imageBase64: string, provider: AIProvider = 'openai'): Promise<MangaAnalysisResult> {
+    try {
+      // First, segment the panels using the ComicPanelSegmentation algorithm
+      const segmentationResult = await this.panelSegmentationService.segmentPanels(imageBase64)
+      
+      if (segmentationResult.panels.length === 0) {
+        // Fallback to original analysis if segmentation fails
+        return await this.analyzeMangaImageDirect(imageBase64, provider)
+      }
+
+      // Analyze each panel individually
+      const panelAnalyses = await Promise.allSettled(
+        segmentationResult.panels.map(async (segmentedPanel: SegmentedPanel, index: number) => {
+          try {
+            const panelAnalysis = await this.analyzeImage(segmentedPanel.imageData, provider)
+            
+            return {
+              panelNumber: index + 1,
+              position: segmentedPanel.boundingBox,
+              extractedText: panelAnalysis.extractedText,
+              translation: panelAnalysis.translation,
+              words: panelAnalysis.words,
+              grammar: panelAnalysis.grammar,
+              context: panelAnalysis.summary
+            } as MangaPanel
+          } catch (error) {
+            console.error(`Error analyzing panel ${index + 1}:`, error)
+            return {
+              panelNumber: index + 1,
+              position: segmentedPanel.boundingBox,
+              extractedText: '',
+              translation: 'Analysis failed for this panel',
+              words: [],
+              grammar: [],
+              context: 'Unable to analyze this panel'
+            } as MangaPanel
+          }
+        })
+      )
+
+      // Extract successful analyses
+      const panels: MangaPanel[] = panelAnalyses
+        .filter((result): result is PromiseFulfilledResult<MangaPanel> => result.status === 'fulfilled')
+        .map(result => result.value)
+
+      // Generate overall summary based on panel analyses
+      const allText = panels.map(p => p.extractedText).filter(text => text.length > 0).join(' ')
+      const allTranslations = panels.map(p => p.translation).filter(t => t.length > 0).join(' ')
+      
+      let overallSummary = 'This manga page contains ' + panels.length + ' panels.'
+      if (allText.length > 0) {
+        overallSummary += ` The story progresses through dialogue and scenes showing: ${allTranslations.substring(0, 200)}${allTranslations.length > 200 ? '...' : ''}`
+      }
+
+      return {
+        panels,
+        overallSummary,
+        readingOrder: segmentationResult.readingOrder,
+        provider
+      }
+
+    } catch (error) {
+      console.error('Panel segmentation failed, falling back to direct analysis:', error)
+      // Fallback to original analysis method
+      return await this.analyzeMangaImageDirect(imageBase64, provider)
+    }
+  }
+
+  private async analyzeMangaImageDirect(imageBase64: string, provider: AIProvider = 'openai'): Promise<MangaAnalysisResult> {
     if (provider === 'openai' && this.openaiService) {
       return await this.openaiService.analyzeMangaImage(imageBase64)
     } else if (provider === 'gemini' && this.geminiService) {

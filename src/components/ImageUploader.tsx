@@ -19,6 +19,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
+  const [segmentationStatus, setSegmentationStatus] = useState<'idle' | 'segmenting' | 'complete' | 'error'>('idle')
   const { selectedProvider, openaiFormatSettings, modelSettings, apiKeySettings } = useAIProviderStore()
 
   const processImage = useCallback(async (file: File) => {
@@ -37,6 +38,10 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
 
         try {
           // Send image to AI for analysis
+          if (isMangaMode) {
+            setSegmentationStatus('segmenting')
+            setProgress(30)
+          }
           setProgress(40)
           const response = await fetch('/api/analyze', {
             method: 'POST',
@@ -48,10 +53,14 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
               provider: selectedProvider,
               modelSettings,
               apiKeySettings,
-              mangaMode: isMangaMode,
-              ...(selectedProvider === 'openai-format' && { openaiFormatSettings }),
+              openaiFormatSettings,
+              mangaMode: isMangaMode
             }),
           })
+
+          if (isMangaMode) {
+            setSegmentationStatus('complete')
+          }
 
           setProgress(70)
 
@@ -79,6 +88,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
           onError(errorMessage)
           setIsAnalyzing(false)
           setProgress(0)
+          setSegmentationStatus('error')
         }
       }
 
@@ -94,6 +104,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
       onError('Failed to process image')
       setIsAnalyzing(false)
       setProgress(0)
+      setSegmentationStatus('error')
     }
   }, [selectedProvider, openaiFormatSettings, modelSettings, apiKeySettings, isMangaMode, onAnalysisComplete, onMangaAnalysisComplete, onError])
 
@@ -118,6 +129,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
     setUploadedImage(null)
     setIsAnalyzing(false)
     setProgress(0)
+    setSegmentationStatus('idle')
   }
 
   const getStatusIcon = () => {
@@ -133,7 +145,14 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
   const getStatusText = () => {
     if (isAnalyzing) {
       if (progress < 40) return 'Reading image...'
-      if (progress < 70) return isMangaMode ? 'Identifying manga panels...' : 'Extracting Japanese text...'
+      if (progress < 70) {
+        if (isMangaMode) {
+          if (segmentationStatus === 'segmenting') return 'Segmenting manga panels...'
+          if (segmentationStatus === 'complete') return 'Analyzing panels with AI...'
+          return 'Identifying manga panels...'
+        }
+        return 'Extracting Japanese text...'
+      }
       if (progress < 100) return isMangaMode ? 'Analyzing panels with AI...' : 'Analyzing with AI...'
     }
     if (progress === 100) return 'Analysis complete!'

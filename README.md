@@ -5,8 +5,10 @@ A modern, beautiful web application for learning Japanese through manga using AI
 ## Features
 
 🎌 **Upload Manga Images**: Drag & drop or select manga pages  
+📖 **Automatic Panel Segmentation**: Advanced computer vision to detect and segment manga panels  
+🔄 **Reading Order Detection**: Automatically orders panels following traditional manga reading sequence (right-to-left, top-to-bottom)  
 🤖 **AI Vision OCR**: Extract Japanese text using advanced LLM vision models (GPT-4 Vision, Gemini Vision)  
-🔍 **Integrated Analysis**: Single-step text extraction and analysis for better accuracy  
+🔍 **Panel-by-Panel Analysis**: Individual analysis of each segmented panel for better accuracy  
 📚 **Vocabulary Breakdown**: Learn new words with readings, meanings, and difficulty levels  
 📖 **Grammar Patterns**: Understand sentence structures and patterns  
 🎨 **Beautiful UI**: Modern, responsive design with smooth animations  
@@ -152,6 +154,35 @@ You can use any OpenAI-compatible API endpoint:
 - Glass morphism effects
 - Intuitive drag-and-drop interface
 - Copy-to-clipboard functionality
+
+## Panel Segmentation Technology
+
+This application uses an advanced comic panel segmentation algorithm based on classical computer vision techniques:
+
+- **Canny Edge Detection**: Identifies panel boundaries
+- **Probabilistic Hough Transform**: Detects straight lines for panel borders  
+- **Intelligent Line Merging**: Combines related line segments
+- **Reading Order Algorithm**: Automatically orders panels for manga reading sequence
+- **Bounding Box Generation**: Precise panel extraction coordinates
+
+The segmentation algorithm is optimized for digital manga and comic formats, providing fast and accurate panel detection without requiring heavy machine learning models.
+
+### Setup Panel Segmentation
+
+1. **Install Python Dependencies**:
+   ```bash
+   ./setup_panel_segmentation.sh
+   ```
+   
+   Or manually:
+   ```bash
+   pip3 install -r requirements.txt
+   ```
+
+2. **Verify Installation**:
+   ```bash
+   python3 -c "import numpy, cv2, PIL, skimage; print('OK')"
+   ```
 
 ## API Endpoints
 

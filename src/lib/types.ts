@@ -98,3 +98,27 @@ export interface MangaAnalysisResult {
   readingOrder: number[]
   provider?: string
 }
+
+export interface PanelBoundingBox {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface SegmentedPanel {
+  id: string
+  boundingBox: PanelBoundingBox
+  imageData: string // base64 encoded panel image
+  readingOrderIndex: number
+}
+
+export interface PanelSegmentationResult {
+  panels: SegmentedPanel[]
+  totalPanels: number
+  originalImage: {
+    width: number
+    height: number
+  }
+  readingOrder: number[]
+}
