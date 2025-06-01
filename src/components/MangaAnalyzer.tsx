@@ -10,6 +10,7 @@ interface MangaAnalyzerProps {
 
 export default function MangaAnalyzer({ analysisResult }: MangaAnalyzerProps) {
   const [expandedPanels, setExpandedPanels] = useState<Set<number>>(new Set([1]))
+  const [showOriginalLayout, setShowOriginalLayout] = useState(true)
 
   const togglePanel = (panelNumber: number) => {
     const newExpanded = new Set(expandedPanels)
@@ -65,38 +66,81 @@ export default function MangaAnalyzer({ analysisResult }: MangaAnalyzerProps) {
             <strong>Reading Order:</strong> {analysisResult.readingOrder.join(' → ')} 
             <span className="text-blue-600 ml-2">(Right to Left, Top to Bottom)</span>
           </p>
+          <p className="text-xs text-blue-600 mt-1">
+            Panels have been automatically segmented and ordered using computer vision
+          </p>
+        </div>
+
+        {/* Panel Layout Toggle */}
+        <div className="mt-4 flex items-center gap-3">
+          <span className="text-sm font-medium text-gray-700">View Mode:</span>
+          <button
+            onClick={() => setShowOriginalLayout(!showOriginalLayout)}
+            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+              showOriginalLayout 
+                ? 'bg-blue-600 text-white' 
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+          >
+            {showOriginalLayout ? 'Reading Sequence' : 'Original Layout'}
+          </button>
         </div>
       </div>
 
       {/* Panel Analysis */}
       <div className="space-y-4">
-        <h2 className="text-xl font-semibold text-gray-900">Panel-by-Panel Analysis</h2>
+        <h2 className="text-xl font-semibold text-gray-900">
+          Panel-by-Panel Analysis ({showOriginalLayout ? 'Reading Sequence' : 'Original Layout'})
+        </h2>
         
-        {sortedPanels.map((panel) => (
-          <div key={panel.panelNumber} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
-            {/* Panel Header */}
-            <button
-              onClick={() => togglePanel(panel.panelNumber)}
-              className="w-full px-6 py-4 text-left bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
-            >
-              <div className="flex items-center gap-3">
-                <span className="bg-blue-600 text-white text-sm font-medium px-3 py-1 rounded-full">
-                  Panel {panel.panelNumber}
-                </span>
-                <h3 className="font-medium text-gray-900">
-                  {panel.extractedText || 'No text detected'}
-                </h3>
-              </div>
-              {expandedPanels.has(panel.panelNumber) ? (
-                <ChevronDown size={20} className="text-gray-400" />
-              ) : (
-                <ChevronRight size={20} className="text-gray-400" />
-              )}
-            </button>
+        {sortedPanels.map((panel, sequenceIndex) => {
+          const readingOrderPosition = analysisResult.readingOrder.indexOf(panel.panelNumber) + 1
+          
+          return (
+            <div key={panel.panelNumber} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+              {/* Panel Header */}
+              <button
+                onClick={() => togglePanel(panel.panelNumber)}
+                className="w-full px-6 py-4 text-left bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="bg-blue-600 text-white text-sm font-medium px-3 py-1 rounded-full">
+                      Panel {panel.panelNumber}
+                    </span>
+                    <span className="bg-green-600 text-white text-xs font-medium px-2 py-1 rounded-full">
+                      #{readingOrderPosition}
+                    </span>
+                  </div>
+                  <h3 className="font-medium text-gray-900">
+                    {panel.extractedText || 'No text detected'}
+                  </h3>
+                  {panel.position && (
+                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      {panel.position.width}×{panel.position.height}px
+                    </span>
+                  )}
+                </div>
+                {expandedPanels.has(panel.panelNumber) ? (
+                  <ChevronDown size={20} className="text-gray-400" />
+                ) : (
+                  <ChevronRight size={20} className="text-gray-400" />
+                )}
+              </button>
 
             {/* Panel Content */}
             {expandedPanels.has(panel.panelNumber) && (
               <div className="p-6 space-y-6">
+                {/* Panel Position Info */}
+                {panel.position && (
+                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
+                    <p className="text-sm text-purple-800">
+                      <strong>Panel Position:</strong> ({panel.position.x}, {panel.position.y}) - 
+                      {panel.position.width}×{panel.position.height}px
+                    </p>
+                  </div>
+                )}
+
                 {/* Context */}
                 {panel.context && (
                   <div>
@@ -227,7 +271,7 @@ export default function MangaAnalyzer({ analysisResult }: MangaAnalyzerProps) {
               </div>
             )}
           </div>
-        ))}
+        )})}
       </div>
     </div>
   )
