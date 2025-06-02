@@ -643,10 +643,18 @@ export class AIAnalysisService {
 
   async analyzeMangaImage(imageBase64: string, provider: AIProvider = 'openai'): Promise<MangaAnalysisResult> {
     try {
+      console.log('🔍 Starting panel segmentation...')
       // First, segment the panels using the ComicPanelSegmentation algorithm
       const segmentationResult = await this.panelSegmentationService.segmentPanels(imageBase64)
       
+      console.log('📊 Segmentation result:', {
+        panelCount: segmentationResult.panels.length,
+        readingOrder: segmentationResult.readingOrder,
+        hasImageData: segmentationResult.panels.map(p => !!p.imageData)
+      })
+      
       if (segmentationResult.panels.length === 0) {
+        console.log('⚠️ No panels found, falling back to direct analysis')
         // Fallback to original analysis if segmentation fails
         return await this.analyzeMangaImageDirect(imageBase64, provider)
       }
@@ -660,6 +668,7 @@ export class AIAnalysisService {
             return {
               panelNumber: index + 1,
               position: segmentedPanel.boundingBox,
+              imageData: segmentedPanel.imageData,
               extractedText: panelAnalysis.extractedText,
               translation: panelAnalysis.translation,
               words: panelAnalysis.words,
@@ -671,6 +680,7 @@ export class AIAnalysisService {
             return {
               panelNumber: index + 1,
               position: segmentedPanel.boundingBox,
+              imageData: segmentedPanel.imageData,
               extractedText: '',
               translation: 'Analysis failed for this panel',
               words: [],
@@ -685,6 +695,12 @@ export class AIAnalysisService {
       const panels: MangaPanel[] = panelAnalyses
         .filter((result): result is PromiseFulfilledResult<MangaPanel> => result.status === 'fulfilled')
         .map(result => result.value)
+
+      console.log('✅ Panel analysis complete:', {
+        totalPanels: panels.length,
+        panelsWithImages: panels.filter(p => p.imageData).length,
+        panelsWithText: panels.filter(p => p.extractedText).length
+      })
 
       // Generate overall summary based on panel analyses
       const allText = panels.map(p => p.extractedText).filter(text => text.length > 0).join(' ')
@@ -703,21 +719,35 @@ export class AIAnalysisService {
       }
 
     } catch (error) {
-      console.error('Panel segmentation failed, falling back to direct analysis:', error)
+      console.error('❌ Panel segmentation failed, falling back to direct analysis:', error)
       // Fallback to original analysis method
       return await this.analyzeMangaImageDirect(imageBase64, provider)
     }
   }
 
   private async analyzeMangaImageDirect(imageBase64: string, provider: AIProvider = 'openai'): Promise<MangaAnalysisResult> {
+    console.log('📁 Using direct analysis fallback')
+    
+    let result: MangaAnalysisResult
     if (provider === 'openai' && this.openaiService) {
-      return await this.openaiService.analyzeMangaImage(imageBase64)
+      result = await this.openaiService.analyzeMangaImage(imageBase64)
     } else if (provider === 'gemini' && this.geminiService) {
-      return await this.geminiService.analyzeMangaImage(imageBase64)
+      result = await this.geminiService.analyzeMangaImage(imageBase64)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
-      return await this.openaiFormatService.analyzeMangaImage(imageBase64)
+      result = await this.openaiFormatService.analyzeMangaImage(imageBase64)
     } else {
       throw new Error(`${provider} service not available or not configured`)
+    }
+
+    // Add the original image data to panels for display purposes
+    const enhancedPanels = result.panels.map(panel => ({
+      ...panel,
+      imageData: imageBase64 // Use the original image as a fallback
+    }))
+
+    return {
+      ...result,
+      panels: enhancedPanels
     }
   }
 

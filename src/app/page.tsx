@@ -15,23 +15,27 @@ export default function Home() {
   const [mangaAnalysisResult, setMangaAnalysisResult] = useState<MangaAnalysisResult | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isMangaMode, setIsMangaMode] = useState(true)
+  const [selectedPanelId, setSelectedPanelId] = useState<number | null>(null)
 
   const handleAnalysisComplete = (result: AnalysisResult) => {
     setAnalysisResult(result)
     setMangaAnalysisResult(null)
     setError(null) // Clear any previous errors
+    setSelectedPanelId(null)
   }
 
   const handleMangaAnalysisComplete = (result: MangaAnalysisResult) => {
     setMangaAnalysisResult(result)
     setAnalysisResult(null)
     setError(null) // Clear any previous errors
+    setSelectedPanelId(null)
   }
 
   const handleError = (errorMessage: string) => {
     setError(errorMessage)
     setAnalysisResult(null) // Clear any previous results
     setMangaAnalysisResult(null)
+    setSelectedPanelId(null)
   }
 
   const clearError = () => {
@@ -43,6 +47,18 @@ export default function Home() {
     setAnalysisResult(null)
     setMangaAnalysisResult(null)
     setError(null)
+    setSelectedPanelId(null)
+  }
+
+  const scrollToPanelAnalysis = (panelNumber: number) => {
+    setSelectedPanelId(panelNumber)
+    // Scroll to the panel analysis section after a brief delay
+    setTimeout(() => {
+      const element = document.getElementById(`panel-${panelNumber}`)
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }
+    }, 100)
   }
 
   return (
@@ -152,7 +168,80 @@ export default function Home() {
             transition={{ duration: 0.6, delay: 0.4 }}
           >
             {mangaAnalysisResult ? (
-              <MangaAnalyzer analysisResult={mangaAnalysisResult} />
+              <div className="space-y-8">
+                {/* Panel Overview Grid */}
+                {mangaAnalysisResult.panels.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.6, delay: 0.5 }}
+                    className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm"
+                  >
+                    <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                      🎬 Panel Overview
+                    </h2>
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {mangaAnalysisResult.panels
+                        .sort((a, b) => {
+                          const aIndex = mangaAnalysisResult.readingOrder.indexOf(a.panelNumber)
+                          const bIndex = mangaAnalysisResult.readingOrder.indexOf(b.panelNumber)
+                          return aIndex - bIndex
+                        })
+                        .map((panel) => {
+                          const readingOrderPosition = mangaAnalysisResult.readingOrder.indexOf(panel.panelNumber) + 1
+                          return (
+                            <div key={panel.panelNumber} className="relative group">
+                              {panel.imageData ? (
+                                <button
+                                  onClick={() => scrollToPanelAnalysis(panel.panelNumber)}
+                                  className="w-full bg-gray-50 border border-gray-200 rounded-lg p-2 hover:shadow-md hover:border-blue-300 transition-all transform hover:scale-105"
+                                >
+                                  <img
+                                    src={`data:image/png;base64,${panel.imageData}`}
+                                    alt={`Panel ${panel.panelNumber}`}
+                                    className="w-full h-24 object-cover rounded border border-gray-200"
+                                  />
+                                  <div className="mt-2 space-y-1">
+                                    <div className="flex items-center justify-between">
+                                      <span className="bg-blue-600 text-white text-xs font-medium px-2 py-1 rounded">
+                                        Panel {panel.panelNumber}
+                                      </span>
+                                      <span className="bg-green-600 text-white text-xs font-medium px-2 py-1 rounded">
+                                        #{readingOrderPosition}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-600 truncate" title={panel.extractedText}>
+                                      {panel.extractedText || 'No text detected'}
+                                    </p>
+                                    {panel.position && (
+                                      <p className="text-xs text-gray-500">
+                                        {panel.position.width}×{panel.position.height}px
+                                      </p>
+                                    )}
+                                  </div>
+                                  <div className="absolute inset-0 bg-blue-500 opacity-0 group-hover:opacity-10 rounded-lg transition-opacity pointer-events-none"></div>
+                                </button>
+                              ) : (
+                                <div className="bg-gray-100 border border-gray-200 rounded-lg p-4 h-32 flex items-center justify-center">
+                                  <span className="text-sm text-gray-500">No image data</span>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                    </div>
+                    <p className="text-sm text-gray-500 mt-4">
+                      💡 Click on any panel above to jump to its detailed analysis below
+                    </p>
+                  </motion.div>
+                )}
+                
+                {/* Detailed Analysis */}
+                <MangaAnalyzer 
+                  analysisResult={mangaAnalysisResult} 
+                  selectedPanelId={selectedPanelId}
+                />
+              </div>
             ) : (
               <TextAnalyzer analysisResult={analysisResult} />
             )}
