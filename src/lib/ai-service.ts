@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel } from './types'
 import { PanelSegmentationService } from './panel-segmentation-service'
+import { ImprovedTextDetectionService } from './improved-text-detection'
 
 export interface AnalysisRequest {
   text: string
@@ -587,6 +588,7 @@ export class AIAnalysisService {
   private geminiService?: GeminiService
   private openaiFormatService?: OpenAIFormatService
   private panelSegmentationService: PanelSegmentationService
+  private improvedTextDetection: ImprovedTextDetectionService
 
   constructor(
     openaiApiKey?: string, 
@@ -595,6 +597,11 @@ export class AIAnalysisService {
     modelSettings?: ModelSettings
   ) {
     this.panelSegmentationService = new PanelSegmentationService()
+    this.improvedTextDetection = new ImprovedTextDetectionService({
+      enableRetry: true,
+      maxRetries: 2,
+      useOCRPreprocessing: true
+    })
     
     if (openaiApiKey && modelSettings?.openai) {
       this.openaiService = new OpenAIService(
@@ -659,24 +666,26 @@ export class AIAnalysisService {
         return await this.analyzeMangaImageDirect(imageBase64, provider)
       }
 
-      // Analyze each panel individually
+      // Analyze each panel individually using improved text detection
       const panelAnalyses = await Promise.allSettled(
         segmentationResult.panels.map(async (segmentedPanel: SegmentedPanel, index: number) => {
           try {
-            const panelAnalysis = await this.analyzeImage(segmentedPanel.imageData, provider)
+            console.log(`🔍 Analyzing panel ${index + 1} with improved text detection...`)
             
-            return {
-              panelNumber: index + 1,
-              position: segmentedPanel.boundingBox,
-              imageData: segmentedPanel.imageData,
-              extractedText: panelAnalysis.extractedText,
-              translation: panelAnalysis.translation,
-              words: panelAnalysis.words,
-              grammar: panelAnalysis.grammar,
-              context: panelAnalysis.summary
-            } as MangaPanel
+            // Use improved text detection service
+            const panelAnalysis = await this.improvedTextDetection.analyzePanel(
+              segmentedPanel.imageData,
+              this,
+              provider,
+              index + 1
+            )
+            
+            // Set the position from segmentation result
+            panelAnalysis.position = segmentedPanel.boundingBox
+            
+            return panelAnalysis
           } catch (error) {
-            console.error(`Error analyzing panel ${index + 1}:`, error)
+            console.error(`❌ Error analyzing panel ${index + 1}:`, error)
             return {
               panelNumber: index + 1,
               position: segmentedPanel.boundingBox,

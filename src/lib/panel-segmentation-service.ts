@@ -1,29 +1,33 @@
 import { spawn } from 'child_process'
 import { resolve, join } from 'path'
+import { platform } from 'os'
 import type { PanelSegmentationResult } from './types'
 
 export class PanelSegmentationService {
   private pythonScriptPath: string
+  private isWindows: boolean
   private condaPath: string
   private condaEnvPath: string
 
   constructor() {
-    // Use absolute path for development, relative for production
-    const scriptPaths = [
-      '/Users/vyang/Desktop/spaces/manga_learnjp/src/lib/panel_segmentation.py',
-      join(process.cwd(), 'src/lib/panel_segmentation.py'),
-      './src/lib/panel_segmentation.py'
-    ]
+    this.isWindows = platform() === 'win32'
     
-    // Use the first path that exists
-    this.pythonScriptPath = scriptPaths[0] // Start with absolute path
+    // Use relative path that works on both platforms
+    this.pythonScriptPath = join(process.cwd(), 'src/lib/panel_segmentation.py')
     
-    // Set up conda environment paths
-    this.condaPath = '/opt/homebrew/Caskroom/miniconda/base/bin/conda'
-    this.condaEnvPath = '/opt/homebrew/Caskroom/miniconda/base'
+    // Set up conda environment paths based on platform
+    if (this.isWindows) {
+      // Common Windows conda paths
+      this.condaPath = 'conda' // Use conda from PATH
+      this.condaEnvPath = '' // Will use default environment
+    } else {
+      // macOS/Linux conda paths
+      this.condaPath = '/opt/homebrew/Caskroom/miniconda/base/bin/conda'
+      this.condaEnvPath = '/opt/homebrew/Caskroom/miniconda/base'
+    }
     
     console.log(`🔍 Using Python script at: ${this.pythonScriptPath}`)
-    console.log(`🐍 Using conda at: ${this.condaPath}`)
+    console.log(`🐍 Platform: ${this.isWindows ? 'Windows' : 'Unix'}`)
     console.log(`📂 Current working directory: ${process.cwd()}`)
   }
 
@@ -37,13 +41,28 @@ export class PanelSegmentationService {
         console.log(`📁 Python script path: ${this.pythonScriptPath}`)
         console.log(`📊 Image data length: ${cleanBase64.length} characters`)
         
-        // Use conda to run Python with the correct environment
-        const pythonProcess = spawn(this.condaPath, [
-          'run', '-p', this.condaEnvPath, '--no-capture-output',
-          'python', this.pythonScriptPath, cleanBase64
-        ], {
-          stdio: ['pipe', 'pipe', 'pipe']
-        })
+        // Use different execution strategies based on platform
+         let pythonProcess
+         
+         if (this.isWindows) {
+           // On Windows, use regular Python with stdin to avoid ENAMETOOLONG
+           console.log('🐍 Using regular Python on Windows (stdin mode)')
+           pythonProcess = spawn('python', [this.pythonScriptPath], {
+             stdio: ['pipe', 'pipe', 'pipe']
+           })
+           
+           // Write base64 data to stdin instead of command line argument
+           pythonProcess.stdin.write(cleanBase64)
+           pythonProcess.stdin.end()
+         } else {
+           // Unix/macOS: use conda with specified environment
+           pythonProcess = spawn(this.condaPath, [
+             'run', '-p', this.condaEnvPath, '--no-capture-output',
+             'python', this.pythonScriptPath, cleanBase64
+           ], {
+             stdio: ['pipe', 'pipe', 'pipe']
+           })
+         }
 
         let stdout = ''
         let stderr = ''
@@ -95,12 +114,22 @@ export class PanelSegmentationService {
 
   async checkPythonDependencies(): Promise<boolean> {
     return new Promise((resolve) => {
-      const pythonProcess = spawn(this.condaPath, [
-        'run', '-p', this.condaEnvPath, '--no-capture-output',
-        'python', '-c', 'import numpy, cv2, PIL, skimage; print("OK")'
-      ], {
-        stdio: ['pipe', 'pipe', 'pipe']
-      })
+      let pythonProcess
+       
+       if (this.isWindows) {
+         // On Windows, use regular Python directly
+         pythonProcess = spawn('python', ['-c', 'import numpy, cv2, PIL, skimage; print("OK")'], {
+           stdio: ['pipe', 'pipe', 'pipe']
+         })
+       } else {
+         // Unix/macOS: use conda with specified environment
+         pythonProcess = spawn(this.condaPath, [
+           'run', '-p', this.condaEnvPath, '--no-capture-output',
+           'python', '-c', 'import numpy, cv2, PIL, skimage; print("OK")'
+         ], {
+           stdio: ['pipe', 'pipe', 'pipe']
+         })
+       }
 
       let stdout = ''
 
