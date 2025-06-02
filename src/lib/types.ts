@@ -85,6 +85,7 @@ export interface MangaPanel {
     width: number
     height: number
   }
+  imageData?: string // base64 encoded panel image
   extractedText: string
   translation: string
   words: WordAnalysis[]

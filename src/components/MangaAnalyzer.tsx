@@ -1,16 +1,28 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Copy, ChevronRight, ChevronDown } from 'lucide-react'
 import type { MangaAnalysisResult, MangaPanel, WordAnalysis, GrammarPattern } from '@/lib/types'
 
 interface MangaAnalyzerProps {
   analysisResult: MangaAnalysisResult
+  selectedPanelId?: number | null
 }
 
-export default function MangaAnalyzer({ analysisResult }: MangaAnalyzerProps) {
+export default function MangaAnalyzer({ analysisResult, selectedPanelId }: MangaAnalyzerProps) {
   const [expandedPanels, setExpandedPanels] = useState<Set<number>>(new Set([1]))
   const [showOriginalLayout, setShowOriginalLayout] = useState(true)
+
+  // Auto-expand the selected panel when selectedPanelId changes
+  useEffect(() => {
+    if (selectedPanelId !== null && selectedPanelId !== undefined) {
+      setExpandedPanels(prev => {
+        const newSet = new Set(prev)
+        newSet.add(selectedPanelId)
+        return newSet
+      })
+    }
+  }, [selectedPanelId])
 
   const togglePanel = (panelNumber: number) => {
     const newExpanded = new Set(expandedPanels)
@@ -97,29 +109,50 @@ export default function MangaAnalyzer({ analysisResult }: MangaAnalyzerProps) {
           const readingOrderPosition = analysisResult.readingOrder.indexOf(panel.panelNumber) + 1
           
           return (
-            <div key={panel.panelNumber} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+            <div 
+              key={panel.panelNumber} 
+              id={`panel-${panel.panelNumber}`}
+              className={`bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden ${
+                selectedPanelId === panel.panelNumber ? 'ring-2 ring-blue-500 ring-opacity-50' : ''
+              }`}
+            >
               {/* Panel Header */}
               <button
                 onClick={() => togglePanel(panel.panelNumber)}
                 className="w-full px-6 py-4 text-left bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between"
               >
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="bg-blue-600 text-white text-sm font-medium px-3 py-1 rounded-full">
-                      Panel {panel.panelNumber}
-                    </span>
-                    <span className="bg-green-600 text-white text-xs font-medium px-2 py-1 rounded-full">
-                      #{readingOrderPosition}
-                    </span>
-                  </div>
-                  <h3 className="font-medium text-gray-900">
-                    {panel.extractedText || 'No text detected'}
-                  </h3>
-                  {panel.position && (
-                    <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
-                      {panel.position.width}×{panel.position.height}px
-                    </span>
+                <div className="flex items-center gap-4">
+                  {/* Panel Thumbnail */}
+                  {panel.imageData && (
+                    <div className="flex-shrink-0">
+                      <img
+                        src={`data:image/png;base64,${panel.imageData}`}
+                        alt={`Panel ${panel.panelNumber} thumbnail`}
+                        className="w-12 h-12 object-cover rounded border border-gray-300"
+                      />
+                    </div>
                   )}
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <span className="bg-blue-600 text-white text-sm font-medium px-3 py-1 rounded-full">
+                        Panel {panel.panelNumber}
+                      </span>
+                      <span className="bg-green-600 text-white text-xs font-medium px-2 py-1 rounded-full">
+                        #{readingOrderPosition}
+                      </span>
+                    </div>
+                    <div className="flex flex-col">
+                      <h3 className="font-medium text-gray-900 text-left">
+                        {panel.extractedText || 'No text detected'}
+                      </h3>
+                      {panel.position && (
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded mt-1 inline-block w-fit">
+                          {panel.position.width}×{panel.position.height}px
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
                 {expandedPanels.has(panel.panelNumber) ? (
                   <ChevronDown size={20} className="text-gray-400" />
@@ -131,80 +164,113 @@ export default function MangaAnalyzer({ analysisResult }: MangaAnalyzerProps) {
             {/* Panel Content */}
             {expandedPanels.has(panel.panelNumber) && (
               <div className="p-6 space-y-6">
-                {/* Panel Position Info */}
-                {panel.position && (
-                  <div className="bg-purple-50 border border-purple-200 rounded-lg p-3">
-                    <p className="text-sm text-purple-800">
-                      <strong>Panel Position:</strong> ({panel.position.x}, {panel.position.y}) - 
-                      {panel.position.width}×{panel.position.height}px
-                    </p>
-                  </div>
-                )}
-
-                {/* Context */}
-                {panel.context && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
+                {/* Panel Image and Position Info Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Panel Image */}
+                  {panel.imageData && (
+                    <div className="space-y-3">
                       <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-                        🎬 Panel Context
+                        🖼️ Panel Image
                       </h4>
-                      <button
-                        onClick={() => copyToClipboard(panel.context)}
-                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                        title="Copy context"
-                      >
-                        <Copy size={16} />
-                      </button>
+                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                        <img
+                          src={`data:image/png;base64,${panel.imageData}`}
+                          alt={`Panel ${panel.panelNumber}`}
+                          className="w-full h-auto max-h-64 object-contain rounded-lg shadow-sm border border-gray-200"
+                        />
+                        <p className="text-xs text-gray-500 mt-2 text-center">
+                          Automatically extracted panel #{readingOrderPosition} in reading sequence
+                        </p>
+                      </div>
                     </div>
-                    <p className="text-gray-800 bg-gray-50 p-4 rounded-lg border border-gray-200">
-                      {panel.context}
-                    </p>
-                  </div>
-                )}
+                  )}
 
-                {/* Extracted Text */}
-                {panel.extractedText && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
+                  {/* Panel Position Info */}
+                  {panel.position && (
+                    <div className="space-y-3">
                       <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-                        📝 Extracted Text
+                        📍 Panel Details
                       </h4>
-                      <button
-                        onClick={() => copyToClipboard(panel.extractedText)}
-                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                        title="Copy text"
-                      >
-                        <Copy size={16} />
-                      </button>
+                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <span className="font-medium text-purple-800">Position:</span>
+                            <p className="text-purple-700">({panel.position.x}, {panel.position.y})</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-purple-800">Dimensions:</span>
+                            <p className="text-purple-700">{panel.position.width} × {panel.position.height}px</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-purple-800">Reading Order:</span>
+                            <p className="text-purple-700">#{readingOrderPosition} of {analysisResult.panels.length}</p>
+                          </div>
+                          <div>
+                            <span className="font-medium text-purple-800">Panel ID:</span>
+                            <p className="text-purple-700">Panel {panel.panelNumber}</p>
+                          </div>
+                        </div>
+                        <div className="pt-2 border-t border-purple-200">
+                          <span className="text-xs text-purple-600">
+                            📐 Automatically detected using computer vision algorithms
+                          </span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                      <p className="text-gray-900 font-medium text-lg leading-relaxed">
-                        {panel.extractedText}
-                      </p>
-                    </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
-                {/* Translation */}
-                {panel.translation && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-                        🌍 Translation
-                      </h4>
-                      <button
-                        onClick={() => copyToClipboard(panel.translation)}
-                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                        title="Copy translation"
-                      >
-                        <Copy size={16} />
-                      </button>
+                {/* Context and Text */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Extracted Text */}
+                  {panel.extractedText && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                          📝 Extracted Text
+                        </h4>
+                        <button
+                          onClick={() => copyToClipboard(panel.extractedText)}
+                          className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Copy text"
+                        >
+                          <Copy size={16} />
+                        </button>
+                      </div>
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <p className="text-blue-900 font-medium leading-relaxed text-lg">
+                          {panel.extractedText}
+                        </p>
+                        {panel.translation && (
+                          <p className="text-blue-700 mt-3 text-sm leading-relaxed">
+                            <strong>Translation:</strong> {panel.translation}
+                          </p>
+                        )}
+                      </div>
                     </div>
-                    <p className="text-gray-800 bg-blue-50 p-4 rounded-lg border border-blue-200">
-                      {panel.translation}
-                    </p>
-                  </div>
-                )}
+                  )}
+
+                  {/* Context */}
+                  {panel.context && (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                          � Panel Context
+                        </h4>
+                        <button
+                          onClick={() => copyToClipboard(panel.context)}
+                          className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                          title="Copy context"
+                        >
+                          <Copy size={16} />
+                        </button>
+                      </div>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <p className="text-green-800 leading-relaxed">{panel.context}</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
 
                 {/* Vocabulary */}
                 {panel.words && panel.words.length > 0 && (
