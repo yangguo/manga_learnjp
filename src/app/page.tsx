@@ -6,6 +6,7 @@ import TextAnalyzer from '@/components/TextAnalyzer'
 import MangaAnalyzer from '@/components/MangaAnalyzer'
 import Header from '@/components/Header'
 import DemoSection from '@/components/DemoSection'
+import { ClientPanelSegmentationDemo } from '@/components/ClientPanelSegmentationDemo'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AnalysisResult, MangaAnalysisResult } from '@/lib/types'
 import { AlertCircle, X, BookOpen, FileText } from 'lucide-react'
@@ -249,6 +250,16 @@ export default function Home() {
         </div>
 
         <DemoSection />
+        
+        {/* Client-Side Panel Segmentation Demo */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.6 }}
+          className="mt-12"
+        >
+          <ClientPanelSegmentationDemo />
+        </motion.div>
       </main>
     </div>
   )

@@ -2,14 +2,17 @@ import { spawn } from 'child_process'
 import { resolve, join } from 'path'
 import { platform } from 'os'
 import type { PanelSegmentationResult } from './types'
+import { ClientPanelSegmentationService } from './client-panel-segmentation'
 
 export class PanelSegmentationService {
   private pythonScriptPath: string
   private isWindows: boolean
   private condaPath: string
   private condaEnvPath: string
+  private clientService: ClientPanelSegmentationService | null = null
 
   constructor() {
+    // Don't instantiate clientService in constructor to avoid SSR issues
     this.isWindows = platform() === 'win32'
     
     // Use relative path that works on both platforms
@@ -31,7 +34,28 @@ export class PanelSegmentationService {
     console.log(`📂 Current working directory: ${process.cwd()}`)
   }
 
+  private getClientService(): ClientPanelSegmentationService {
+    if (!this.clientService) {
+      this.clientService = new ClientPanelSegmentationService()
+    }
+    return this.clientService
+  }
+
   async segmentPanels(imageBase64: string): Promise<PanelSegmentationResult> {
+    // Try client-side segmentation first (works on Vercel and in browser)
+    const clientService = this.getClientService()
+    if (clientService.isAvailable()) {
+      try {
+        console.log('🌐 Using client-side panel segmentation...')
+        const result = await clientService.segmentPanels(imageBase64)
+        console.log('✅ Client-side segmentation successful')
+        return result
+      } catch (error) {
+        console.warn('⚠️ Client-side segmentation failed, falling back to Python:', error)
+      }
+    }
+
+    // Fallback to Python-based segmentation (local development)
     return new Promise((resolve, reject) => {
       try {
         console.log('🐍 Starting Python panel segmentation...')
@@ -113,34 +137,41 @@ export class PanelSegmentationService {
   }
 
   async checkPythonDependencies(): Promise<boolean> {
+    // If client-side segmentation is available, consider dependencies as "installed"
+    const clientService = this.getClientService()
+    if (clientService.isAvailable()) {
+      console.log('✅ Client-side panel segmentation available')
+      return true
+    }
+
+    // Check Python dependencies for fallback
     return new Promise((resolve) => {
       let pythonProcess
-       
-       if (this.isWindows) {
-         // On Windows, use regular Python directly
-         pythonProcess = spawn('python', ['-c', 'import numpy, cv2, PIL, skimage; print("OK")'], {
-           stdio: ['pipe', 'pipe', 'pipe']
-         })
-       } else {
-         // Unix/macOS: use conda with specified environment
-         pythonProcess = spawn(this.condaPath, [
-           'run', '-p', this.condaEnvPath, '--no-capture-output',
-           'python', '-c', 'import numpy, cv2, PIL, skimage; print("OK")'
-         ], {
-           stdio: ['pipe', 'pipe', 'pipe']
-         })
-       }
-
-      let stdout = ''
-
+      
+      try {
+        // On Windows, use regular Python directly
+        pythonProcess = spawn('python', ['-c', 'import numpy, cv2, PIL, skimage; print("OK")'], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+      } catch (error) {
+        pythonProcess = spawn(this.condaPath, [
+          'run', '-n', 'base',
+          'python', '-c', 'import numpy, cv2, PIL, skimage; print("OK")'
+        ], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        })
+      }
+      
+      let output = ''
+      
       pythonProcess.stdout.on('data', (data) => {
-        stdout += data.toString()
+        output += data.toString()
       })
-
+      
       pythonProcess.on('close', (code) => {
-        resolve(code === 0 && stdout.trim() === 'OK')
+        resolve(code === 0 && output.includes('OK'))
       })
-
+      
       pythonProcess.on('error', () => {
         resolve(false)
       })

@@ -13,6 +13,21 @@ const nextConfig = {
   eslint: {
     ignoreDuringBuilds: false,
   },
+  experimental: {
+    esmExternals: false,
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Configure OpenCV.js for client-side usage
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        path: false,
+        crypto: false,
+      };
+    }
+    return config;
+  },
   async rewrites() {
     return [
       {
