@@ -4,17 +4,12 @@ const nextConfig = {
     domains: ['localhost'],
     unoptimized: true,
   },
-  // Add font optimization settings
-  optimizeFonts: true,
   // Handle build errors more gracefully
   typescript: {
     ignoreBuildErrors: false,
   },
   eslint: {
     ignoreDuringBuilds: false,
-  },
-  experimental: {
-    esmExternals: false,
   },
   webpack: (config, { isServer }) => {
     if (!isServer) {
