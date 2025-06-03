@@ -170,7 +170,12 @@ Use the same JSON format as before.`
     // Return the best result we got
     return {
       panelNumber,
-      position: undefined, // Will be set by caller
+      position: {
+        x: 0,
+        y: 0,
+        width: 0,
+        height: 0
+      }, // Default position, will be set by caller
       imageData: panelImageBase64,
       extractedText: lastResult?.extractedText || '',
       translation: lastResult?.translation || 'No text to translate',
