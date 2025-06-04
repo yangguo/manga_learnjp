@@ -19,8 +19,8 @@ export const useAIProviderStore = create<AIProviderState>()(
       selectedProvider: 'openai',
       setSelectedProvider: (provider) => set({ selectedProvider: provider }),
       openaiFormatSettings: {
-        endpoint: 'https://api.openai.com/v1',
-        model: 'gpt-4-vision-preview'
+        endpoint: '',
+        model: ''
       },
       setOpenAIFormatSettings: (settings) => 
         set((state) => ({
