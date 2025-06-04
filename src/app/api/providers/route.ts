@@ -16,7 +16,7 @@ export async function GET() {
 
     return NextResponse.json({
       providers: availableProviders,
-      default: process.env.NEXT_PUBLIC_DEFAULT_AI_PROVIDER || 'openai'
+      default: 'openai'
     })
   } catch (error) {
     console.error('Error checking providers:', error)

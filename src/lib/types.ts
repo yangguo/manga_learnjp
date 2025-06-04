@@ -25,8 +25,7 @@ export interface APIKeySettings {
 
 export interface ModelSettings {
   openai: {
-    textModel: string
-    visionModel: string
+    model: string
   }
   gemini: {
     model: string

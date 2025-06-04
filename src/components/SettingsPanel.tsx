@@ -38,10 +38,7 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     { id: 'openai-format' as AIProvider, name: 'OpenAI-Compatible', icon: Server, color: 'text-purple-500' }
   ]
 
-  const openaiModels = {
-    text: ['gpt-4-turbo-preview', 'gpt-4', 'gpt-3.5-turbo'],
-    vision: ['gpt-4-vision-preview', 'gpt-4-turbo', 'gpt-4o']
-  }
+  const openaiModels = ['gpt-4-vision-preview', 'gpt-4-turbo', 'gpt-4o', 'gpt-4', 'gpt-3.5-turbo']
 
   const geminiModels = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro-vision']
 
@@ -137,32 +134,21 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                       </p>
                     </div>
                     <div>
-                      <label className="text-xs text-gray-600 mb-1 block">Text Model</label>
+                      <label className="text-xs text-gray-600 mb-1 block">Model</label>
                       <select
-                        value={modelSettings.openai.textModel}
+                        value={modelSettings.openai.model}
                         onChange={(e) => setModelSettings({ 
-                          openai: { ...modelSettings.openai, textModel: e.target.value }
+                          openai: { model: e.target.value }
                         })}
                         className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500"
                       >
-                        {openaiModels.text.map(model => (
+                        {openaiModels.map(model => (
                           <option key={model} value={model}>{model}</option>
                         ))}
                       </select>
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-600 mb-1 block">Vision Model</label>
-                      <select
-                        value={modelSettings.openai.visionModel}
-                        onChange={(e) => setModelSettings({ 
-                          openai: { ...modelSettings.openai, visionModel: e.target.value }
-                        })}
-                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500"
-                      >
-                        {openaiModels.vision.map(model => (
-                          <option key={model} value={model}>{model}</option>
-                        ))}
-                      </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Override OPENAI_MODEL environment variable
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -198,6 +184,9 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                           <option key={model} value={model}>{model}</option>
                         ))}
                       </select>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Override GEMINI_MODEL environment variable
+                      </p>
                     </div>
                   </div>
                 </div>

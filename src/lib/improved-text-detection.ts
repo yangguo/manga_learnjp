@@ -219,7 +219,7 @@ Use the same JSON format as before.`
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: openaiService.visionModel || 'gpt-4-vision-preview',
+        model: openaiService.model || 'gpt-4-vision-preview',
         messages: [
           {
             role: 'system',
