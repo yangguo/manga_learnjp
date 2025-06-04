@@ -23,3 +23,18 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+
+# Test files and debug files
+test_*.py
+test_*.jpg
+test_*.png
+debug_*.py
+debug-*.js
+test-*.js
