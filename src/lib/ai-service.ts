@@ -140,13 +140,11 @@ function cleanJsonResponse(content: string): string {
 
 export class OpenAIService {
   private apiKey: string
-  private textModel: string
-  private visionModel: string
+  private model: string
 
-  constructor(apiKey: string, textModel = 'gpt-4-turbo-preview', visionModel = 'gpt-4-vision-preview') {
+  constructor(apiKey: string, model = 'gpt-4-vision-preview') {
     this.apiKey = apiKey
-    this.textModel = textModel
-    this.visionModel = visionModel
+    this.model = model
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
@@ -157,7 +155,7 @@ export class OpenAIService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: this.textModel,
+        model: this.model,
         messages: [
           {
             role: 'system',
@@ -199,7 +197,7 @@ export class OpenAIService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: this.visionModel,
+        model: this.model,
         messages: [
           {
             role: 'system',
@@ -252,7 +250,7 @@ export class OpenAIService {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: this.visionModel,
+        model: this.model,
         messages: [
           {
             role: 'system',
@@ -606,8 +604,7 @@ export class AIAnalysisService {
     if (openaiApiKey && modelSettings?.openai) {
       this.openaiService = new OpenAIService(
         openaiApiKey, 
-        modelSettings.openai.textModel, 
-        modelSettings.openai.visionModel
+        modelSettings.openai.model
       )
     } else if (openaiApiKey) {
       this.openaiService = new OpenAIService(openaiApiKey)

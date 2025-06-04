@@ -28,8 +28,7 @@ export const useAIProviderStore = create<AIProviderState>()(
         })),
       modelSettings: {
         openai: {
-          textModel: 'gpt-4-turbo-preview',
-          visionModel: 'gpt-4-vision-preview'
+          model: 'gpt-4-vision-preview'
         },
         gemini: {
           model: 'gemini-1.5-pro'
