@@ -27,11 +27,19 @@ export async function POST(request: NextRequest) {
     const openaiApiKey = apiKeySettings?.openai || process.env.OPENAI_API_KEY
     const geminiApiKey = apiKeySettings?.gemini || process.env.GEMINI_API_KEY
 
-    // For OpenAI-format, we need settings but API key is optional
-    let hasOpenAIFormat = false
-    if (provider === 'openai-format' && openaiFormatSettings?.endpoint && openaiFormatSettings?.model) {
-      hasOpenAIFormat = true
+    // For OpenAI-format, use settings from request or fall back to environment variables
+    let finalOpenAIFormatSettings: OpenAIFormatSettings | undefined
+    if (openaiFormatSettings?.endpoint?.trim() && openaiFormatSettings?.model?.trim()) {
+      finalOpenAIFormatSettings = openaiFormatSettings
+    } else if (process.env.OPENAI_FORMAT_API_URL && process.env.OPENAI_FORMAT_MODEL) {
+      finalOpenAIFormatSettings = {
+        endpoint: process.env.OPENAI_FORMAT_API_URL,
+        model: process.env.OPENAI_FORMAT_MODEL,
+        apiKey: process.env.OPENAI_FORMAT_API_KEY // Optional
+      }
     }
+
+    const hasOpenAIFormat = !!finalOpenAIFormatSettings
 
     if (!openaiApiKey && !geminiApiKey && !hasOpenAIFormat) {
       return NextResponse.json(
@@ -45,7 +53,7 @@ export async function POST(request: NextRequest) {
     const aiService = new AIAnalysisService(
       openaiApiKey, 
       geminiApiKey, 
-      hasOpenAIFormat ? openaiFormatSettings : undefined,
+      finalOpenAIFormatSettings,
       modelSettings
     )
     const availableProviders = aiService.getAvailableProviders()
