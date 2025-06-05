@@ -25,9 +25,19 @@ export async function GET() {
       availableProviders.push('openai-format')
     }
 
+    // Smart default selection: prefer the first actually available provider
+    // Priority order: openai -> gemini -> openai-format
+    let smartDefault: string = 'openai-format' // fallback if nothing else is available
+    
+    if (availableProviders.includes('openai')) {
+      smartDefault = 'openai'
+    } else if (availableProviders.includes('gemini')) {
+      smartDefault = 'gemini'
+    }
+
     return NextResponse.json({
       providers: availableProviders,
-      default: 'openai'
+      default: smartDefault
     })
   } catch (error) {
     console.error('Error checking providers:', error)

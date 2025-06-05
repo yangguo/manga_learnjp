@@ -266,9 +266,29 @@ Use the same JSON format as before.`
    * Call Gemini with custom prompt
    */
   private async callGeminiWithCustomPrompt(geminiService: any, imageBase64: string, customPrompt: string): Promise<any> {
-    // Similar implementation for Gemini
-    // This would need to be implemented based on the Gemini service structure
-    throw new Error('Gemini custom prompt not implemented yet')
+    // Convert base64 to format Gemini expects
+    const imagePart = {
+      inlineData: {
+        data: imageBase64,
+        mimeType: 'image/jpeg'
+      }
+    }
+
+    const result = await geminiService.model.generateContent([
+      customPrompt,
+      imagePart
+    ])
+
+    const response = await result.response
+    const content = response.text()
+
+    if (!content) {
+      throw new Error('No content received from Gemini')
+    }
+
+    // Parse JSON response, handling potential markdown formatting
+    const cleanContent = content.replace(/```json\n?|```\n?/g, '').trim()
+    return JSON.parse(cleanContent)
   }
 
   /**

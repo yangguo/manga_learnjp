@@ -20,7 +20,8 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     modelSettings,
     setModelSettings,
     apiKeySettings,
-    setAPIKeySettings
+    setAPIKeySettings,
+    initializeSmartDefault
   } = useAIProviderStore()
   const [availableProviders, setAvailableProviders] = useState<AIProvider[]>([])
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -28,9 +29,13 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   useEffect(() => {
     fetch('/api/providers')
       .then(res => res.json())
-      .then(data => setAvailableProviders(data.providers || []))
+      .then(data => {
+        setAvailableProviders(data.providers || [])
+        // Initialize smart default on first load
+        initializeSmartDefault()
+      })
       .catch(() => setAvailableProviders(['openai']))
-  }, [])
+  }, [initializeSmartDefault])
 
   const providers = [
     { id: 'openai' as AIProvider, name: 'OpenAI', icon: Zap, color: 'text-green-500' },
@@ -38,9 +43,7 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     { id: 'openai-format' as AIProvider, name: 'OpenAI-Compatible', icon: Server, color: 'text-purple-500' }
   ]
 
-  const openaiModels = ['gpt-4-vision-preview', 'gpt-4-turbo', 'gpt-4o', 'gpt-4', 'gpt-3.5-turbo']
-
-  const geminiModels = ['gemini-1.5-pro', 'gemini-1.5-flash', 'gemini-pro-vision']
+  // No predefined models - users must provide their own
 
   if (!isOpen) return null
 
@@ -135,19 +138,17 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                     </div>
                     <div>
                       <label className="text-xs text-gray-600 mb-1 block">Model</label>
-                      <select
+                      <input
+                        type="text"
                         value={modelSettings.openai.model}
                         onChange={(e) => setModelSettings({ 
                           openai: { model: e.target.value }
                         })}
+                        placeholder="e.g., gpt-4o, gpt-4-turbo, gpt-4-vision-preview"
                         className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500"
-                      >
-                        {openaiModels.map(model => (
-                          <option key={model} value={model}>{model}</option>
-                        ))}
-                      </select>
+                      />
                       <p className="text-xs text-gray-500 mt-1">
-                        Override OPENAI_MODEL environment variable
+                        Enter the OpenAI model name you want to use
                       </p>
                     </div>
                   </div>
@@ -173,19 +174,17 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                     </div>
                     <div>
                       <label className="text-xs text-gray-600 mb-1 block">Model</label>
-                      <select
+                      <input
+                        type="text"
                         value={modelSettings.gemini.model}
                         onChange={(e) => setModelSettings({ 
                           gemini: { model: e.target.value }
                         })}
+                        placeholder="e.g., gemini-pro-vision, gemini-pro"
                         className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        {geminiModels.map(model => (
-                          <option key={model} value={model}>{model}</option>
-                        ))}
-                      </select>
+                      />
                       <p className="text-xs text-gray-500 mt-1">
-                        Override GEMINI_MODEL environment variable
+                        Enter the Gemini model name you want to use
                       </p>
                     </div>
                   </div>

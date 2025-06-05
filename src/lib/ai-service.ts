@@ -142,9 +142,9 @@ export class OpenAIService {
   private apiKey: string
   private model: string
 
-  constructor(apiKey: string, model = 'gpt-4-vision-preview') {
+  constructor(apiKey: string, model?: string) {
     this.apiKey = apiKey
-    this.model = model
+    this.model = model || process.env.OPENAI_MODEL || 'gpt-4-vision-preview'
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
@@ -300,9 +300,10 @@ export class GeminiService {
   private genAI: GoogleGenerativeAI
   private model: any
 
-  constructor(apiKey: string, modelName = 'gemini-1.5-pro') {
+  constructor(apiKey: string, modelName?: string) {
     this.genAI = new GoogleGenerativeAI(apiKey)
-    this.model = this.genAI.getGenerativeModel({ model: modelName })
+    const finalModelName = modelName || process.env.GEMINI_MODEL || 'gemini-pro-vision'
+    this.model = this.genAI.getGenerativeModel({ model: finalModelName })
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
@@ -601,22 +602,38 @@ export class AIAnalysisService {
       useOCRPreprocessing: true
     })
     
-    if (openaiApiKey && modelSettings?.openai) {
-      this.openaiService = new OpenAIService(
-        openaiApiKey, 
-        modelSettings.openai.model
-      )
-    } else if (openaiApiKey) {
-      this.openaiService = new OpenAIService(openaiApiKey)
+    // Only initialize OpenAI service if both API key and model are available
+    if (openaiApiKey) {
+      const openaiModel = modelSettings?.openai?.model?.trim()
+      if (openaiModel) {
+        this.openaiService = new OpenAIService(openaiApiKey, openaiModel)
+      } else {
+        // Check if environment variable has a model as fallback
+        const envModel = process.env.OPENAI_MODEL?.trim()
+        if (envModel) {
+          this.openaiService = new OpenAIService(openaiApiKey, envModel)
+        }
+        // If no model available, don't initialize the service
+      }
     }
     
-    if (geminiApiKey && modelSettings?.gemini) {
-      this.geminiService = new GeminiService(geminiApiKey, modelSettings.gemini.model)
-    } else if (geminiApiKey) {
-      this.geminiService = new GeminiService(geminiApiKey)
+    // Only initialize Gemini service if both API key and model are available
+    if (geminiApiKey) {
+      const geminiModel = modelSettings?.gemini?.model?.trim()
+      if (geminiModel) {
+        this.geminiService = new GeminiService(geminiApiKey, geminiModel)
+      } else {
+        // Check if environment variable has a model as fallback
+        const envModel = process.env.GEMINI_MODEL?.trim()
+        if (envModel) {
+          this.geminiService = new GeminiService(geminiApiKey, envModel)
+        }
+        // If no model available, don't initialize the service
+      }
     }
     
-    if (openaiFormatSettings) {
+    // Only initialize OpenAI-format service if endpoint and model are provided
+    if (openaiFormatSettings?.endpoint?.trim() && openaiFormatSettings?.model?.trim()) {
       this.openaiFormatService = new OpenAIFormatService(openaiFormatSettings)
     }
   }

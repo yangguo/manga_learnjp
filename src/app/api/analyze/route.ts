@@ -58,40 +58,47 @@ export async function POST(request: NextRequest) {
     )
     const availableProviders = aiService.getAvailableProviders()
 
-    if (!availableProviders.includes(provider)) {
-      // Fallback to available provider
-      const fallbackProvider = availableProviders[0]
-      if (!fallbackProvider) {
-        return NextResponse.json(
-          { error: 'No AI providers available. Please check your API keys or OpenAI-format settings.' },
-          { status: 500 }
-        )
-      }
-      
-      let result: AnalysisResult | MangaAnalysisResult
-      if (imageBase64) {
-        if (mangaMode) {
-          result = await aiService.analyzeMangaImage(imageBase64, fallbackProvider)
-        } else {
-          result = await aiService.analyzeImage(imageBase64, fallbackProvider)
-        }
-      } else {
-        result = await aiService.analyzeText(text!, fallbackProvider)
-      }
-      return NextResponse.json(result)
+    if (availableProviders.length === 0) {
+      return NextResponse.json(
+        { error: 'No AI providers available. Please check your API keys or OpenAI-format settings.' },
+        { status: 500 }
+      )
     }
 
-    let result: AnalysisResult | MangaAnalysisResult
-    if (imageBase64) {
-      if (mangaMode) {
-        result = await aiService.analyzeMangaImage(imageBase64, provider)
-      } else {
-        result = await aiService.analyzeImage(imageBase64, provider)
+    // Try providers in order: requested provider first, then all available providers
+    const providersToTry = availableProviders.includes(provider) 
+      ? [provider, ...availableProviders.filter(p => p !== provider)]
+      : availableProviders
+
+    let lastError: Error | null = null
+    
+    for (const currentProvider of providersToTry) {
+      try {
+        console.log(`🔄 Trying provider: ${currentProvider}`)
+        
+        let result: AnalysisResult | MangaAnalysisResult
+        if (imageBase64) {
+          if (mangaMode) {
+            result = await aiService.analyzeMangaImage(imageBase64, currentProvider)
+          } else {
+            result = await aiService.analyzeImage(imageBase64, currentProvider)
+          }
+        } else {
+          result = await aiService.analyzeText(text!, currentProvider)
+        }
+        
+        console.log(`✅ Success with provider: ${currentProvider}`)
+        return NextResponse.json(result)
+        
+      } catch (error) {
+        console.log(`❌ Provider ${currentProvider} failed:`, error instanceof Error ? error.message : 'Unknown error')
+        lastError = error instanceof Error ? error : new Error('Unknown error')
+        continue
       }
-    } else {
-      result = await aiService.analyzeText(text!, provider)
     }
-    return NextResponse.json(result)
+
+    // If all providers failed, throw the last error
+    throw lastError || new Error('All providers failed')
 
   } catch (error) {
     console.error('Analysis error:', error)
