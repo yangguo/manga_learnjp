@@ -7,6 +7,7 @@ import { Upload, FileImage, Loader2, CheckCircle, AlertCircle, X } from 'lucide-
 import toast from 'react-hot-toast'
 import { SUPPORTED_IMAGE_TYPES, type AnalysisResult, type MangaAnalysisResult } from '@/lib/types'
 import { useAIProviderStore } from '@/lib/store'
+import { useClientPanelSegmentation } from '@/hooks/useClientPanelSegmentation'
 
 interface ImageUploaderProps {
   onAnalysisComplete: (result: AnalysisResult) => void
@@ -21,6 +22,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
   const [progress, setProgress] = useState(0)
   const [segmentationStatus, setSegmentationStatus] = useState<'idle' | 'segmenting' | 'complete' | 'error'>('idle')
   const { selectedProvider, openaiFormatSettings, modelSettings, apiKeySettings } = useAIProviderStore()
+  const { segmentPanels, isLoading: isSegmenting, error: segmentationError, isAvailable: isClientSegmentationAvailable } = useClientPanelSegmentation()
 
   const processImage = useCallback(async (file: File) => {
     if (!file) return
@@ -37,49 +39,124 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
         setProgress(20)
 
         try {
-          // Send image to AI for analysis
-          if (isMangaMode) {
+          console.log('🔍 Debug: isMangaMode =', isMangaMode)
+          console.log('🔍 Debug: isClientSegmentationAvailable =', isClientSegmentationAvailable)
+          
+          if (isMangaMode && isClientSegmentationAvailable) {
+            // Use client-side segmentation for manga mode
             setSegmentationStatus('segmenting')
             setProgress(30)
-          }
-          setProgress(40)
-          const response = await fetch('/api/analyze', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              imageBase64,
-              provider: selectedProvider,
-              modelSettings,
-              apiKeySettings,
-              openaiFormatSettings,
-              mangaMode: isMangaMode
-            }),
-          })
-
-          if (isMangaMode) {
+            
+            console.log('🔍 Starting client-side panel segmentation...')
+            const segmentationResult = await segmentPanels(imageBase64)
+            
+            console.log('📊 Segmentation result:', segmentationResult)
+            
             setSegmentationStatus('complete')
-          }
-
-          setProgress(70)
-
-          if (!response.ok) {
-            const errorData = await response.json()
-            throw new Error(errorData.error || 'Failed to analyze image')
-          }
-
-          const result: AnalysisResult | MangaAnalysisResult = await response.json()
-          setProgress(100)
-
-          // Show success message
-          toast.success(`✅ Image analyzed successfully using ${result.provider?.toUpperCase()}!`)
-          
-          // Pass result to appropriate parent component handler
-          if (isMangaMode && 'panels' in result) {
-            onMangaAnalysisComplete(result as MangaAnalysisResult)
+            setProgress(50)
+            
+            // Now analyze each panel using the API
+            const panelAnalyses = await Promise.allSettled(
+              segmentationResult.panels.map(async (panel, index) => {
+                const response = await fetch('/api/analyze', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    imageBase64: panel.imageData,
+                    provider: selectedProvider,
+                    modelSettings,
+                    apiKeySettings,
+                    openaiFormatSettings,
+                    mangaMode: false // Analyze individual panels as regular images
+                  }),
+                })
+                
+                if (!response.ok) {
+                  throw new Error(`Failed to analyze panel ${index + 1}`)
+                }
+                
+                const panelResult = await response.json()
+                return {
+                  panelNumber: index + 1,
+                  position: panel.boundingBox,
+                  imageData: panel.imageData,
+                  extractedText: panelResult.extractedText || '',
+                  translation: panelResult.translation || '',
+                  words: panelResult.words || [],
+                  grammar: panelResult.grammar || [],
+                  context: panelResult.context || ''
+                }
+              })
+            )
+            
+            setProgress(90)
+            
+            // Extract successful analyses
+            const panels = panelAnalyses
+              .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
+              .map(result => result.value)
+            
+            const mangaResult: MangaAnalysisResult = {
+              panels,
+              overallSummary: `This manga page contains ${panels.length} panels with segmented content.`,
+              readingOrder: segmentationResult.readingOrder,
+              provider: selectedProvider
+            }
+            
+            setProgress(100)
+            setIsAnalyzing(false)
+            toast.success(`✅ Manga analyzed with client-side segmentation! Found ${panels.length} panels.`)
+            onMangaAnalysisComplete(mangaResult)
+            
           } else {
-            onAnalysisComplete(result as AnalysisResult)
+            // Use server-side analysis for regular images or fallback
+            if (isMangaMode) {
+              setSegmentationStatus('segmenting')
+              setProgress(30)
+            }
+            setProgress(40)
+            
+            const response = await fetch('/api/analyze', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                imageBase64,
+                provider: selectedProvider,
+                modelSettings,
+                apiKeySettings,
+                openaiFormatSettings,
+                mangaMode: isMangaMode
+              }),
+            })
+
+            if (isMangaMode) {
+              setSegmentationStatus('complete')
+            }
+
+            setProgress(70)
+
+            if (!response.ok) {
+              const errorData = await response.json()
+              throw new Error(errorData.error || 'Failed to analyze image')
+            }
+
+            const result: AnalysisResult | MangaAnalysisResult = await response.json()
+            setProgress(100)
+            setIsAnalyzing(false)
+
+            // Show success message
+            toast.success(`✅ Image analyzed successfully using ${result.provider?.toUpperCase()}!`)
+            
+            // Pass result to appropriate parent component handler
+            if (isMangaMode && 'panels' in result) {
+              onMangaAnalysisComplete(result as MangaAnalysisResult)
+            } else {
+              onAnalysisComplete(result as AnalysisResult)
+            }
           }
 
         } catch (error) {

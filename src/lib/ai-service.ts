@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel } from './types'
-import { PanelSegmentationService } from './panel-segmentation-service'
+import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
 
 export interface AnalysisRequest {
@@ -586,7 +586,7 @@ export class AIAnalysisService {
   private openaiService?: OpenAIService
   private geminiService?: GeminiService
   private openaiFormatService?: OpenAIFormatService
-  private panelSegmentationService: PanelSegmentationService
+  private panelSegmentationService: ClientPanelSegmentationService
   private improvedTextDetection: ImprovedTextDetectionService
 
   constructor(
@@ -595,7 +595,8 @@ export class AIAnalysisService {
     openaiFormatSettings?: OpenAIFormatSettings,
     modelSettings?: ModelSettings
   ) {
-    this.panelSegmentationService = new PanelSegmentationService()
+    // Initialize client-side panel segmentation service
+    this.panelSegmentationService = new ClientPanelSegmentationService()
     this.improvedTextDetection = new ImprovedTextDetectionService({
       enableRetry: true,
       maxRetries: 2,
@@ -664,8 +665,18 @@ export class AIAnalysisService {
 
   async analyzeMangaImage(imageBase64: string, provider: AIProvider = 'openai'): Promise<MangaAnalysisResult> {
     try {
-      console.log('🔍 Starting panel segmentation...')
-      // First, segment the panels using the ComicPanelSegmentation algorithm
+      console.log('🔍 Starting client-side panel segmentation...')
+      
+      // Check if client-side segmentation is available
+      if (!this.panelSegmentationService.isAvailable()) {
+        console.log('⚠️ Client-side segmentation not available, falling back to direct analysis')
+        return await this.analyzeMangaImageDirect(imageBase64, provider)
+      }
+      
+      // Initialize the client-side segmentation service
+      await this.panelSegmentationService.initialize()
+      
+      // Segment the panels using client-side OpenCV.js
       const segmentationResult = await this.panelSegmentationService.segmentPanels(imageBase64)
       
       console.log('📊 Segmentation result:', {
