@@ -93,24 +93,22 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                       <button
                         key={provider.id}
                         onClick={() => {
-                          if (isAvailable) {
-                            setSelectedProvider(provider.id)
-                            if (provider.id === 'openai-format') {
-                              setShowAdvanced(true)
-                            }
+                          setSelectedProvider(provider.id)
+                          if (provider.id === 'openai-format') {
+                            setShowAdvanced(true)
                           }
                         }}
-                        disabled={!isAvailable}
                         className={`p-3 rounded-lg border-2 transition-all text-center ${
                           isSelected
                             ? 'border-primary-500 bg-primary-50'
-                            : isAvailable
-                            ? 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                            : 'border-gray-100 bg-gray-50 opacity-50 cursor-not-allowed'
-                        }`}
+                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                        } ${!isAvailable ? 'relative' : ''}`}
                       >
                         <Icon className={`w-5 h-5 mx-auto mb-1 ${isSelected ? 'text-primary-500' : provider.color}`} />
                         <div className="text-xs font-medium text-gray-700">{provider.name}</div>
+                        {!isAvailable && (
+                          <div className="text-xs text-amber-600 mt-1">⚠ API key needed</div>
+                        )}
                         {isSelected && <Check className="w-3 h-3 text-primary-500 mx-auto mt-1" />}
                       </button>
                     )
