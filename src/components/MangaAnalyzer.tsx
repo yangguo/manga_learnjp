@@ -60,7 +60,7 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId }: Manga
       <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-            📚 Manga Page Summary
+            📚 {analysisResult.panels.length > 1 ? 'Manga Page Summary' : 'Image Analysis Summary'}
           </h2>
           <button
             onClick={() => copyToClipboard(analysisResult.overallSummary)}
@@ -72,37 +72,56 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId }: Manga
         </div>
         <p className="text-gray-800 leading-relaxed">{analysisResult.overallSummary}</p>
         
-        {/* Reading Order Info */}
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-sm text-blue-800">
-            <strong>Reading Order:</strong> {analysisResult.readingOrder.join(' → ')} 
-            <span className="text-blue-600 ml-2">(Right to Left, Top to Bottom)</span>
-          </p>
-          <p className="text-xs text-blue-600 mt-1">
-            Panels have been automatically segmented and ordered using computer vision
-          </p>
-        </div>
+        {/* Reading Order Info - only show for multiple panels */}
+        {analysisResult.panels.length > 1 && (
+          <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm text-blue-800">
+              <strong>Reading Order:</strong> {analysisResult.readingOrder.join(' → ')} 
+              <span className="text-blue-600 ml-2">(Right to Left, Top to Bottom)</span>
+            </p>
+            <p className="text-xs text-blue-600 mt-1">
+              Panels have been automatically segmented and ordered using AI analysis
+            </p>
+          </div>
+        )}
 
-        {/* Panel Layout Toggle */}
-        <div className="mt-4 flex items-center gap-3">
-          <span className="text-sm font-medium text-gray-700">View Mode:</span>
-          <button
-            onClick={() => setShowOriginalLayout(!showOriginalLayout)}
-            className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
-              showOriginalLayout 
-                ? 'bg-blue-600 text-white' 
-                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-            }`}
-          >
-            {showOriginalLayout ? 'Reading Sequence' : 'Original Layout'}
-          </button>
-        </div>
+        {/* Single panel info */}
+        {analysisResult.panels.length === 1 && (
+          <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-sm text-green-800">
+              <strong>Analysis Mode:</strong> Single panel detected - displaying detailed text analysis
+            </p>
+            <p className="text-xs text-green-600 mt-1">
+              AI analysis detected one main content area for detailed text analysis
+            </p>
+          </div>
+        )}
+
+        {/* Panel Layout Toggle - only show for multiple panels */}
+        {analysisResult.panels.length > 1 && (
+          <div className="mt-4 flex items-center gap-3">
+            <span className="text-sm font-medium text-gray-700">View Mode:</span>
+            <button
+              onClick={() => setShowOriginalLayout(!showOriginalLayout)}
+              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${
+                showOriginalLayout 
+                  ? 'bg-blue-600 text-white' 
+                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+              }`}
+            >
+              {showOriginalLayout ? 'Reading Sequence' : 'Original Layout'}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Panel Analysis */}
       <div className="space-y-4">
         <h2 className="text-xl font-semibold text-gray-900">
-          Panel-by-Panel Analysis ({showOriginalLayout ? 'Reading Sequence' : 'Original Layout'})
+          {analysisResult.panels.length > 1 
+            ? `Panel-by-Panel Analysis (${showOriginalLayout ? 'Reading Sequence' : 'Original Layout'})`
+            : 'Detailed Text Analysis'
+          }
         </h2>
         
         {sortedPanels.map((panel, sequenceIndex) => {
@@ -136,11 +155,13 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId }: Manga
                   <div className="flex items-center gap-3">
                     <div className="flex items-center gap-2">
                       <span className="bg-blue-600 text-white text-sm font-medium px-3 py-1 rounded-full">
-                        Panel {panel.panelNumber}
+                        {analysisResult.panels.length > 1 ? `Panel ${panel.panelNumber}` : 'Content'}
                       </span>
-                      <span className="bg-green-600 text-white text-xs font-medium px-2 py-1 rounded-full">
-                        #{readingOrderPosition}
-                      </span>
+                      {analysisResult.panels.length > 1 && (
+                        <span className="bg-green-600 text-white text-xs font-medium px-2 py-1 rounded-full">
+                          #{readingOrderPosition}
+                        </span>
+                      )}
                     </div>
                     <div className="flex flex-col">
                       <h3 className="font-medium text-gray-900 text-left">
@@ -170,16 +191,19 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId }: Manga
                   {panel.imageData && (
                     <div className="space-y-3">
                       <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-                        🖼️ Panel Image
+                        🖼️ {analysisResult.panels.length > 1 ? 'Panel Image' : 'Analyzed Image'}
                       </h4>
                       <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
                         <img
                           src={`data:image/png;base64,${panel.imageData}`}
-                          alt={`Panel ${panel.panelNumber}`}
+                          alt={`${analysisResult.panels.length > 1 ? `Panel ${panel.panelNumber}` : 'Analyzed content'}`}
                           className="w-full h-auto max-h-64 object-contain rounded-lg shadow-sm border border-gray-200"
                         />
                         <p className="text-xs text-gray-500 mt-2 text-center">
-                          Automatically extracted panel #{readingOrderPosition} in reading sequence
+                          {analysisResult.panels.length > 1 
+                            ? `Automatically extracted panel #${readingOrderPosition} in reading sequence`
+                            : 'Automatically detected content area for analysis'
+                          }
                         </p>
                       </div>
                     </div>
@@ -189,7 +213,7 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId }: Manga
                   {panel.position && (
                     <div className="space-y-3">
                       <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-                        📍 Panel Details
+                        📍 {analysisResult.panels.length > 1 ? 'Panel Details' : 'Content Details'}
                       </h4>
                       <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
                         <div className="grid grid-cols-2 gap-3 text-sm">
@@ -201,18 +225,22 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId }: Manga
                             <span className="font-medium text-purple-800">Dimensions:</span>
                             <p className="text-purple-700">{panel.position.width} × {panel.position.height}px</p>
                           </div>
-                          <div>
-                            <span className="font-medium text-purple-800">Reading Order:</span>
-                            <p className="text-purple-700">#{readingOrderPosition} of {analysisResult.panels.length}</p>
-                          </div>
-                          <div>
-                            <span className="font-medium text-purple-800">Panel ID:</span>
-                            <p className="text-purple-700">Panel {panel.panelNumber}</p>
-                          </div>
+                          {analysisResult.panels.length > 1 && (
+                            <>
+                              <div>
+                                <span className="font-medium text-purple-800">Reading Order:</span>
+                                <p className="text-purple-700">#{readingOrderPosition} of {analysisResult.panels.length}</p>
+                              </div>
+                              <div>
+                                <span className="font-medium text-purple-800">Panel ID:</span>
+                                <p className="text-purple-700">Panel {panel.panelNumber}</p>
+                              </div>
+                            </>
+                          )}
                         </div>
                         <div className="pt-2 border-t border-purple-200">
                           <span className="text-xs text-purple-600">
-                            📐 Automatically detected using computer vision algorithms
+                            📐 Automatically detected using AI analysis algorithms
                           </span>
                         </div>
                       </div>
@@ -255,7 +283,7 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId }: Manga
                     <div className="space-y-3">
                       <div className="flex items-center justify-between">
                         <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-                          � Panel Context
+                          🎭 {analysisResult.panels.length > 1 ? 'Panel Context' : 'Content Context'}
                         </h4>
                         <button
                           onClick={() => copyToClipboard(panel.context)}

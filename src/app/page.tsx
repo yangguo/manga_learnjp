@@ -108,8 +108,8 @@ export default function Home() {
           
           <p className="text-sm text-gray-500 mt-4">
             {isMangaMode
-              ? 'Extract text from individual manga panels in proper reading order'
-              : 'Extract and analyze all text from the entire image at once'
+              ? 'Extract text from individual manga panels using computer vision and AI analysis'
+              : 'Automatically detect panels with AI, or fallback to simple text extraction'
             }
           </p>
         </motion.div>
@@ -169,9 +169,10 @@ export default function Home() {
             transition={{ duration: 0.6, delay: 0.4 }}
           >
             {mangaAnalysisResult ? (
+              // Show panel analysis results (for both manga mode and simple mode with panel detection)
               <div className="space-y-8">
                 {/* Panel Overview Grid */}
-                {mangaAnalysisResult.panels.length > 0 && (
+                {mangaAnalysisResult.panels.length > 1 && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -243,9 +244,10 @@ export default function Home() {
                   selectedPanelId={selectedPanelId}
                 />
               </div>
-            ) : (
+            ) : analysisResult ? (
+              // Show simple text analysis results (fallback when panel detection fails)
               <TextAnalyzer analysisResult={analysisResult} />
-            )}
+            ) : null}
           </motion.div>
         </div>
 
