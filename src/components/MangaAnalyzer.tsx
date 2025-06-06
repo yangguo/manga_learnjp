@@ -2,14 +2,16 @@
 
 import { useState, useEffect } from 'react'
 import { Copy, ChevronRight, ChevronDown } from 'lucide-react'
+import PanelImageViewer from './PanelImageViewer'
 import type { MangaAnalysisResult, MangaPanel, WordAnalysis, GrammarPattern } from '@/lib/types'
 
 interface MangaAnalyzerProps {
   analysisResult: MangaAnalysisResult
   selectedPanelId?: number | null
+  originalImageData?: string // base64 encoded original image
 }
 
-export default function MangaAnalyzer({ analysisResult, selectedPanelId }: MangaAnalyzerProps) {
+export default function MangaAnalyzer({ analysisResult, selectedPanelId, originalImageData }: MangaAnalyzerProps) {
   const [expandedPanels, setExpandedPanels] = useState<Set<number>>(new Set([1]))
   const [showOriginalLayout, setShowOriginalLayout] = useState(true)
 
@@ -185,65 +187,27 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId }: Manga
             {/* Panel Content */}
             {expandedPanels.has(panel.panelNumber) && (
               <div className="p-6 space-y-6">
-                {/* Panel Image and Position Info Grid */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Panel Image */}
+                {/* Panel Analysis */}
+                <div className="grid grid-cols-1 gap-6">
+                  {/* Enhanced Panel Image Viewer */}
                   {panel.imageData && (
                     <div className="space-y-3">
                       <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
                         🖼️ {analysisResult.panels.length > 1 ? 'Panel Image' : 'Analyzed Image'}
                       </h4>
-                      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-                        <img
-                          src={`data:image/png;base64,${panel.imageData}`}
-                          alt={`${analysisResult.panels.length > 1 ? `Panel ${panel.panelNumber}` : 'Analyzed content'}`}
-                          className="w-full h-auto max-h-64 object-contain rounded-lg shadow-sm border border-gray-200"
-                        />
-                        <p className="text-xs text-gray-500 mt-2 text-center">
-                          {analysisResult.panels.length > 1 
-                            ? `Automatically extracted panel #${readingOrderPosition} in reading sequence`
-                            : 'Automatically detected content area for analysis'
-                          }
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Panel Position Info */}
-                  {panel.position && (
-                    <div className="space-y-3">
-                      <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
-                        📍 {analysisResult.panels.length > 1 ? 'Panel Details' : 'Content Details'}
-                      </h4>
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 space-y-3">
-                        <div className="grid grid-cols-2 gap-3 text-sm">
-                          <div>
-                            <span className="font-medium text-purple-800">Position:</span>
-                            <p className="text-purple-700">({panel.position.x}, {panel.position.y})</p>
-                          </div>
-                          <div>
-                            <span className="font-medium text-purple-800">Dimensions:</span>
-                            <p className="text-purple-700">{panel.position.width} × {panel.position.height}px</p>
-                          </div>
-                          {analysisResult.panels.length > 1 && (
-                            <>
-                              <div>
-                                <span className="font-medium text-purple-800">Reading Order:</span>
-                                <p className="text-purple-700">#{readingOrderPosition} of {analysisResult.panels.length}</p>
-                              </div>
-                              <div>
-                                <span className="font-medium text-purple-800">Panel ID:</span>
-                                <p className="text-purple-700">Panel {panel.panelNumber}</p>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        <div className="pt-2 border-t border-purple-200">
-                          <span className="text-xs text-purple-600">
-                            📐 Automatically detected using AI analysis algorithms
-                          </span>
-                        </div>
-                      </div>
+                      <PanelImageViewer
+                        panelImageData={panel.imageData}
+                        originalImageData={originalImageData}
+                        panelPosition={panel.position}
+                        originalImageDimensions={
+                          analysisResult.panels.length > 1 ? {
+                            width: Math.max(...analysisResult.panels.map(p => p.position.x + p.position.width)),
+                            height: Math.max(...analysisResult.panels.map(p => p.position.y + p.position.height))
+                          } : undefined
+                        }
+                        panelNumber={panel.panelNumber}
+                        readingOrderPosition={readingOrderPosition}
+                      />
                     </div>
                   )}
                 </div>

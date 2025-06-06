@@ -185,7 +185,10 @@ export function ClientPanelSegmentationDemo({
                   <img
                     src={`data:image/jpeg;base64,${panel.imageData}`}
                     alt={`Panel ${index + 1}`}
-                    className="w-full h-32 object-cover"
+                    className="w-full h-48 object-contain bg-gray-100"
+                    style={{
+                      imageRendering: 'crisp-edges'
+                    }}
                   />
                   <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
                     Panel {index + 1}

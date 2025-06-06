@@ -14,6 +14,7 @@ import { AlertCircle, X, BookOpen, FileText } from 'lucide-react'
 export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [mangaAnalysisResult, setMangaAnalysisResult] = useState<MangaAnalysisResult | null>(null)
+  const [originalImageData, setOriginalImageData] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [isMangaMode, setIsMangaMode] = useState(true)
   const [selectedPanelId, setSelectedPanelId] = useState<number | null>(null)
@@ -21,6 +22,7 @@ export default function Home() {
   const handleAnalysisComplete = (result: AnalysisResult) => {
     setAnalysisResult(result)
     setMangaAnalysisResult(null)
+    setOriginalImageData(null) // Clear original image data for simple analysis
     setError(null) // Clear any previous errors
     setSelectedPanelId(null)
   }
@@ -32,10 +34,15 @@ export default function Home() {
     setSelectedPanelId(null)
   }
 
+  const handleOriginalImageChange = (imageData: string | null) => {
+    setOriginalImageData(imageData)
+  }
+
   const handleError = (errorMessage: string) => {
     setError(errorMessage)
     setAnalysisResult(null) // Clear any previous results
     setMangaAnalysisResult(null)
+    setOriginalImageData(null) // Clear original image data on error
     setSelectedPanelId(null)
   }
 
@@ -158,6 +165,7 @@ export default function Home() {
             <ImageUploader 
               onAnalysisComplete={handleAnalysisComplete}
               onMangaAnalysisComplete={handleMangaAnalysisComplete}
+              onOriginalImageChange={handleOriginalImageChange}
               onError={handleError}
               isMangaMode={isMangaMode}
             />
@@ -242,6 +250,7 @@ export default function Home() {
                 <MangaAnalyzer 
                   analysisResult={mangaAnalysisResult} 
                   selectedPanelId={selectedPanelId}
+                  originalImageData={originalImageData || undefined}
                 />
               </div>
             ) : analysisResult ? (

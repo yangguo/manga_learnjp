@@ -12,11 +12,12 @@ import { useClientPanelSegmentation } from '@/hooks/useClientPanelSegmentation'
 interface ImageUploaderProps {
   onAnalysisComplete: (result: AnalysisResult) => void
   onMangaAnalysisComplete: (result: MangaAnalysisResult) => void
+  onOriginalImageChange: (imageData: string | null) => void
   onError: (errorMessage: string) => void
   isMangaMode: boolean
 }
 
-export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisComplete, onError, isMangaMode }: ImageUploaderProps) {
+export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisComplete, onOriginalImageChange, onError, isMangaMode }: ImageUploaderProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
@@ -36,6 +37,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
       reader.onload = async () => {
         const imageBase64 = (reader.result as string).split(',')[1]
         setUploadedImage(reader.result as string)
+        onOriginalImageChange(imageBase64) // Store the original image data
         setProgress(20)
 
         try {
@@ -274,6 +276,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
 
   const resetUpload = () => {
     setUploadedImage(null)
+    onOriginalImageChange(null) // Clear the original image data
     setIsAnalyzing(false)
     setProgress(0)
     setSegmentationStatus('idle')
