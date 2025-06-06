@@ -18,6 +18,7 @@ interface PanelImageViewerProps {
   }
   panelNumber: number
   readingOrderPosition: number
+  isSimpleAnalysisMode?: boolean
 }
 
 export default function PanelImageViewer({
@@ -26,7 +27,8 @@ export default function PanelImageViewer({
   panelPosition,
   originalImageDimensions,
   panelNumber,
-  readingOrderPosition
+  readingOrderPosition,
+  isSimpleAnalysisMode = false
 }: PanelImageViewerProps) {
   const [viewMode, setViewMode] = useState<'panel' | 'context'>('panel')
   const [zoom, setZoom] = useState(1)
@@ -83,14 +85,19 @@ export default function PanelImageViewer({
       displayedHeight = containerHeight
     }
 
-    // Calculate zoom to show panel at a reasonable size (panel takes up ~40% of view)
+    // Calculate zoom to show panel at a reasonable size
     const panelDisplayWidth = (panelPosition.width / originalImageDimensions.width) * displayedWidth
     const panelDisplayHeight = (panelPosition.height / originalImageDimensions.height) * displayedHeight
     
-    const targetPanelSize = Math.min(containerWidth, containerHeight) * 0.4
+    // In simple analysis mode, make the detected content larger (60% of view)
+    // In manga mode, use smaller size (40% of view) to show more context
+    const targetPanelPercentage = isSimpleAnalysisMode ? 0.6 : 0.4
+    const targetPanelSize = Math.min(containerWidth, containerHeight) * targetPanelPercentage
     const scaleFactorX = targetPanelSize / panelDisplayWidth
     const scaleFactorY = targetPanelSize / panelDisplayHeight
-    const contextZoom = Math.min(scaleFactorX, scaleFactorY, 4) // Cap at 4x zoom
+    // In simple analysis mode, allow higher zoom levels for better content visibility
+    const maxZoom = isSimpleAnalysisMode ? 6 : 4
+    const contextZoom = Math.min(scaleFactorX, scaleFactorY, maxZoom)
     
     // Calculate panel center in displayed image coordinates
     const panelCenterX = (panelPosition.x + panelPosition.width / 2) / originalImageDimensions.width
@@ -101,7 +108,7 @@ export default function PanelImageViewer({
     const panY = -(panelCenterY - 0.5) * displayedHeight * contextZoom
 
     return {
-      zoom: Math.max(1, contextZoom),
+      zoom: Math.max(isSimpleAnalysisMode ? 1.5 : 1, contextZoom), // Minimum 1.5x zoom in simple analysis mode
       panPosition: { x: panX, y: panY }
     }
   }
@@ -118,6 +125,12 @@ export default function PanelImageViewer({
       setPanPosition(contextView.panPosition)
     }
     
+    // In simple analysis mode, default to context view to show panel location
+    if (isSimpleAnalysisMode && originalImageData && panelPosition) {
+      setViewMode('context')
+      return
+    }
+    
     // Auto-suggest context view for very small panels if original image is available
     if (originalImageData && panelPosition) {
       const panelArea = panelPosition.width * panelPosition.height
@@ -129,7 +142,7 @@ export default function PanelImageViewer({
         setViewMode('panel')
       }
     }
-  }, [panelPosition, panelNumber, originalImageData, viewMode])
+  }, [panelPosition, panelNumber, originalImageData, viewMode, isSimpleAnalysisMode])
 
   const handleViewModeChange = (newMode: 'panel' | 'context') => {
     setViewMode(newMode)
@@ -285,7 +298,7 @@ export default function PanelImageViewer({
             }`}
           >
             <Eye size={16} className="mr-1" />
-            Panel View
+            {isSimpleAnalysisMode ? 'Content View' : 'Panel View'}
           </button>
           {originalImageData && (
             <button
@@ -297,10 +310,15 @@ export default function PanelImageViewer({
               }`}
             >
               <Maximize2 size={16} className="mr-1" />
-              Context View
+              {isSimpleAnalysisMode ? 'Full Image View' : 'Context View'}
             </button>
           )}
-          {panelPosition && panelPosition.width * panelPosition.height < 10000 && originalImageData && (
+          {isSimpleAnalysisMode && originalImageData && (
+            <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded border border-blue-200">
+              🎯 Detected content within your image - Enhanced zoom enabled
+            </span>
+          )}
+          {!isSimpleAnalysisMode && panelPosition && panelPosition.width * panelPosition.height < 10000 && originalImageData && (
             <span className="text-xs text-orange-600 bg-orange-50 px-2 py-1 rounded border border-orange-200">
               💡 Try Context View for small panels
             </span>
@@ -381,7 +399,7 @@ export default function PanelImageViewer({
               }}
             >
               <div className="absolute -top-6 left-0 bg-red-500 text-white text-xs px-2 py-1 rounded">
-                Panel {panelNumber} (#{readingOrderPosition})
+                {isSimpleAnalysisMode ? 'Detected Content' : `Panel ${panelNumber} (#{readingOrderPosition})`}
               </div>
             </div>
           )}
@@ -398,7 +416,10 @@ export default function PanelImageViewer({
         {zoom > 1 && (
           <div className="absolute bottom-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
             Click and drag to pan • Scroll to zoom
-            {viewMode === 'context' && (
+            {viewMode === 'context' && isSimpleAnalysisMode && (
+              <div className="text-yellow-300 mt-1">🎯 Showing detected content in your image</div>
+            )}
+            {viewMode === 'context' && !isSimpleAnalysisMode && (
               <div className="text-yellow-300 mt-1">🎯 Centered on Panel {panelNumber}</div>
             )}
             {viewMode === 'panel' && zoom === calculateOptimalZoom() && zoom > 1 && (
@@ -411,11 +432,11 @@ export default function PanelImageViewer({
       {/* Panel Info */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-center">
-          <div className="font-medium text-blue-800">Panel Number</div>
+          <div className="font-medium text-blue-800">{isSimpleAnalysisMode ? 'Content Number' : 'Panel Number'}</div>
           <div className="text-blue-600 text-lg font-bold">{panelNumber}</div>
         </div>
         <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-center">
-          <div className="font-medium text-green-800">Reading Order</div>
+          <div className="font-medium text-green-800">{isSimpleAnalysisMode ? 'Detection Order' : 'Reading Order'}</div>
           <div className="text-green-600 text-lg font-bold">#{readingOrderPosition}</div>
         </div>
         {panelPosition && (
@@ -428,7 +449,7 @@ export default function PanelImageViewer({
               <div className="font-medium text-orange-800">Dimensions</div>
               <div className="text-orange-600 font-mono text-sm">{panelPosition.width}×{panelPosition.height}</div>
               {panelPosition.width * panelPosition.height < 10000 && (
-                <div className="text-xs text-orange-500 mt-1">Small panel - Auto-fitted</div>
+                <div className="text-xs text-orange-500 mt-1">{isSimpleAnalysisMode ? 'Small content - Auto-fitted' : 'Small panel - Auto-fitted'}</div>
               )}
             </div>
           </>

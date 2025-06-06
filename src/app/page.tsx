@@ -246,6 +246,7 @@ export default function Home() {
                   analysisResult={mangaAnalysisResult} 
                   selectedPanelId={selectedPanelId}
                   originalImageData={originalImageData || undefined}
+                  isSimpleAnalysisMode={!isMangaMode}
                 />
               </div>
             ) : analysisResult ? (

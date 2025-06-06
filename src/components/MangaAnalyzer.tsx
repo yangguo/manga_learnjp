@@ -9,9 +9,10 @@ interface MangaAnalyzerProps {
   analysisResult: MangaAnalysisResult
   selectedPanelId?: number | null
   originalImageData?: string // base64 encoded original image
+  isSimpleAnalysisMode?: boolean
 }
 
-export default function MangaAnalyzer({ analysisResult, selectedPanelId, originalImageData }: MangaAnalyzerProps) {
+export default function MangaAnalyzer({ analysisResult, selectedPanelId, originalImageData, isSimpleAnalysisMode = false }: MangaAnalyzerProps) {
   const [expandedPanels, setExpandedPanels] = useState<Set<number>>(new Set([1]))
   const [showOriginalLayout, setShowOriginalLayout] = useState(true)
 
@@ -203,6 +204,7 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
                         }
                         panelNumber={panel.panelNumber}
                         readingOrderPosition={readingOrderPosition}
+                        isSimpleAnalysisMode={isSimpleAnalysisMode}
                       />
                     </div>
                   )}
