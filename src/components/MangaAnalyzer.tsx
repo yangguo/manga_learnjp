@@ -49,12 +49,8 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
     }
   }
 
-  // Sort panels by reading order
-  const sortedPanels = [...analysisResult.panels].sort((a, b) => {
-    const aIndex = analysisResult.readingOrder.indexOf(a.panelNumber)
-    const bIndex = analysisResult.readingOrder.indexOf(b.panelNumber)
-    return aIndex - bIndex
-  })
+  // Sort panels by reading order (panel numbers now match reading order positions)
+  const sortedPanels = [...analysisResult.panels].sort((a, b) => a.panelNumber - b.panelNumber)
 
   return (
     <div className="space-y-6">
@@ -127,7 +123,7 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
         </h2>
         
         {sortedPanels.map((panel, sequenceIndex) => {
-          const readingOrderPosition = analysisResult.readingOrder.indexOf(panel.panelNumber) + 1
+          const readingOrderPosition = panel.panelNumber // Panel number now matches reading order position
           
           return (
             <div 

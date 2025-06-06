@@ -192,13 +192,8 @@ export default function Home() {
                     </h2>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                       {mangaAnalysisResult.panels
-                        .sort((a, b) => {
-                          const aIndex = mangaAnalysisResult.readingOrder.indexOf(a.panelNumber)
-                          const bIndex = mangaAnalysisResult.readingOrder.indexOf(b.panelNumber)
-                          return aIndex - bIndex
-                        })
+                        .sort((a, b) => a.panelNumber - b.panelNumber) // Sort by panel number (which now matches reading order)
                         .map((panel) => {
-                          const readingOrderPosition = mangaAnalysisResult.readingOrder.indexOf(panel.panelNumber) + 1
                           return (
                             <div key={panel.panelNumber} className="relative group">
                               {panel.imageData ? (
@@ -217,7 +212,7 @@ export default function Home() {
                                         Panel {panel.panelNumber}
                                       </span>
                                       <span className="bg-green-600 text-white text-xs font-medium px-2 py-1 rounded">
-                                        #{readingOrderPosition}
+                                        #{panel.panelNumber}
                                       </span>
                                     </div>
                                     <p className="text-xs text-gray-600 truncate" title={panel.extractedText}>

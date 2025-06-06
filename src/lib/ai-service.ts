@@ -696,14 +696,16 @@ export class AIAnalysisService {
       const panelAnalyses = await Promise.allSettled(
         segmentationResult.panels.map(async (segmentedPanel: SegmentedPanel, index: number) => {
           try {
-            console.log(`🔍 Analyzing panel ${index + 1} with improved text detection...`)
+            // Use reading order position as panel number (1-based)
+            const readingOrderPosition = segmentationResult.readingOrder[index]
+            console.log(`🔍 Analyzing panel ${readingOrderPosition} (position ${index + 1}) with improved text detection...`)
             
             // Use improved text detection service
             const panelAnalysis = await this.improvedTextDetection.analyzePanel(
               segmentedPanel.imageData,
               this,
               provider,
-              index + 1
+              readingOrderPosition
             )
             
             // Set the position from segmentation result
@@ -711,9 +713,9 @@ export class AIAnalysisService {
             
             return panelAnalysis
           } catch (error) {
-            console.error(`❌ Error analyzing panel ${index + 1}:`, error)
+            console.error(`❌ Error analyzing panel ${segmentationResult.readingOrder[index]}:`, error)
             return {
-              panelNumber: index + 1,
+              panelNumber: segmentationResult.readingOrder[index],
               position: segmentedPanel.boundingBox,
               imageData: segmentedPanel.imageData,
               extractedText: '',

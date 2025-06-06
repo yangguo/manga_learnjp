@@ -36,43 +36,125 @@ export default function PanelImageViewer({
   const containerRef = useRef<HTMLDivElement>(null)
   const imageRef = useRef<HTMLImageElement>(null)
 
-  // Calculate optimal initial zoom based on panel size
+  // Calculate optimal initial zoom based on panel size and container
   const calculateOptimalZoom = () => {
-    if (!panelPosition) return 2 // Default zoom for better readability
+    if (!panelPosition || !containerRef.current) return 1 // Start at 1x for natural size
     
-    // For very small panels (< 150px in either dimension), zoom more
+    const container = containerRef.current
+    const containerWidth = container.clientWidth
+    const containerHeight = container.clientHeight
+    
+    // Calculate zoom to fit the panel nicely in the container
+    const scaleX = (containerWidth * 0.8) / panelPosition.width
+    const scaleY = (containerHeight * 0.8) / panelPosition.height
+    const fitZoom = Math.min(scaleX, scaleY)
+    
+    // For very small panels, allow more zoom but cap it reasonably
     const minDimension = Math.min(panelPosition.width, panelPosition.height)
-    const maxDimension = Math.max(panelPosition.width, panelPosition.height)
+    if (minDimension < 100) return Math.min(fitZoom, 3)
+    if (minDimension < 150) return Math.min(fitZoom, 2)
     
-    if (minDimension < 100) return 4
-    if (minDimension < 150) return 3
-    if (maxDimension < 300) return 2.5
-    return 2 // Default zoom for better visibility
+    // For normal panels, use fit zoom but don't go below 1x or above 2x
+    return Math.max(1, Math.min(fitZoom, 2))
+  }
+
+  // Calculate optimal positioning for context view to center on panel
+  const calculateContextViewPosition = () => {
+    if (!panelPosition || !originalImageDimensions || !containerRef.current) {
+      return { zoom: 1, panPosition: { x: 0, y: 0 } }
+    }
+
+    const container = containerRef.current
+    const containerWidth = container.clientWidth
+    const containerHeight = container.clientHeight
+
+    // Calculate how the image will be displayed with object-contain
+    const imageAspectRatio = originalImageDimensions.width / originalImageDimensions.height
+    const containerAspectRatio = containerWidth / containerHeight
+    
+    let displayedWidth, displayedHeight
+    if (imageAspectRatio > containerAspectRatio) {
+      // Image is wider than container
+      displayedWidth = containerWidth
+      displayedHeight = containerWidth / imageAspectRatio
+    } else {
+      // Image is taller than container
+      displayedWidth = containerHeight * imageAspectRatio
+      displayedHeight = containerHeight
+    }
+
+    // Calculate zoom to show panel at a reasonable size (panel takes up ~40% of view)
+    const panelDisplayWidth = (panelPosition.width / originalImageDimensions.width) * displayedWidth
+    const panelDisplayHeight = (panelPosition.height / originalImageDimensions.height) * displayedHeight
+    
+    const targetPanelSize = Math.min(containerWidth, containerHeight) * 0.4
+    const scaleFactorX = targetPanelSize / panelDisplayWidth
+    const scaleFactorY = targetPanelSize / panelDisplayHeight
+    const contextZoom = Math.min(scaleFactorX, scaleFactorY, 4) // Cap at 4x zoom
+    
+    // Calculate panel center in displayed image coordinates
+    const panelCenterX = (panelPosition.x + panelPosition.width / 2) / originalImageDimensions.width
+    const panelCenterY = (panelPosition.y + panelPosition.height / 2) / originalImageDimensions.height
+    
+    // Calculate pan to center the panel in the container
+    const panX = -(panelCenterX - 0.5) * displayedWidth * contextZoom
+    const panY = -(panelCenterY - 0.5) * displayedHeight * contextZoom
+
+    return {
+      zoom: Math.max(1, contextZoom),
+      panPosition: { x: panX, y: panY }
+    }
   }
 
   // Set initial zoom when panel changes
   useEffect(() => {
-    const optimalZoom = calculateOptimalZoom()
-    setZoom(optimalZoom)
-    setPanPosition({ x: 0, y: 0 })
+    if (viewMode === 'panel') {
+      const optimalZoom = calculateOptimalZoom()
+      setZoom(optimalZoom)
+      setPanPosition({ x: 0, y: 0 })
+    } else if (viewMode === 'context') {
+      const contextView = calculateContextViewPosition()
+      setZoom(contextView.zoom)
+      setPanPosition(contextView.panPosition)
+    }
     
     // Auto-suggest context view for very small panels if original image is available
     if (originalImageData && panelPosition) {
       const panelArea = panelPosition.width * panelPosition.height
       const avgDimension = Math.sqrt(panelArea)
-      if (avgDimension < 120) {
+      if (avgDimension < 80) {
         // For very small panels, start with context view to show location
         setViewMode('context')
       } else {
         setViewMode('panel')
       }
     }
-  }, [panelPosition, panelNumber, originalImageData])
+  }, [panelPosition, panelNumber, originalImageData, viewMode])
+
+  const handleViewModeChange = (newMode: 'panel' | 'context') => {
+    setViewMode(newMode)
+    
+    if (newMode === 'panel') {
+      const optimalZoom = calculateOptimalZoom()
+      setZoom(optimalZoom)
+      setPanPosition({ x: 0, y: 0 })
+    } else if (newMode === 'context') {
+      const contextView = calculateContextViewPosition()
+      setZoom(contextView.zoom)
+      setPanPosition(contextView.panPosition)
+    }
+  }
 
   const resetView = () => {
-    const optimalZoom = calculateOptimalZoom()
-    setZoom(optimalZoom)
-    setPanPosition({ x: 0, y: 0 })
+    if (viewMode === 'panel') {
+      const optimalZoom = calculateOptimalZoom()
+      setZoom(optimalZoom)
+      setPanPosition({ x: 0, y: 0 })
+    } else if (viewMode === 'context') {
+      const contextView = calculateContextViewPosition()
+      setZoom(contextView.zoom)
+      setPanPosition(contextView.panPosition)
+    }
   }
 
   const handleZoomIn = () => {
@@ -95,9 +177,24 @@ export default function PanelImageViewer({
 
   const handleMouseMove = (e: React.MouseEvent) => {
     if (isDragging && zoom > 1) {
+      const container = containerRef.current
+      if (!container) return
+      
+      const rect = container.getBoundingClientRect()
+      const centerX = rect.width / 2
+      const centerY = rect.height / 2
+      
+      // Calculate new position relative to container center
+      const newX = e.clientX - dragStart.x
+      const newY = e.clientY - dragStart.y
+      
+      // Constrain panning to keep image visible
+      const maxPanX = rect.width * (zoom - 1) / 2
+      const maxPanY = rect.height * (zoom - 1) / 2
+      
       setPanPosition({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y
+        x: Math.max(-maxPanX, Math.min(maxPanX, newX)),
+        y: Math.max(-maxPanY, Math.min(maxPanY, newY))
       })
     }
   }
@@ -109,7 +206,14 @@ export default function PanelImageViewer({
   const handleWheel = (e: React.WheelEvent) => {
     e.preventDefault()
     const delta = e.deltaY > 0 ? 0.9 : 1.1
-    setZoom(prev => Math.max(0.1, Math.min(5, prev * delta)))
+    const newZoom = Math.max(0.1, Math.min(5, zoom * delta))
+    
+    // When zooming, keep the image centered
+    if (newZoom <= 1) {
+      setPanPosition({ x: 0, y: 0 })
+    }
+    
+    setZoom(newZoom)
   }
 
   useEffect(() => {
@@ -173,7 +277,7 @@ export default function PanelImageViewer({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setViewMode('panel')}
+            onClick={() => handleViewModeChange('panel')}
             className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
               viewMode === 'panel'
                 ? 'bg-blue-600 text-white'
@@ -185,7 +289,7 @@ export default function PanelImageViewer({
           </button>
           {originalImageData && (
             <button
-              onClick={() => setViewMode('context')}
+              onClick={() => handleViewModeChange('context')}
               className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                 viewMode === 'context'
                   ? 'bg-blue-600 text-white'
@@ -224,7 +328,7 @@ export default function PanelImageViewer({
           <button
             onClick={resetView}
             className="p-2 text-gray-600 hover:text-blue-600 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
-            title={`Reset to optimal zoom (${Math.round(calculateOptimalZoom() * 100)}%)`}
+            title={`Reset to optimal view for ${viewMode} mode`}
           >
             <RotateCcw size={16} />
           </button>
@@ -234,25 +338,30 @@ export default function PanelImageViewer({
       {/* Image Viewer */}
       <div
         ref={containerRef}
-        className="relative bg-gray-50 border border-gray-200 rounded-lg overflow-hidden"
-        style={{ height: '600px' }} // Increased from 400px for better visibility
+        className="relative bg-gray-50 border border-gray-200 rounded-lg overflow-hidden flex items-center justify-center"
+        style={{ height: '500px' }} // Reduced from 600px for better proportions
         onWheel={handleWheel}
       >
         <div
-          className={`relative w-full h-full ${zoom > 1 ? 'cursor-grab' : ''} ${isDragging ? 'cursor-grabbing' : ''}`}
+          className={`relative ${zoom > 1 ? 'cursor-grab' : ''} ${isDragging ? 'cursor-grabbing' : ''}`}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           style={{
             transform: `scale(${zoom}) translate(${panPosition.x / zoom}px, ${panPosition.y / zoom}px)`,
-            transformOrigin: 'center center'
+            transformOrigin: 'center center',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: '100%',
+            height: '100%'
           }}
         >
           <img
             ref={imageRef}
             src={`data:image/${viewMode === 'panel' ? 'png' : 'jpeg'};base64,${viewMode === 'panel' ? panelImageData : originalImageData}`}
             alt={`Panel ${panelNumber} ${viewMode === 'panel' ? 'image' : 'in context'}`}
-            className="w-full h-full object-contain"
+            className="max-w-full max-h-full object-contain"
             style={{
               imageRendering: zoom > 2 ? 'crisp-edges' : 'auto'
             }}
@@ -289,8 +398,11 @@ export default function PanelImageViewer({
         {zoom > 1 && (
           <div className="absolute bottom-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
             Click and drag to pan • Scroll to zoom
-            {zoom === calculateOptimalZoom() && zoom > 1 && (
-              <div className="text-yellow-300 mt-1">✨ Auto-zoomed for readability</div>
+            {viewMode === 'context' && (
+              <div className="text-yellow-300 mt-1">🎯 Centered on Panel {panelNumber}</div>
+            )}
+            {viewMode === 'panel' && zoom === calculateOptimalZoom() && zoom > 1 && (
+              <div className="text-yellow-300 mt-1">✨ Auto-fitted for optimal viewing</div>
             )}
           </div>
         )}
@@ -315,8 +427,8 @@ export default function PanelImageViewer({
             <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 text-center">
               <div className="font-medium text-orange-800">Dimensions</div>
               <div className="text-orange-600 font-mono text-sm">{panelPosition.width}×{panelPosition.height}</div>
-              {panelPosition.width * panelPosition.height < 15000 && (
-                <div className="text-xs text-orange-500 mt-1">Small panel - Auto-zoomed</div>
+              {panelPosition.width * panelPosition.height < 10000 && (
+                <div className="text-xs text-orange-500 mt-1">Small panel - Auto-fitted</div>
               )}
             </div>
           </>
