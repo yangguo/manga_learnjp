@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel } from './types'
 import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
+import { createImageDataURL, getImageMimeType } from './image-utils'
 
 export interface AnalysisRequest {
   text: string
@@ -213,7 +214,7 @@ export class OpenAIService {
               {
                 type: 'image_url',
                 image_url: {
-                  url: `data:image/jpeg;base64,${imageBase64}`
+                  url: createImageDataURL(imageBase64)
                 }
               }
             ]
@@ -266,7 +267,7 @@ export class OpenAIService {
               {
                 type: 'image_url',
                 image_url: {
-                  url: `data:image/jpeg;base64,${imageBase64}`
+                  url: createImageDataURL(imageBase64)
                 }
               }
             ]
@@ -336,7 +337,7 @@ export class GeminiService {
     const imagePart = {
       inlineData: {
         data: imageBase64,
-        mimeType: 'image/jpeg'
+        mimeType: getImageMimeType(imageBase64)
       }
     }
 
@@ -366,7 +367,7 @@ export class GeminiService {
     const imagePart = {
       inlineData: {
         data: imageBase64,
-        mimeType: 'image/jpeg'
+        mimeType: getImageMimeType(imageBase64)
       }
     }
 
@@ -480,7 +481,7 @@ export class OpenAIFormatService {
               {
                 type: 'image_url',
                 image_url: {
-                  url: `data:image/jpeg;base64,${imageBase64}`
+                  url: createImageDataURL(imageBase64)
                 }
               }
             ]
@@ -545,7 +546,7 @@ export class OpenAIFormatService {
               {
                 type: 'image_url',
                 image_url: {
-                  url: `data:image/jpeg;base64,${imageBase64}`
+                  url: createImageDataURL(imageBase64)
                 }
               }
             ]

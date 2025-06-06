@@ -4,6 +4,7 @@
  */
 
 import type { AIProvider, MangaPanel, SegmentedPanel } from './types'
+import { createImageDataURL, getImageMimeType } from './image-utils'
 
 export interface TextDetectionOptions {
   // Minimum confidence threshold for text detection
@@ -235,7 +236,7 @@ Use the same JSON format as before.`
               {
                 type: 'image_url',
                 image_url: {
-                  url: `data:image/jpeg;base64,${imageBase64}`
+                  url: createImageDataURL(imageBase64)
                 }
               }
             ]
@@ -270,7 +271,7 @@ Use the same JSON format as before.`
     const imagePart = {
       inlineData: {
         data: imageBase64,
-        mimeType: 'image/jpeg'
+        mimeType: getImageMimeType(imageBase64)
       }
     }
 
