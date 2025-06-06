@@ -1,13 +1,7 @@
 import './globals.css'
 import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
-
-const inter = Inter({ 
-  subsets: ['latin'],
-  fallback: ['system-ui', 'arial'],
-  display: 'swap'
-})
+import './globals.css'
 
 export const metadata: Metadata = {
   title: 'Manga Learn JP - Learn Japanese Through Manga',
@@ -21,7 +15,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className={inter.className}>
+      <body className="font-sans">
         {children}
         <Toaster
           position="top-right"

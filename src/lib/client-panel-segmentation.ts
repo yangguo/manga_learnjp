@@ -161,7 +161,7 @@ export class ClientPanelSegmentationService {
           panels = this.createPanelData(linePanels, src, cropInfo, originalWidth, originalHeight)
         } else {
           console.log('🔄 Final fallback to relaxed contour detection')
-          const relaxedPanels = this.detectPanelsRelaxed(croppedMat)
+          const relaxedPanels = this.detectPanelsContourBasedRelaxed(croppedMat)
           console.log(`🎯 Relaxed detection found ${relaxedPanels.length} panels`)
           panels = this.createPanelData(relaxedPanels, src, cropInfo, originalWidth, originalHeight)
         }
