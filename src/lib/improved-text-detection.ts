@@ -204,8 +204,6 @@ Use the same JSON format as before.`
       extractedText: lastResult?.extractedText || '',
       sentences: lastResult?.sentences || [], // Sentence breakdown from AI analysis
       translation: lastResult?.translation || 'No text to translate',
-      words: lastResult?.words || [],
-      grammar: lastResult?.grammar || [],
       context: lastResult?.summary || 'Panel analysis completed'
     }
   }
