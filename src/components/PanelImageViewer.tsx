@@ -243,42 +243,18 @@ export default function PanelImageViewer({
     }
 
     const img = imageRef.current
-    const containerRect = img.getBoundingClientRect()
     
-    // Calculate the actual displayed image dimensions
-    const imgNaturalRatio = img.naturalWidth / img.naturalHeight
-    const containerRatio = containerRect.width / containerRect.height
-    
-    let displayedWidth, displayedHeight, offsetX, offsetY
-    
-    if (imgNaturalRatio > containerRatio) {
-      // Image is wider than container
-      displayedWidth = containerRect.width
-      displayedHeight = containerRect.width / imgNaturalRatio
-      offsetX = 0
-      offsetY = (containerRect.height - displayedHeight) / 2
-    } else {
-      // Image is taller than container
-      displayedWidth = containerRect.height * imgNaturalRatio
-      displayedHeight = containerRect.height
-      offsetX = (containerRect.width - displayedWidth) / 2
-      offsetY = 0
-    }
-
-    // Scale panel position to displayed image coordinates
-    const scaleX = displayedWidth / originalImageDimensions.width
-    const scaleY = displayedHeight / originalImageDimensions.height
-    
-    const overlayX = offsetX + (panelPosition.x * scaleX)
-    const overlayY = offsetY + (panelPosition.y * scaleY)
-    const overlayWidth = panelPosition.width * scaleX
-    const overlayHeight = panelPosition.height * scaleY
+    // Calculate the panel position as a percentage of the image
+    const panelLeftPercent = (panelPosition.x / originalImageDimensions.width) * 100
+    const panelTopPercent = (panelPosition.y / originalImageDimensions.height) * 100
+    const panelWidthPercent = (panelPosition.width / originalImageDimensions.width) * 100
+    const panelHeightPercent = (panelPosition.height / originalImageDimensions.height) * 100
 
     return {
-      left: overlayX,
-      top: overlayY,
-      width: overlayWidth,
-      height: overlayHeight
+      left: `${panelLeftPercent}%`,
+      top: `${panelTopPercent}%`,
+      width: `${panelWidthPercent}%`,
+      height: `${panelHeightPercent}%`
     }
   }
 
@@ -375,34 +351,36 @@ export default function PanelImageViewer({
             height: '100%'
           }}
         >
-          <img
-            ref={imageRef}
-            src={`data:image/${viewMode === 'panel' ? 'png' : 'jpeg'};base64,${viewMode === 'panel' ? panelImageData : originalImageData}`}
-            alt={`Panel ${panelNumber} ${viewMode === 'panel' ? 'image' : 'in context'}`}
-            className="max-w-full max-h-full object-contain"
-            style={{
-              imageRendering: zoom > 2 ? 'crisp-edges' : 'auto'
-            }}
-            draggable={false}
-          />
-
-          {/* Panel overlay for context view */}
-          {viewMode === 'context' && overlayStyle && (
-            <div
-              className="absolute border-2 border-red-500 bg-red-500 bg-opacity-20"
+          <div className="relative">
+            <img
+              ref={imageRef}
+              src={`data:image/${viewMode === 'panel' ? 'png' : 'jpeg'};base64,${viewMode === 'panel' ? panelImageData : originalImageData}`}
+              alt={`Panel ${panelNumber} ${viewMode === 'panel' ? 'image' : 'in context'}`}
+              className="max-w-full max-h-full object-contain"
               style={{
-                left: `${overlayStyle.left}px`,
-                top: `${overlayStyle.top}px`,
-                width: `${overlayStyle.width}px`,
-                height: `${overlayStyle.height}px`,
-                pointerEvents: 'none'
+                imageRendering: zoom > 2 ? 'crisp-edges' : 'auto'
               }}
-            >
-              <div className="absolute -top-6 left-0 bg-red-500 text-white text-xs px-2 py-1 rounded">
-                {isSimpleAnalysisMode ? 'Detected Content' : `Panel ${panelNumber} (#{readingOrderPosition})`}
+              draggable={false}
+            />
+
+            {/* Panel overlay for context view */}
+            {viewMode === 'context' && overlayStyle && (
+              <div
+                className="absolute border-2 border-red-500 bg-red-500 bg-opacity-20 pointer-events-none"
+                style={{
+                  left: overlayStyle.left,
+                  top: overlayStyle.top,
+                  width: overlayStyle.width,
+                  height: overlayStyle.height,
+                  zIndex: 10
+                }}
+              >
+                <div className="absolute -top-6 left-0 bg-red-500 text-white text-xs px-2 py-1 rounded whitespace-nowrap">
+                  {isSimpleAnalysisMode ? 'Detected Content' : `Panel ${panelNumber} (#{readingOrderPosition})`}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Zoom indicator */}
