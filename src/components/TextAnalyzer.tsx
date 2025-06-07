@@ -193,63 +193,110 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
         </motion.div>
       )}
 
-      {/* Vocabulary Section */}
-      {analysisResult.words && analysisResult.words.length > 0 && (
+      {/* Sentence-by-Sentence Analysis */}
+      {analysisResult.sentences && analysisResult.sentences.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.35 }}
           className="bg-white/5 backdrop-blur-md rounded-2xl border border-gray-600 overflow-hidden"
         >
-          <div className="p-6 bg-gradient-to-r from-indigo-600/10 to-purple-600/10 border-b border-gray-600">
+          <div className="p-6 bg-gradient-to-r from-teal-600/10 to-cyan-600/10 border-b border-gray-600">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-indigo-500/20">
-                  <BookOpen className="w-5 h-5 text-indigo-400" />
+                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-teal-500/20">
+                  <FileText className="w-5 h-5 text-teal-400" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-white">Vocabulary Analysis</h3>
-                  <p className="text-gray-400 text-sm">Key words and their meanings</p>
+                  <h3 className="text-lg font-semibold text-white">Sentence Analysis</h3>
+                  <p className="text-gray-400 text-sm">Detailed breakdown of each sentence</p>
                 </div>
               </div>
-              <span className="px-3 py-1 bg-indigo-600/20 text-indigo-300 text-sm rounded-full">
-                {analysisResult.words.length} words
+              <span className="px-3 py-1 bg-teal-600/20 text-teal-300 text-sm rounded-full">
+                {analysisResult.sentences.length} sentences
               </span>
             </div>
           </div>
           <div className="p-6">
-            <div className="grid gap-4">
-              {analysisResult.words.map((word, index) => (
+            <div className="space-y-6">
+              {analysisResult.sentences.map((sentence, index) => (
                 <motion.div
                   key={index}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1 * index }}
-                  className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-300 shadow-sm">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-lg font-semibold text-gray-900 font-japanese">
-                        {word.word}
-                      </span>
-                      <span className="text-gray-600 font-japanese">
-                        ({word.reading})
-                      </span>
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${getDifficultyColor(word.difficulty)}`}>
-                        {getDifficultyIcon(word.difficulty)} {word.difficulty}
-                      </span>
+                  className="p-4 bg-white rounded-xl border border-gray-300 shadow-sm"
+                >
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <h4 className="text-lg font-semibold text-gray-900 font-japanese mb-2">
+                        {sentence.sentence}
+                      </h4>
+                      <p className="text-gray-800 mb-2">{sentence.translation}</p>
+                      {sentence.context && (
+                        <p className="text-gray-600 text-sm italic">{sentence.context}</p>
+                      )}
                     </div>
-                    <p className="text-gray-800 mb-1">{word.meaning}</p>
-                    <p className="text-gray-600 text-sm">{word.partOfSpeech}</p>
+                    <button
+                      onClick={() => copyToClipboard(`${sentence.sentence}\n${sentence.translation}`, `sentence-${index}`)}
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                    >
+                      {copiedText === `sentence-${index}` ? (
+                        <Check className="w-4 h-4 text-green-500" />
+                      ) : (
+                        <Copy className="w-4 h-4 text-gray-500" />
+                      )}
+                    </button>
                   </div>
-                  <button
-                    onClick={() => copyToClipboard(`${word.word} (${word.reading}) - ${word.meaning}`, `word-${index}`)}
-                    className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                    {copiedText === `word-${index}` ? (
-                      <Check className="w-4 h-4 text-green-500" />
-                    ) : (
-                      <Copy className="w-4 h-4 text-gray-500" />
-                    )}
-                  </button>
+
+                  {/* Words in this sentence */}
+                  {sentence.words && sentence.words.length > 0 && (
+                    <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                      <h5 className="text-sm font-medium text-blue-900 mb-3">📚 Vocabulary in this sentence:</h5>
+                      <div className="space-y-3">
+                        {sentence.words.map((word, wordIndex) => (
+                          <div
+                            key={wordIndex}
+                            className={`p-3 rounded-lg border ${getDifficultyColor(word.difficulty)}`}
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="font-japanese font-semibold text-lg">{word.word}</span>
+                              <span className="text-gray-600 font-japanese">({word.reading})</span>
+                              <span className="text-xs px-2 py-1 rounded-full bg-white/50">
+                                {getDifficultyIcon(word.difficulty)} {word.difficulty}
+                              </span>
+                            </div>
+                            <div className="text-sm space-y-1">
+                              <p><span className="font-medium">Meaning:</span> {word.meaning}</p>
+                              <p><span className="font-medium">Part of speech:</span> {word.partOfSpeech}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Grammar in this sentence */}
+                  {sentence.grammar && sentence.grammar.length > 0 && (
+                    <div className="mt-3 p-3 bg-orange-50 rounded-lg">
+                      <h5 className="text-sm font-medium text-orange-900 mb-3">⚙️ Grammar patterns in this sentence:</h5>
+                      <div className="space-y-3">
+                        {sentence.grammar.map((grammar, grammarIndex) => (
+                          <div key={grammarIndex} className="p-3 bg-white rounded-lg border border-orange-200">
+                            <div className="mb-2">
+                              <span className="font-semibold text-orange-800 font-japanese text-lg">{grammar.pattern}</span>
+                            </div>
+                            <div className="text-sm space-y-2">
+                              <p><span className="font-medium text-orange-900">Explanation:</span> {grammar.explanation}</p>
+                              <div className="bg-orange-50 p-2 rounded border-l-4 border-orange-400">
+                                <p className="text-orange-800"><span className="font-medium">Example:</span> {grammar.example}</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </motion.div>
               ))}
             </div>
@@ -257,66 +304,7 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
         </motion.div>
       )}
 
-      {/* Grammar Section */}
-      {analysisResult.grammar && analysisResult.grammar.length > 0 && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-          className="bg-white/5 backdrop-blur-md rounded-2xl border border-gray-600 overflow-hidden"
-        >
-          <div className="p-6 bg-gradient-to-r from-orange-600/10 to-red-600/10 border-b border-gray-600">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full bg-orange-500/20">
-                  <Brain className="w-5 h-5 text-orange-400" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-white">Grammar Patterns</h3>
-                  <p className="text-gray-400 text-sm">Important grammar structures explained</p>
-                </div>
-              </div>
-              <span className="px-3 py-1 bg-orange-600/20 text-orange-300 text-sm rounded-full">
-                {analysisResult.grammar.length} patterns
-              </span>
-            </div>
-          </div>
-          <div className="p-6">
-            <div className="space-y-6">
-              {analysisResult.grammar.map((grammar, index) => (
-                <motion.div
-                  key={index}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 * index }}
-                  className="p-4 bg-white rounded-xl border border-gray-300 shadow-sm">
-                  <div className="flex items-start justify-between mb-3">
-                    <h4 className="text-lg font-semibold text-gray-900 font-japanese">
-                      {grammar.pattern}
-                    </h4>
-                    <button
-                      onClick={() => copyToClipboard(`${grammar.pattern}\n\n${grammar.explanation}\n\nExample: ${grammar.example}`, `grammar-${index}`)}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                      {copiedText === `grammar-${index}` ? (
-                        <Check className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <Copy className="w-4 h-4 text-gray-500" />
-                      )}
-                    </button>
-                  </div>
-                  <p className="text-gray-800 mb-3 leading-relaxed">
-                    {grammar.explanation}
-                  </p>
-                  <div className="p-3 bg-orange-50 rounded-lg border-l-4 border-orange-500">
-                    <p className="text-gray-600 text-sm mb-1">Example:</p>
-                    <p className="text-gray-900 font-japanese">{grammar.example}</p>
-                  </div>
-                </motion.div>
-              ))}
-            </div>
-          </div>
-        </motion.div>
-      )}
+
     </motion.div>
   )
 }

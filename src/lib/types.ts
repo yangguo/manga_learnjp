@@ -34,13 +34,20 @@ export interface ModelSettings {
 
 export type AIProvider = 'openai' | 'gemini' | 'openai-format'
 
-export interface AnalysisResult {
-  extractedText: string
+export interface SentenceAnalysis {
+  sentence: string
+  translation: string
   words: WordAnalysis[]
   grammar: GrammarPattern[]
+  context: string
+}
+
+export interface AnalysisResult {
+  extractedText: string
+  sentences: SentenceAnalysis[]
   translation: string
   summary: string
-  provider?: string
+  provider: AIProvider
 }
 
 export interface OCRProgress {
@@ -86,9 +93,8 @@ export interface MangaPanel {
   }
   imageData?: string // base64 encoded panel image
   extractedText: string
+  sentences: SentenceAnalysis[]
   translation: string
-  words: WordAnalysis[]
-  grammar: GrammarPattern[]
   context: string
 }
 

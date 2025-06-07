@@ -210,8 +210,8 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
                   )}
                 </div>
 
-                {/* Context and Text */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Text and Context */}
+                <div className="space-y-6">
                   {/* Extracted Text */}
                   {panel.extractedText && (
                     <div className="space-y-3">
@@ -262,68 +262,89 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
                   )}
                 </div>
 
-                {/* Vocabulary */}
-                {panel.words && panel.words.length > 0 && (
-                  <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
-                      📚 Vocabulary Analysis
+                {/* Sentence Analysis */}
+                {panel.sentences && panel.sentences.length > 0 && (
+                  <div className="space-y-3">
+                    <h4 className="text-lg font-medium text-gray-900 flex items-center gap-2">
+                      📝 Sentence Analysis
                     </h4>
-                    <div className="grid gap-3">
-                      {panel.words.map((word: WordAnalysis, index: number) => (
-                        <div key={index} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                          <div className="flex items-start justify-between mb-2">
-                            <div className="flex items-center gap-3">
-                              <span className="text-xl font-bold text-gray-900">{word.word}</span>
-                              <span className="text-gray-600">({word.reading})</span>
-                              <span className={`text-xs px-2 py-1 rounded-full border ${getDifficultyColor(word.difficulty)}`}>
-                                {word.difficulty}
-                              </span>
+                    <div className="space-y-4">
+                      {panel.sentences.map((sentence, sentenceIndex) => (
+                        <div key={sentenceIndex} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
+                          <div className="flex items-start justify-between mb-3">
+                            <div className="flex-1">
+                              <h5 className="text-lg font-semibold text-gray-900 mb-2 font-japanese">
+                                {sentence.sentence}
+                              </h5>
+                              <p className="text-gray-700 mb-2">{sentence.translation}</p>
+                              {sentence.context && (
+                                <p className="text-gray-600 text-sm italic">{sentence.context}</p>
+                              )}
                             </div>
                             <button
-                              onClick={() => copyToClipboard(`${word.word} (${word.reading}) - ${word.meaning}`)}
+                              onClick={() => copyToClipboard(`${sentence.sentence}\n${sentence.translation}`)}
                               className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                              title="Copy word"
+                              title="Copy sentence"
                             >
                               <Copy size={14} />
                             </button>
                           </div>
-                          <p className="text-gray-700 mb-1">{word.meaning}</p>
-                          <p className="text-sm text-gray-500 italic">{word.partOfSpeech}</p>
+
+                          {/* Words in this sentence */}
+                          {sentence.words && sentence.words.length > 0 && (
+                            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                              <p className="text-sm font-medium text-blue-900 mb-3">📚 Vocabulary in this sentence:</p>
+                              <div className="space-y-3">
+                                {sentence.words.map((word, wordIndex) => (
+                                  <div
+                                    key={wordIndex}
+                                    className={`p-3 rounded-lg border ${getDifficultyColor(word.difficulty)}`}
+                                  >
+                                    <div className="flex items-center gap-2 mb-2">
+                                      <span className="font-japanese font-semibold text-lg">{word.word}</span>
+                                      <span className="text-gray-600 font-japanese">({word.reading})</span>
+                                      <span className="text-xs px-2 py-1 rounded-full bg-white/50">
+                                        {word.difficulty}
+                                      </span>
+                                    </div>
+                                    <div className="text-sm space-y-1">
+                                      <p><span className="font-medium">Meaning:</span> {word.meaning}</p>
+                                      <p><span className="font-medium">Part of speech:</span> {word.partOfSpeech}</p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Grammar in this sentence */}
+                          {sentence.grammar && sentence.grammar.length > 0 && (
+                            <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                              <p className="text-sm font-medium text-orange-900 mb-3">⚙️ Grammar patterns in this sentence:</p>
+                              <div className="space-y-3">
+                                {sentence.grammar.map((grammar, grammarIndex) => (
+                                  <div key={grammarIndex} className="p-3 bg-white rounded-lg border border-orange-200">
+                                    <div className="mb-2">
+                                      <span className="font-semibold text-orange-800 font-japanese text-lg">{grammar.pattern}</span>
+                                    </div>
+                                    <div className="text-sm space-y-2">
+                                      <p><span className="font-medium text-orange-900">Explanation:</span> {grammar.explanation}</p>
+                                      <div className="bg-orange-25 p-2 rounded border-l-3 border-orange-400">
+                                        <p className="text-orange-800"><span className="font-medium">Example:</span> {grammar.example}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
                   </div>
                 )}
 
-                {/* Grammar */}
-                {panel.grammar && panel.grammar.length > 0 && (
-                  <div>
-                    <h4 className="text-lg font-medium text-gray-900 mb-3 flex items-center gap-2">
-                      ⚙️ Grammar Patterns
-                    </h4>
-                    <div className="space-y-4">
-                      {panel.grammar.map((pattern: GrammarPattern, index: number) => (
-                        <div key={index} className="bg-white p-4 rounded-lg border border-gray-200 shadow-sm">
-                          <div className="flex items-start justify-between mb-2">
-                            <h5 className="font-medium text-gray-900">{pattern.pattern}</h5>
-                            <button
-                              onClick={() => copyToClipboard(`${pattern.pattern}: ${pattern.explanation}\nExample: ${pattern.example}`)}
-                              className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-                              title="Copy grammar pattern"
-                            >
-                              <Copy size={14} />
-                            </button>
-                          </div>
-                          <p className="text-gray-700 mb-2">{pattern.explanation}</p>
-                          <div className="bg-gray-50 p-3 rounded border border-gray-200">
-                            <p className="text-sm text-gray-600 font-medium">Example:</p>
-                            <p className="text-gray-800">{pattern.example}</p>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+
               </div>
             )}
           </div>

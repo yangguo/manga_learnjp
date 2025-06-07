@@ -89,6 +89,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
                         position: panel.boundingBox,
                         imageData: panel.imageData,
                         extractedText: panelResult.extractedText || '',
+                        sentences: panelResult.sentences || [],
                         translation: panelResult.translation || '',
                         words: panelResult.words || [],
                         grammar: panelResult.grammar || [],

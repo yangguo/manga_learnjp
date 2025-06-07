@@ -40,35 +40,44 @@ ${text ? `Japanese Text:\n"${text}"` : ''}
 Please provide a JSON response with the following structure:
 {
   "extractedText": "${text ? text : 'All Japanese text found in the image'}",
-  "translation": "English translation of the text",
-  "summary": "Brief context summary explaining what's happening in this manga scene",
-  "words": [
+  "sentences": [
     {
-      "word": "Japanese word",
-      "reading": "hiragana/katakana reading",
-      "meaning": "English meaning",
-      "partOfSpeech": "noun/verb/adjective/etc",
-      "difficulty": "beginner/intermediate/advanced"
+      "sentence": "Individual Japanese sentence",
+      "translation": "English translation of this sentence",
+      "words": [
+        {
+          "word": "Japanese word",
+          "reading": "hiragana/katakana reading",
+          "meaning": "English meaning",
+          "partOfSpeech": "noun/verb/adjective/etc",
+          "difficulty": "beginner/intermediate/advanced"
+        }
+      ],
+      "grammar": [
+        {
+          "pattern": "Grammar pattern found in this sentence",
+          "explanation": "Detailed explanation of the grammar pattern",
+          "example": "Example sentence using this pattern"
+        }
+      ],
+      "context": "Context or usage notes for this specific sentence"
     }
   ],
-  "grammar": [
-    {
-      "pattern": "Grammar pattern found in text",
-      "explanation": "Detailed explanation of the grammar pattern",
-      "example": "Example sentence using this pattern"
-    }
-  ]
+  "translation": "Overall English translation of all text",
+  "summary": "Brief context summary explaining what's happening in this manga scene"
 }
 
 Focus on:
-1. ${text ? '' : 'First, accurately extracting ALL Japanese text from the manga image (including text in speech bubbles, sound effects, signs, etc.)'} 
-2. Breaking down important vocabulary words, especially those that might be difficult for learners
-3. Identifying key grammar patterns and structures
-4. Providing context for manga-specific language or expressions
-5. Assigning appropriate difficulty levels (beginner: JLPT N5-N4, intermediate: N3-N2, advanced: N1+)
-6. Including furigana readings for kanji
-7. Explaining any colloquialisms, slang, or casual speech patterns common in manga
-8. ${text ? '' : 'Recognizing manga sound effects (onomatopoeia) and their meanings'}
+1. ${text ? 'First, split the text into individual sentences (including sound effects as separate items)' : 'First, accurately extracting ALL Japanese text from the manga image (including text in speech bubbles, sound effects, signs, etc.) and split into sentences'} 
+2. Analyze each sentence individually for vocabulary and grammar
+3. Breaking down important vocabulary words, especially those that might be difficult for learners
+4. Identifying key grammar patterns and structures in each sentence
+5. Providing context for manga-specific language or expressions
+6. Assigning appropriate difficulty levels (beginner: JLPT N5-N4, intermediate: N3-N2, advanced: N1+)
+7. Including furigana readings for kanji
+8. Explaining any colloquialisms, slang, or casual speech patterns common in manga
+9. ${text ? 'Recognizing sentence boundaries properly (。！？ etc.)' : 'Recognizing manga sound effects (onomatopoeia) and their meanings as separate sentence items'}
+10. Provide both sentence-level analysis AND overall summary analysis
 
 Make sure the response is valid JSON format.`
 
@@ -89,23 +98,30 @@ Please provide a JSON response with the following structure:
         "height": 100
       },
       "extractedText": "Japanese text from this specific panel",
+      "sentences": [
+        {
+          "sentence": "Individual Japanese sentence from this panel",
+          "translation": "English translation of this sentence",
+          "words": [
+            {
+              "word": "Japanese word",
+              "reading": "hiragana/katakana reading",
+              "meaning": "English meaning",
+              "partOfSpeech": "noun/verb/adjective/etc",
+              "difficulty": "beginner/intermediate/advanced"
+            }
+          ],
+          "grammar": [
+            {
+              "pattern": "Grammar pattern found in this sentence",
+              "explanation": "Detailed explanation of the grammar pattern",
+              "example": "Example sentence using this pattern"
+            }
+          ],
+          "context": "Context or usage notes for this specific sentence"
+        }
+      ],
       "translation": "English translation of this panel's text",
-      "words": [
-        {
-          "word": "Japanese word",
-          "reading": "hiragana/katakana reading",
-          "meaning": "English meaning",
-          "partOfSpeech": "noun/verb/adjective/etc",
-          "difficulty": "beginner/intermediate/advanced"
-        }
-      ],
-      "grammar": [
-        {
-          "pattern": "Grammar pattern found in this panel",
-          "explanation": "Detailed explanation of the grammar pattern",
-          "example": "Example sentence using this pattern"
-        }
-      ],
       "context": "What's happening in this specific panel"
     }
   ],
@@ -116,27 +132,475 @@ Please provide a JSON response with the following structure:
 Focus on:
 1. Identifying individual manga panels (speech bubbles, panel borders, distinct scenes)
 2. Reading order: RIGHT to LEFT, TOP to BOTTOM (traditional Japanese manga layout)
-3. Extracting text from each panel separately
-4. Analyzing vocabulary and grammar for each panel individually
-5. Providing context for each panel's content
-6. Including sound effects (onomatopoeia) and their meanings
-7. Recognizing different types of text (dialogue, thoughts, narration, sound effects)
-8. Difficulty levels: beginner (JLPT N5-N4), intermediate (N3-N2), advanced (N1+)
+3. Extracting text from each panel separately and splitting into individual sentences
+4. Analyzing each sentence individually for vocabulary and grammar
+5. Analyzing vocabulary and grammar for each panel individually (summary level)
+6. Providing context for each panel's content and individual sentences
+7. Including sound effects (onomatopoeia) and their meanings as separate sentence items
+8. Recognizing different types of text (dialogue, thoughts, narration, sound effects)
+9. Difficulty levels: beginner (JLPT N5-N4), intermediate (N3-N2), advanced (N1+)
+10. Proper sentence boundary recognition (。！？ etc.)
 
 Make sure the response is valid JSON format.`
 
-// Helper function to clean JSON responses that might be wrapped in markdown
-function cleanJsonResponse(content: string): string {
-  // Remove markdown code block wrappers if present
-  const codeBlockRegex = /```(?:json)?\s*([\s\S]*?)\s*```/
-  const match = content.match(codeBlockRegex)
-  
-  if (match) {
-    return match[1].trim()
+// Shortened prompt for providers with response length limits
+const CONCISE_ANALYSIS_PROMPT = (text?: string) => `
+You are a Japanese language learning assistant. ${text ? `Analyze this Japanese text` : `Extract and analyze Japanese text from this image`}.
+
+${text ? `Text: "${text}"` : ''}
+
+Provide concise JSON response:
+{
+  "extractedText": "${text ? text : 'Japanese text from image'}",
+  "sentences": [
+    {
+      "sentence": "Japanese sentence",
+      "translation": "English translation",
+      "words": [{"word": "word", "reading": "reading", "meaning": "meaning", "partOfSpeech": "pos", "difficulty": "level"}],
+      "grammar": [{"pattern": "pattern", "explanation": "brief explanation", "example": "example"}],
+      "context": "brief context"
+    }
+  ],
+  "translation": "Overall translation",
+  "summary": "Brief summary"
+}
+
+IMPORTANT: Keep responses under 5000 characters. Be concise but accurate.`
+
+// Concise manga panel analysis prompt for providers with response length limits
+const CONCISE_MANGA_PANEL_ANALYSIS_PROMPT = () => `
+Analyze this manga image. Identify panels in RIGHT-to-LEFT, TOP-to-BOTTOM order.
+
+Provide concise JSON:
+{
+  "panels": [
+    {
+      "panelNumber": 1,
+      "position": {"x": 0, "y": 0, "width": 100, "height": 100},
+      "extractedText": "Japanese text from panel",
+      "sentences": [
+        {
+          "sentence": "Japanese sentence",
+          "translation": "English translation",
+          "words": [{"word": "word", "reading": "reading", "meaning": "meaning", "partOfSpeech": "pos", "difficulty": "level"}],
+          "grammar": [{"pattern": "pattern", "explanation": "brief explanation", "example": "example"}],
+          "context": "brief context"
+        }
+      ],
+      "translation": "Panel translation",
+      "context": "Brief panel context"
+    }
+  ]
+}
+
+IMPORTANT: Keep under 5000 characters. Be concise but accurate.`
+
+// Utility functions for text batching and sentence splitting
+function splitTextIntoSentences(text: string): string[] {
+  if (!text || text.trim().length === 0) {
+    return []
   }
   
-  // If no code blocks found, return original content trimmed
-  return content.trim()
+  // Japanese sentence endings: period, exclamation, question mark
+  // Also handle special cases like ellipsis, tilde, etc.
+  const sentenceEndings = /[。！？…～♪♫]/
+  
+  // Split by sentence endings but keep the ending character
+  const sentences: string[] = []
+  let currentSentence = ''
+  
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i]
+    currentSentence += char
+    
+    if (sentenceEndings.test(char)) {
+      // Found sentence ending
+      sentences.push(currentSentence.trim())
+      currentSentence = ''
+    }
+  }
+  
+  // Add remaining text as a sentence if it exists
+  if (currentSentence.trim().length > 0) {
+    sentences.push(currentSentence.trim())
+  }
+  
+  // Filter out empty sentences and very short ones (likely artifacts)
+  return sentences.filter(s => s.trim().length > 0)
+}
+
+function createTextBatches(sentences: string[], maxBatchSize: number = 3): string[][] {
+  const batches: string[][] = []
+  
+  for (let i = 0; i < sentences.length; i += maxBatchSize) {
+    const batch = sentences.slice(i, i + maxBatchSize)
+    batches.push(batch)
+  }
+  
+  return batches
+}
+
+function combineBatchResults(batchResults: any[]): any {
+  if (batchResults.length === 0) {
+    throw new Error('No batch results to combine')
+  }
+  
+  if (batchResults.length === 1) {
+    return batchResults[0]
+  }
+  
+  // Combine all sentences from all batches
+  const allSentences: any[] = []
+  const translations: string[] = []
+  const extractedTexts: string[] = []
+  
+  for (const result of batchResults) {
+    if (result.sentences && Array.isArray(result.sentences)) {
+      allSentences.push(...result.sentences)
+    }
+    if (result.translation) {
+      translations.push(result.translation)
+    }
+    if (result.extractedText) {
+      extractedTexts.push(result.extractedText)
+    }
+  }
+  
+  return {
+    extractedText: extractedTexts.join(''),
+    sentences: allSentences,
+    translation: translations.join(' '),
+    summary: `Combined analysis of ${allSentences.length} sentences from ${batchResults.length} batches.`,
+    provider: batchResults[0]?.provider || 'unknown'
+  }
+}
+
+// Helper function to clean JSON responses that might be wrapped in markdown
+function cleanJsonResponse(content: string): string {
+  if (!content) return ''
+  
+  // Remove markdown code block wrappers if present
+  let cleaned = content.trim()
+  
+  // Handle multiple patterns of markdown code blocks
+  const patterns = [
+    /```(?:json)?\s*([\s\S]*?)\s*```/g,  // Standard markdown blocks
+    /```\s*([\s\S]*?)\s*```/g,           // Generic code blocks
+    /`{3,}\s*json\s*([\s\S]*?)`{3,}/gi,  // Variations with json label
+    /`{3,}\s*([\s\S]*?)`{3,}/g           // Generic triple backticks
+  ]
+  
+  for (const pattern of patterns) {
+    const match = cleaned.match(pattern)
+    if (match) {
+      // Extract the content between code blocks
+      cleaned = match[0].replace(/```(?:json)?/gi, '').replace(/```/g, '').trim()
+      break
+    }
+  }
+  
+  // Remove any remaining backticks at the start or end
+  cleaned = cleaned.replace(/^`+|`+$/g, '').trim()
+  
+  // Find JSON content by looking for opening and closing braces
+  const jsonStart = cleaned.indexOf('{')
+  if (jsonStart === -1) {
+    return cleaned // No JSON found, return as is
+  }
+  
+  // Count braces to find the matching closing brace
+  let braceCount = 0
+  let jsonEnd = -1
+  let inString = false
+  let escapeNext = false
+  
+  for (let i = jsonStart; i < cleaned.length; i++) {
+    const char = cleaned[i]
+    
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+    
+    if (char === '\\') {
+      escapeNext = true
+      continue
+    }
+    
+    if (char === '"' && !escapeNext) {
+      inString = !inString
+      continue
+    }
+    
+    if (!inString) {
+      if (char === '{') {
+        braceCount++
+      } else if (char === '}') {
+        braceCount--
+        if (braceCount === 0) {
+          jsonEnd = i
+          break
+        }
+      }
+    }
+  }
+  
+  if (jsonEnd !== -1) {
+    cleaned = cleaned.substring(jsonStart, jsonEnd + 1)
+  } else {
+    // If we can't find matching braces, try the old method as fallback
+    const lastBrace = cleaned.lastIndexOf('}')
+    if (lastBrace > jsonStart) {
+      cleaned = cleaned.substring(jsonStart, lastBrace + 1)
+    }
+  }
+  
+  return cleaned
+}
+
+// Helper function to validate and parse JSON with better error handling
+function parseJsonSafely(content: string, source: string = 'unknown', skipValidation: boolean = false): any {
+  try {
+    const result = JSON.parse(content)
+    if (!skipValidation) {
+      validateAnalysisResult(result, source)
+    }
+    return result
+  } catch (error) {
+    console.error(`JSON parsing error in ${source}:`, error)
+    console.error('Content length:', content.length)
+    console.error('Content preview (first 500 chars):', content.substring(0, 500))
+    console.error('Content preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)))
+    
+    // Try to reconstruct truncated JSON
+    let fixedContent = content.trim()
+    
+    // Remove trailing commas
+    fixedContent = fixedContent.replace(/,(\s*[}\]])/g, '$1')
+    
+    // Check if JSON is truncated by looking for incomplete structures
+    const lastCompleteObject = findLastCompleteJsonObject(fixedContent)
+    if (lastCompleteObject) {
+      console.log('Found truncated JSON, attempting to reconstruct...')
+      fixedContent = lastCompleteObject
+    } else {
+      // Try other common fixes
+      if (fixedContent.includes('[') && !fixedContent.includes(']')) {
+        fixedContent += ']'
+      }
+      
+      // Count braces and try to balance them
+      const openBraces = (fixedContent.match(/{/g) || []).length
+      const closeBraces = (fixedContent.match(/}/g) || []).length
+      
+      if (openBraces > closeBraces) {
+        fixedContent += '}'.repeat(openBraces - closeBraces)
+      }
+    }
+    
+    try {
+      console.log('Attempting to parse with fixes...')
+      const result = JSON.parse(fixedContent)
+      validateAnalysisResult(result, `${source} (fixed)`)
+      return result
+    } catch (secondError) {
+      console.error('Even with fixes, parsing failed:', secondError)
+      
+      // Last resort: try to extract partial data
+      const partialResult = extractPartialJsonData(content)
+      if (partialResult) {
+        console.log('Using partial JSON extraction as fallback')
+        return partialResult
+      }
+      
+      throw new Error(`Failed to parse JSON from ${source}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+}
+
+// Helper function to find the last complete JSON object in truncated content
+function findLastCompleteJsonObject(content: string): string | null {
+  const jsonStart = content.indexOf('{')
+  if (jsonStart === -1) return null
+  
+  let braceCount = 0
+  let inString = false
+  let escapeNext = false
+  let lastValidEnd = -1
+  
+  for (let i = jsonStart; i < content.length; i++) {
+    const char = content[i]
+    
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+    
+    if (char === '\\') {
+      escapeNext = true
+      continue
+    }
+    
+    if (char === '"' && !escapeNext) {
+      inString = !inString
+      continue
+    }
+    
+    if (!inString) {
+      if (char === '{') {
+        braceCount++
+      } else if (char === '}') {
+        braceCount--
+        if (braceCount === 0) {
+          lastValidEnd = i
+          // Continue to see if there are more complete objects
+        }
+      }
+    }
+  }
+  
+  if (lastValidEnd !== -1) {
+    return content.substring(jsonStart, lastValidEnd + 1)
+  }
+  
+  return null
+}
+
+// Helper function to extract partial data from malformed JSON
+function extractPartialJsonData(content: string): any | null {
+  try {
+    // Try to extract basic fields even from incomplete JSON
+    const extractedTextMatch = content.match(/"extractedText":\s*"([^"]*)"/)
+    const extractedText = extractedTextMatch ? extractedTextMatch[1] : ''
+    
+    // Try to extract complete sentences that were parsed
+    const sentencesMatch = content.match(/"sentences":\s*\[([\s\S]*?)(?:\]|$)/)
+    const sentences: any[] = []
+    
+    if (sentencesMatch) {
+      const sentencesContent = sentencesMatch[1]
+      // Find complete sentence objects
+      const sentencePattern = /{[^{}]*"sentence"[^{}]*"translation"[^{}]*}/g
+      let match
+      while ((match = sentencePattern.exec(sentencesContent)) !== null) {
+        try {
+          const sentenceObj = JSON.parse(match[0])
+          if (sentenceObj.sentence && sentenceObj.translation) {
+            // Fill in missing fields with defaults
+            sentences.push({
+              sentence: sentenceObj.sentence,
+              translation: sentenceObj.translation,
+              words: sentenceObj.words || [],
+              grammar: sentenceObj.grammar || [],
+              context: sentenceObj.context || 'Analysis incomplete due to truncated response'
+            })
+          }
+        } catch (e) {
+          // Skip malformed sentence objects
+        }
+      }
+    }
+    
+    if (extractedText || sentences.length > 0) {
+      return {
+        extractedText: extractedText,
+        sentences: sentences,
+        translation: extractedText ? `Partial translation (truncated response)` : 'Analysis incomplete',
+        summary: 'Analysis was truncated due to response length limits. Some data may be incomplete.',
+        provider: 'openai-format'
+      }
+    }
+  } catch (e) {
+    console.error('Failed to extract partial data:', e)
+  }
+  
+  return null
+}
+
+// Helper function to validate the structure of analysis results
+function validateAnalysisResult(result: any, source: string): boolean {
+  if (!result || typeof result !== 'object') {
+    console.warn(`${source}: Result is not an object`, result)
+    return false
+  }
+
+  const requiredFields = ['extractedText', 'sentences', 'translation', 'summary']
+  const missingFields = requiredFields.filter(field => !(field in result))
+  
+  if (missingFields.length > 0) {
+    console.warn(`${source}: Missing required fields:`, missingFields)
+    console.warn(`${source}: Available fields:`, Object.keys(result))
+  }
+
+  // Check sentences structure
+  if (result.sentences && Array.isArray(result.sentences)) {
+    const invalidSentences = result.sentences.filter((sentence: any, index: number) => {
+      const sentenceFields = ['sentence', 'translation', 'words', 'grammar', 'context']
+      const missingSentenceFields = sentenceFields.filter(field => !(field in sentence))
+      if (missingSentenceFields.length > 0) {
+        console.warn(`${source}: Sentence ${index} missing fields:`, missingSentenceFields)
+        return true
+      }
+      return false
+    })
+    
+    if (invalidSentences.length > 0) {
+      console.warn(`${source}: Found ${invalidSentences.length} invalid sentences`)
+    }
+  } else {
+    console.warn(`${source}: sentences field is not an array or missing`)
+  }
+
+  return missingFields.length === 0
+}
+
+// Helper function to validate the structure of manga analysis results
+function validateMangaAnalysisResult(result: any, source: string): boolean {
+  if (!result || typeof result !== 'object') {
+    console.warn(`${source}: Result is not an object`, result)
+    return false
+  }
+
+  // Check for panels structure
+  if (!result.panels || !Array.isArray(result.panels)) {
+    console.warn(`${source}: panels field is not an array or missing`)
+    return false
+  }
+
+  // Validate each panel structure
+  const invalidPanels = result.panels.filter((panel: any, index: number) => {
+    const panelFields = ['panelNumber', 'position', 'extractedText', 'sentences', 'translation']
+    const missingPanelFields = panelFields.filter(field => !(field in panel))
+    if (missingPanelFields.length > 0) {
+      console.warn(`${source}: Panel ${index} missing fields:`, missingPanelFields)
+      return true
+    }
+
+    // Check sentences structure within panel
+    if (panel.sentences && Array.isArray(panel.sentences)) {
+      const invalidSentences = panel.sentences.filter((sentence: any, sentenceIndex: number) => {
+        const sentenceFields = ['sentence', 'translation', 'words', 'grammar', 'context']
+        const missingSentenceFields = sentenceFields.filter(field => !(field in sentence))
+        if (missingSentenceFields.length > 0) {
+          console.warn(`${source}: Panel ${index}, Sentence ${sentenceIndex} missing fields:`, missingSentenceFields)
+          return true
+        }
+        return false
+      })
+      
+      if (invalidSentences.length > 0) {
+        console.warn(`${source}: Panel ${index} has ${invalidSentences.length} invalid sentences`)
+      }
+    }
+    
+    return false
+  })
+  
+  if (invalidPanels.length > 0) {
+    console.warn(`${source}: Found ${invalidPanels.length} invalid panels`)
+  }
+
+  return invalidPanels.length === 0
 }
 
 export class OpenAIService {
@@ -149,6 +613,51 @@ export class OpenAIService {
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
+    // Split text into sentences for batching
+    const sentences = splitTextIntoSentences(text)
+    console.log(`OpenAI analyzeText: Split text into ${sentences.length} sentences`)
+    
+    // If we have few sentences, analyze all at once
+    if (sentences.length <= 3) {
+      return this.analyzeSingleBatch(text)
+    }
+    
+    // Create batches for longer texts
+    const batches = createTextBatches(sentences, 3) // 3 sentences per batch
+    console.log(`OpenAI analyzeText: Created ${batches.length} batches`)
+    
+    const batchResults: any[] = []
+    
+    // Process each batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i]
+      const batchText = batch.join('')
+      console.log(`OpenAI analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
+      
+      try {
+        const batchResult = await this.analyzeSingleBatch(batchText)
+        batchResults.push(batchResult)
+      } catch (error) {
+        console.error(`OpenAI analyzeText: Error processing batch ${i + 1}:`, error)
+        // Continue with other batches rather than failing completely
+      }
+    }
+    
+    if (batchResults.length === 0) {
+      throw new Error('All batches failed to process')
+    }
+    
+    // Combine results from all batches
+    const combinedResult = combineBatchResults(batchResults)
+    console.log(`OpenAI analyzeText: Combined ${batchResults.length} batch results into final result`)
+    
+    return {
+      ...combinedResult,
+      provider: 'openai' as AIProvider
+    }
+  }
+
+  private async analyzeSingleBatch(text: string): Promise<AnalysisResult> {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -183,10 +692,25 @@ export class OpenAIService {
       throw new Error('No content received from OpenAI')
     }
 
-    const analysisResult = JSON.parse(cleanJsonResponse(content))
-    return {
-      ...analysisResult,
-      provider: 'openai' as AIProvider
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('OpenAI analyzeSingleBatch cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI analyzeSingleBatch')
+      
+      // Validate the structure of the analysis result
+      const isValid = validateAnalysisResult(analysisResult, 'OpenAI analyzeSingleBatch')
+      if (!isValid) {
+        throw new Error('Invalid analysis result structure')
+      }
+      
+      return {
+        ...analysisResult,
+        provider: 'openai' as AIProvider
+      }
+    } catch (error) {
+      console.error('OpenAI analyzeSingleBatch JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse OpenAI response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -236,10 +760,25 @@ export class OpenAIService {
       throw new Error('No content received from OpenAI')
     }
 
-    const analysisResult = JSON.parse(cleanJsonResponse(content))
-    return {
-      ...analysisResult,
-      provider: 'openai' as AIProvider
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('OpenAI analyzeImage cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI analyzeImage')
+      
+      // Validate the structure of the analysis result
+      const isValid = validateAnalysisResult(analysisResult, 'OpenAI analyzeImage')
+      if (!isValid) {
+        throw new Error('Invalid analysis result structure')
+      }
+      
+      return {
+        ...analysisResult,
+        provider: 'openai' as AIProvider
+      }
+    } catch (error) {
+      console.error('OpenAI analyzeImage JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse OpenAI response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -289,10 +828,25 @@ export class OpenAIService {
       throw new Error('No content received from OpenAI')
     }
 
-    const analysisResult = JSON.parse(cleanJsonResponse(content))
-    return {
-      ...analysisResult,
-      provider: 'openai' as AIProvider
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('OpenAI analyzeMangaImage cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI analyzeMangaImage', true)
+      
+      // Validate the structure of the manga analysis result
+      const isValid = validateMangaAnalysisResult(analysisResult, 'OpenAI analyzeMangaImage')
+      if (!isValid) {
+        throw new Error('Invalid manga analysis result structure')
+      }
+      
+      return {
+        ...analysisResult,
+        provider: 'openai' as AIProvider
+      }
+    } catch (error) {
+      console.error('OpenAI analyzeMangaImage JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse OpenAI response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 }
@@ -308,6 +862,51 @@ export class GeminiService {
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
+    // Split text into sentences for batching
+    const sentences = splitTextIntoSentences(text)
+    console.log(`Gemini analyzeText: Split text into ${sentences.length} sentences`)
+    
+    // If we have few sentences, analyze all at once
+    if (sentences.length <= 3) {
+      return this.analyzeSingleBatch(text)
+    }
+    
+    // Create batches for longer texts
+    const batches = createTextBatches(sentences, 3) // 3 sentences per batch
+    console.log(`Gemini analyzeText: Created ${batches.length} batches`)
+    
+    const batchResults: any[] = []
+    
+    // Process each batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i]
+      const batchText = batch.join('')
+      console.log(`Gemini analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
+      
+      try {
+        const batchResult = await this.analyzeSingleBatch(batchText)
+        batchResults.push(batchResult)
+      } catch (error) {
+        console.error(`Gemini analyzeText: Error processing batch ${i + 1}:`, error)
+        // Continue with other batches rather than failing completely
+      }
+    }
+    
+    if (batchResults.length === 0) {
+      throw new Error('All batches failed to process')
+    }
+    
+    // Combine results from all batches
+    const combinedResult = combineBatchResults(batchResults)
+    console.log(`Gemini analyzeText: Combined ${batchResults.length} batch results into final result`)
+    
+    return {
+      ...combinedResult,
+      provider: 'gemini' as AIProvider
+    }
+  }
+
+  private async analyzeSingleBatch(text: string): Promise<AnalysisResult> {
     const prompt = ANALYSIS_PROMPT(text)
     
     const result = await this.model.generateContent([
@@ -323,10 +922,25 @@ export class GeminiService {
       throw new Error('No content received from Gemini')
     }
 
-    const analysisResult = JSON.parse(cleanJsonResponse(content))
-    return {
-      ...analysisResult,
-      provider: 'gemini' as AIProvider
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('Gemini analyzeSingleBatch cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'Gemini analyzeSingleBatch')
+      
+      // Validate the structure of the analysis result
+      const isValid = validateAnalysisResult(analysisResult, 'Gemini analyzeSingleBatch')
+      if (!isValid) {
+        throw new Error('Invalid analysis result structure')
+      }
+      
+      return {
+        ...analysisResult,
+        provider: 'gemini' as AIProvider
+      }
+    } catch (error) {
+      console.error('Gemini analyzeSingleBatch JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse Gemini response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -353,10 +967,25 @@ export class GeminiService {
       throw new Error('No content received from Gemini')
     }
 
-    const analysisResult = JSON.parse(cleanJsonResponse(content))
-    return {
-      ...analysisResult,
-      provider: 'gemini' as AIProvider
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('Gemini analyzeImage cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'Gemini analyzeImage')
+      
+      // Validate the structure of the analysis result
+      const isValid = validateAnalysisResult(analysisResult, 'Gemini analyzeImage')
+      if (!isValid) {
+        throw new Error('Invalid analysis result structure')
+      }
+      
+      return {
+        ...analysisResult,
+        provider: 'gemini' as AIProvider
+      }
+    } catch (error) {
+      console.error('Gemini analyzeImage JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse Gemini response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -383,7 +1012,14 @@ export class GeminiService {
       throw new Error('No content received from Gemini')
     }
 
-    const analysisResult = JSON.parse(cleanJsonResponse(content))
+    const analysisResult = parseJsonSafely(cleanJsonResponse(content), 'Gemini analyzeMangaImage', true)
+    
+    // Validate the structure of the manga analysis result
+    const isValid = validateMangaAnalysisResult(analysisResult, 'Gemini analyzeMangaImage')
+    if (!isValid) {
+      throw new Error('Invalid manga analysis result structure')
+    }
+    
     return {
       ...analysisResult,
       provider: 'gemini' as AIProvider
@@ -399,6 +1035,51 @@ export class OpenAIFormatService {
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
+    // Split text into sentences for batching
+    const sentences = splitTextIntoSentences(text)
+    console.log(`OpenAI-format analyzeText: Split text into ${sentences.length} sentences`)
+    
+    // If we have few sentences, analyze all at once
+    if (sentences.length <= 2) { // Use smaller batch size for OpenAI-format due to stricter limits
+      return this.analyzeSingleBatch(text)
+    }
+    
+    // Create batches for longer texts
+    const batches = createTextBatches(sentences, 2) // 2 sentences per batch for OpenAI-format
+    console.log(`OpenAI-format analyzeText: Created ${batches.length} batches`)
+    
+    const batchResults: any[] = []
+    
+    // Process each batch
+    for (let i = 0; i < batches.length; i++) {
+      const batch = batches[i]
+      const batchText = batch.join('')
+      console.log(`OpenAI-format analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
+      
+      try {
+        const batchResult = await this.analyzeSingleBatch(batchText)
+        batchResults.push(batchResult)
+      } catch (error) {
+        console.error(`OpenAI-format analyzeText: Error processing batch ${i + 1}:`, error)
+        // Continue with other batches rather than failing completely
+      }
+    }
+    
+    if (batchResults.length === 0) {
+      throw new Error('All batches failed to process')
+    }
+    
+    // Combine results from all batches
+    const combinedResult = combineBatchResults(batchResults)
+    console.log(`OpenAI-format analyzeText: Combined ${batchResults.length} batch results into final result`)
+    
+    return {
+      ...combinedResult,
+      provider: 'openai-format' as AIProvider
+    }
+  }
+
+  private async analyzeSingleBatch(text: string): Promise<AnalysisResult> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -415,15 +1096,15 @@ export class OpenAIFormatService {
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful Japanese language learning assistant that provides detailed analysis of Japanese text for learners. Always respond with valid JSON.'
+            content: 'You are a helpful Japanese language learning assistant that provides detailed analysis of Japanese text for learners. Always respond with valid JSON. Keep responses concise to avoid truncation.'
           },
           {
             role: 'user',
-            content: ANALYSIS_PROMPT(text)
+            content: CONCISE_ANALYSIS_PROMPT(text)
           }
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
     })
 
@@ -445,10 +1126,25 @@ export class OpenAIFormatService {
       throw new Error('No content received from OpenAI-format API')
     }
 
-    const analysisResult = JSON.parse(cleanJsonResponse(content))
-    return {
-      ...analysisResult,
-      provider: 'openai-format' as AIProvider
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('OpenAI-format analyzeSingleBatch cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI-format analyzeSingleBatch')
+      
+      // Validate the structure of the analysis result
+      const isValid = validateAnalysisResult(analysisResult, 'OpenAI-format analyzeSingleBatch')
+      if (!isValid) {
+        throw new Error('Invalid analysis result structure')
+      }
+      
+      return {
+        ...analysisResult,
+        provider: 'openai-format' as AIProvider
+      }
+    } catch (error) {
+      console.error('OpenAI-format analyzeSingleBatch JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse OpenAI-format response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 
@@ -469,79 +1165,14 @@ export class OpenAIFormatService {
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful Japanese language learning assistant that can read Japanese text from manga images and provide detailed analysis for learners. Always respond with valid JSON.'
+            content: 'You are a helpful Japanese language learning assistant that can read Japanese text from manga images and provide detailed analysis for learners. Always respond with valid JSON. Keep responses concise to avoid truncation.'
           },
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: ANALYSIS_PROMPT()
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: createImageDataURL(imageBase64)
-                }
-              }
-            ]
-          }
-        ],
-        temperature: 0.3,
-        max_tokens: 2000,
-      }),
-    })
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error(`OpenAI-format API error: ${response.status}`, { 
-        endpoint: `${this.settings.endpoint}/chat/completions`,
-        model: this.settings.model,
-        hasApiKey: !!this.settings.apiKey,
-        error: errorText 
-      })
-      throw new Error(`OpenAI-format API error: ${response.status} - ${errorText}`)
-    }
-
-    const data = await response.json()
-    const content = data.choices[0]?.message?.content
-
-    if (!content) {
-      throw new Error('No content received from OpenAI-format API')
-    }
-
-    const analysisResult = JSON.parse(cleanJsonResponse(content))
-    return {
-      ...analysisResult,
-      provider: 'openai-format' as AIProvider
-    }
-  }
-
-  async analyzeMangaImage(imageBase64: string): Promise<MangaAnalysisResult> {
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-    
-    if (this.settings.apiKey) {
-      headers['Authorization'] = `Bearer ${this.settings.apiKey}`
-    }
-
-    const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        model: this.settings.model,
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful Japanese language learning assistant specialized in manga analysis. You can identify manga panels and extract text from each panel separately following traditional right-to-left, top-to-bottom reading order. Always respond with valid JSON.'
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: MANGA_PANEL_ANALYSIS_PROMPT()
+                text: CONCISE_ANALYSIS_PROMPT()
               },
               {
                 type: 'image_url',
@@ -575,10 +1206,105 @@ export class OpenAIFormatService {
       throw new Error('No content received from OpenAI-format API')
     }
 
-    const analysisResult = JSON.parse(cleanJsonResponse(content))
-    return {
-      ...analysisResult,
-      provider: 'openai-format' as AIProvider
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('OpenAI-format analyzeImage cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI-format analyzeImage')
+      
+      // Validate the structure of the analysis result
+      const isValid = validateAnalysisResult(analysisResult, 'OpenAI-format analyzeImage')
+      if (!isValid) {
+        throw new Error('Invalid analysis result structure')
+      }
+      
+      return {
+        ...analysisResult,
+        provider: 'openai-format' as AIProvider
+      }
+    } catch (error) {
+      console.error('OpenAI-format analyzeImage final error:', error)
+      console.error('Raw content:', content.substring(0, 1000) + '...')
+      throw error
+    }
+  }
+
+  async analyzeMangaImage(imageBase64: string): Promise<MangaAnalysisResult> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    
+    if (this.settings.apiKey) {
+      headers['Authorization'] = `Bearer ${this.settings.apiKey}`
+    }
+
+    const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: this.settings.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful Japanese language learning assistant specialized in manga analysis. You can identify manga panels and extract text from each panel separately following traditional right-to-left, top-to-bottom reading order. Always respond with valid JSON. Keep responses concise to avoid truncation.'
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: CONCISE_MANGA_PANEL_ANALYSIS_PROMPT()
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: createImageDataURL(imageBase64)
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`OpenAI-format API error: ${response.status}`, { 
+        endpoint: `${this.settings.endpoint}/chat/completions`,
+        model: this.settings.model,
+        hasApiKey: !!this.settings.apiKey,
+        error: errorText 
+      })
+      throw new Error(`OpenAI-format API error: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    const content = data.choices[0]?.message?.content
+
+    if (!content) {
+      throw new Error('No content received from OpenAI-format API')
+    }
+
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('OpenAI-format analyzeMangaImage cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI-format analyzeMangaImage', true)
+      
+      // Validate the structure of the manga analysis result
+      const isValid = validateMangaAnalysisResult(analysisResult, 'OpenAI-format analyzeMangaImage')
+      if (!isValid) {
+        throw new Error('Invalid manga analysis result structure')
+      }
+      
+      return {
+        ...analysisResult,
+        provider: 'openai-format' as AIProvider
+      }
+    } catch (error) {
+      console.error('OpenAI-format analyzeMangaImage JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse OpenAI-format response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 }
@@ -719,6 +1445,7 @@ export class AIAnalysisService {
               position: segmentedPanel.boundingBox,
               imageData: segmentedPanel.imageData,
               extractedText: '',
+              sentences: [],
               translation: 'Analysis failed for this panel',
               words: [],
               grammar: [],

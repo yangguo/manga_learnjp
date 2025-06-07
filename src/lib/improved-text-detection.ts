@@ -62,7 +62,30 @@ IMPORTANT INSTRUCTIONS:
 Provide your response in this JSON format:
 {
   "extractedText": "All Japanese text found (or empty string if none)",
-  "translation": "English translation of the text",
+  "sentences": [
+    {
+      "sentence": "Individual Japanese sentence",
+      "translation": "English translation of this sentence",
+      "words": [
+        {
+          "word": "Japanese word",
+          "reading": "hiragana/katakana reading",
+          "meaning": "English meaning",
+          "partOfSpeech": "noun/verb/adjective/etc",
+          "difficulty": "beginner/intermediate/advanced"
+        }
+      ],
+      "grammar": [
+        {
+          "pattern": "Grammar pattern found in this sentence",
+          "explanation": "Detailed explanation of the grammar pattern",
+          "example": "Example sentence using this pattern"
+        }
+      ],
+      "context": "Context or usage notes for this specific sentence"
+    }
+  ],
+  "translation": "Overall English translation of all text",
   "summary": "Brief description of what's shown in this panel",
   "confidence": 0.95,
   "textLocations": [
@@ -179,6 +202,7 @@ Use the same JSON format as before.`
       }, // Default position, will be set by caller
       imageData: panelImageBase64,
       extractedText: lastResult?.extractedText || '',
+      sentences: lastResult?.sentences || [], // Sentence breakdown from AI analysis
       translation: lastResult?.translation || 'No text to translate',
       words: lastResult?.words || [],
       grammar: lastResult?.grammar || [],
