@@ -145,7 +145,8 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
                   modelSettings,
                   apiKeySettings,
                   openaiFormatSettings,
-                  mangaMode: true // Use manga mode for LLM-based panel detection
+                  mangaMode: false, // Don't use regular manga mode
+                  simpleAnalysisMode: true // Use simple analysis mode which triggers LLM-based panel detection
                 }),
               })
 
@@ -196,7 +197,8 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
               modelSettings,
               apiKeySettings,
               openaiFormatSettings,
-              mangaMode: isMangaMode
+              mangaMode: isMangaMode,
+              simpleAnalysisMode: !isMangaMode // Use simple analysis mode when not in manga mode
             }),
           })
 

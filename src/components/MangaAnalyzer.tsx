@@ -72,7 +72,7 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
         <p className="text-gray-800 leading-relaxed">{analysisResult.overallSummary}</p>
         
         {/* Reading Order Info - only show for multiple panels */}
-        {analysisResult.panels.length > 1 && (
+        {analysisResult.panels.length > 1 && analysisResult.readingOrder && (
           <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm text-blue-800">
               <strong>Reading Order:</strong> {analysisResult.readingOrder.join(' → ')} 

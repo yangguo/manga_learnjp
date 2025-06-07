@@ -165,7 +165,7 @@ export function ClientPanelSegmentationDemo({
                 <div className="text-sm text-gray-500">Original Size</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">{result.readingOrder.join('→')}</div>
+                <div className="text-2xl font-bold text-purple-600">{result.readingOrder?.join('→') || 'N/A'}</div>
                 <div className="text-sm text-gray-500">Reading Order</div>
               </div>
             </div>

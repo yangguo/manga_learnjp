@@ -375,26 +375,43 @@ function parseJsonSafely(content: string, source: string = 'unknown', skipValida
     // Try to reconstruct truncated JSON
     let fixedContent = content.trim()
     
-    // Remove trailing commas
+    // Remove trailing commas before closing brackets/braces
     fixedContent = fixedContent.replace(/,(\s*[}\]])/g, '$1')
     
-    // Check if JSON is truncated by looking for incomplete structures
-    const lastCompleteObject = findLastCompleteJsonObject(fixedContent)
-    if (lastCompleteObject) {
+    // Fix incomplete array elements by removing trailing content after last complete object
+    const lastValidObjectEnd = findLastCompleteJsonStructure(fixedContent)
+    if (lastValidObjectEnd) {
       console.log('Found truncated JSON, attempting to reconstruct...')
-      fixedContent = lastCompleteObject
+      fixedContent = lastValidObjectEnd
     } else {
-      // Try other common fixes
-      if (fixedContent.includes('[') && !fixedContent.includes(']')) {
-        fixedContent += ']'
+      // Try other common fixes for incomplete structures
+      
+      // Fix incomplete arrays by closing them at the last valid position
+      if (fixedContent.includes('[') && !fixedContent.trim().endsWith(']')) {
+        // Find the position of incomplete array element
+        const lastCompleteArrayElement = findLastCompleteArrayElement(fixedContent)
+        if (lastCompleteArrayElement) {
+          fixedContent = lastCompleteArrayElement + ']'
+        } else {
+          // Simple case: just add closing bracket
+          fixedContent += ']'
+        }
       }
       
-      // Count braces and try to balance them
+      // Balance braces for incomplete objects
       const openBraces = (fixedContent.match(/{/g) || []).length
       const closeBraces = (fixedContent.match(/}/g) || []).length
       
       if (openBraces > closeBraces) {
         fixedContent += '}'.repeat(openBraces - closeBraces)
+      }
+      
+      // Balance brackets for incomplete arrays
+      const openBrackets = (fixedContent.match(/\[/g) || []).length
+      const closeBrackets = (fixedContent.match(/\]/g) || []).length
+      
+      if (openBrackets > closeBrackets) {
+        fixedContent += ']'.repeat(openBrackets - closeBrackets)
       }
     }
     
@@ -466,8 +483,134 @@ function findLastCompleteJsonObject(content: string): string | null {
   return null
 }
 
+// Helper function to find the last complete JSON structure (object or array)
+function findLastCompleteJsonStructure(content: string): string | null {
+  // First try to find complete object
+  const completeObject = findLastCompleteJsonObject(content)
+  if (completeObject) return completeObject
+  
+  // If no complete object, try to find complete array elements
+  const arrayStart = content.indexOf('[')
+  if (arrayStart === -1) return null
+  
+  let inString = false
+  let escapeNext = false
+  let braceCount = 0
+  let bracketCount = 0
+  let lastValidArrayEnd = -1
+  
+  for (let i = arrayStart; i < content.length; i++) {
+    const char = content[i]
+    
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+    
+    if (char === '\\') {
+      escapeNext = true
+      continue
+    }
+    
+    if (char === '"' && !escapeNext) {
+      inString = !inString
+      continue
+    }
+    
+    if (!inString) {
+      if (char === '{') {
+        braceCount++
+      } else if (char === '}') {
+        braceCount--
+      } else if (char === '[') {
+        bracketCount++
+      } else if (char === ']') {
+        bracketCount--
+        if (bracketCount === 0) {
+          lastValidArrayEnd = i
+        }
+      }
+    }
+  }
+  
+  if (lastValidArrayEnd !== -1) {
+    return content.substring(0, lastValidArrayEnd + 1)
+  }
+  
+  return null
+}
+
+// Helper function to find the last complete array element
+function findLastCompleteArrayElement(content: string): string | null {
+  const arrayStart = content.indexOf('[')
+  if (arrayStart === -1) return null
+  
+  let inString = false
+  let escapeNext = false
+  let braceCount = 0
+  let lastCompleteElementEnd = -1
+  let elementStart = -1
+  
+  for (let i = arrayStart + 1; i < content.length; i++) {
+    const char = content[i]
+    
+    if (escapeNext) {
+      escapeNext = false
+      continue
+    }
+    
+    if (char === '\\') {
+      escapeNext = true
+      continue
+    }
+    
+    if (char === '"' && !escapeNext) {
+      inString = !inString
+      continue
+    }
+    
+    if (!inString) {
+      if (char === '{') {
+        if (braceCount === 0) {
+          elementStart = i
+        }
+        braceCount++
+      } else if (char === '}') {
+        braceCount--
+        if (braceCount === 0 && elementStart !== -1) {
+          lastCompleteElementEnd = i
+        }
+      }
+    }
+  }
+  
+  if (lastCompleteElementEnd !== -1) {
+    return content.substring(0, lastCompleteElementEnd + 1)
+  }
+  
+  return null
+}
+
 // Helper function to extract partial data from malformed JSON
 function extractPartialJsonData(content: string): any | null {
+  try {
+    // Check if this looks like a manga analysis (has "panels" field)
+    const isMangaAnalysis = content.includes('"panels"')
+    
+    if (isMangaAnalysis) {
+      return extractPartialMangaData(content)
+    } else {
+      return extractPartialTextData(content)
+    }
+  } catch (e) {
+    console.error('Failed to extract partial data:', e)
+  }
+  
+  return null
+}
+
+// Extract partial data for regular text analysis
+function extractPartialTextData(content: string): any | null {
   try {
     // Try to extract basic fields even from incomplete JSON
     const extractedTextMatch = content.match(/"extractedText":\s*"([^"]*)"/)
@@ -511,7 +654,91 @@ function extractPartialJsonData(content: string): any | null {
       }
     }
   } catch (e) {
-    console.error('Failed to extract partial data:', e)
+    console.error('Failed to extract partial text data:', e)
+  }
+  
+  return null
+}
+
+// Extract partial data for manga analysis
+function extractPartialMangaData(content: string): any | null {
+  try {
+    const panels: any[] = []
+    
+    // Try to extract panels array content
+    const panelsMatch = content.match(/"panels":\s*\[([\s\S]*?)(?:\]|$)/)
+    if (panelsMatch) {
+      const panelsContent = panelsMatch[1]
+      
+      // Find complete panel objects using a more robust approach
+      let braceCount = 0
+      let inString = false
+      let escapeNext = false
+      let panelStart = -1
+      let currentPos = 0
+      
+      for (let i = 0; i < panelsContent.length; i++) {
+        const char = panelsContent[i]
+        
+        if (escapeNext) {
+          escapeNext = false
+          continue
+        }
+        
+        if (char === '\\') {
+          escapeNext = true
+          continue
+        }
+        
+        if (char === '"' && !escapeNext) {
+          inString = !inString
+          continue
+        }
+        
+        if (!inString) {
+          if (char === '{') {
+            if (braceCount === 0) {
+              panelStart = i
+            }
+            braceCount++
+          } else if (char === '}') {
+            braceCount--
+            if (braceCount === 0 && panelStart !== -1) {
+              // Found a complete panel object
+              const panelJson = panelsContent.substring(panelStart, i + 1)
+              try {
+                const panel = JSON.parse(panelJson)
+                if (panel.panelNumber && panel.extractedText !== undefined) {
+                  // Fill in missing fields with defaults
+                  panels.push({
+                    panelNumber: panel.panelNumber,
+                    position: panel.position || { x: 0, y: 0, width: 100, height: 100 },
+                    extractedText: panel.extractedText || '',
+                    sentences: panel.sentences || [],
+                    translation: panel.translation || 'Translation incomplete',
+                    context: panel.context || 'Analysis incomplete due to truncated response'
+                  })
+                }
+              } catch (e) {
+                // Skip malformed panel objects
+              }
+              panelStart = -1
+            }
+          }
+        }
+      }
+    }
+    
+    if (panels.length > 0) {
+      return {
+        panels: panels,
+        overallSummary: `Partial analysis recovered ${panels.length} panel(s). Some data may be incomplete due to truncated response.`,
+        readingOrder: panels.map((_, index) => index + 1),
+        provider: 'openai-format'
+      }
+    }
+  } catch (e) {
+    console.error('Failed to extract partial manga data:', e)
   }
   
   return null
@@ -839,8 +1066,12 @@ export class OpenAIService {
         throw new Error('Invalid manga analysis result structure')
       }
       
+      // Ensure we have a proper readingOrder
+      const readingOrder = analysisResult.readingOrder || (analysisResult.panels ? analysisResult.panels.map((_: any, index: number) => index + 1) : [])
+      
       return {
         ...analysisResult,
+        readingOrder,
         provider: 'openai' as AIProvider
       }
     } catch (error) {
@@ -1020,8 +1251,12 @@ export class GeminiService {
       throw new Error('Invalid manga analysis result structure')
     }
     
+    // Ensure we have a proper readingOrder
+    const readingOrder = analysisResult.readingOrder || (analysisResult.panels ? analysisResult.panels.map((_: any, index: number) => index + 1) : [])
+    
     return {
       ...analysisResult,
+      readingOrder,
       provider: 'gemini' as AIProvider
     }
   }
@@ -1297,8 +1532,12 @@ export class OpenAIFormatService {
         throw new Error('Invalid manga analysis result structure')
       }
       
+      // Ensure we have a proper readingOrder
+      const readingOrder = analysisResult.readingOrder || (analysisResult.panels ? analysisResult.panels.map((_: any, index: number) => index + 1) : [])
+      
       return {
         ...analysisResult,
+        readingOrder,
         provider: 'openai-format' as AIProvider
       }
     } catch (error) {
@@ -1489,7 +1728,7 @@ export class AIAnalysisService {
     }
   }
 
-  private async analyzeMangaImageDirect(imageBase64: string, provider: AIProvider = 'openai'): Promise<MangaAnalysisResult> {
+  async analyzeMangaImageDirect(imageBase64: string, provider: AIProvider = 'openai'): Promise<MangaAnalysisResult> {
     console.log('📁 Using direct analysis fallback')
     
     let result: MangaAnalysisResult
@@ -1509,9 +1748,13 @@ export class AIAnalysisService {
       imageData: imageBase64 // Use the original image as a fallback
     }))
 
+    // Ensure we have a proper readingOrder
+    const readingOrder = result.readingOrder || enhancedPanels.map((_, index) => index + 1)
+
     return {
       ...result,
-      panels: enhancedPanels
+      panels: enhancedPanels,
+      readingOrder
     }
   }
 

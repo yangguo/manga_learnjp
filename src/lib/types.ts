@@ -101,7 +101,7 @@ export interface MangaPanel {
 export interface MangaAnalysisResult {
   panels: MangaPanel[]
   overallSummary: string
-  readingOrder: number[]
+  readingOrder?: number[]
   provider?: string
 }
 

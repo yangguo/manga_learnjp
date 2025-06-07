@@ -10,11 +10,12 @@ interface AnalysisRequest {
   modelSettings?: ModelSettings
   apiKeySettings?: APIKeySettings
   mangaMode?: boolean
+  simpleAnalysisMode?: boolean // New flag to distinguish simple analysis from panel analysis
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, imageBase64, provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings, mangaMode = false }: AnalysisRequest = await request.json()
+    const { text, imageBase64, provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings, mangaMode = false, simpleAnalysisMode = false }: AnalysisRequest = await request.json()
 
     if (!text && !imageBase64) {
       return NextResponse.json(
@@ -80,7 +81,12 @@ export async function POST(request: NextRequest) {
         if (imageBase64) {
           if (mangaMode) {
             result = await aiService.analyzeMangaImage(imageBase64, currentProvider)
+          } else if (simpleAnalysisMode) {
+            // In simple mode, use manga analysis but skip client-side segmentation
+            // This will fall back to LLM-based analysis and display using panel UI
+            result = await aiService.analyzeMangaImageDirect(imageBase64, currentProvider)
           } else {
+            // Regular individual panel analysis or simple image analysis
             result = await aiService.analyzeImage(imageBase64, currentProvider)
           }
         } else {
