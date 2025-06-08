@@ -51,10 +51,9 @@ export const useAIProviderStore = create<AIProviderState>()(persist(
           const data = await response.json()
           const currentProvider = get().selectedProvider
           
-          // Only update if current provider is not available or is the default 'openai'
-          // and the smart default is different
-          if (data.default && data.default !== currentProvider && 
-              (!data.providers.includes(currentProvider) || currentProvider === 'openai')) {
+          // Always use server's smart default if it's different from current
+          // This ensures we use the best available provider based on current configuration
+          if (data.default && data.default !== currentProvider) {
             console.log(`🎯 Smart default selected: ${data.default} (was: ${currentProvider})`)
             set({ selectedProvider: data.default })
           }

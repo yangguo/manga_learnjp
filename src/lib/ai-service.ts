@@ -1089,6 +1089,7 @@ export class GeminiService {
   constructor(apiKey: string, modelName?: string) {
     this.genAI = new GoogleGenerativeAI(apiKey)
     const finalModelName = modelName || process.env.GEMINI_MODEL || 'gemini-pro-vision'
+    console.log(`🔧 Gemini service initializing with model: ${finalModelName}`)
     this.model = this.genAI.getGenerativeModel({ model: finalModelName })
   }
 
@@ -1587,11 +1588,14 @@ export class AIAnalysisService {
     // Only initialize Gemini service if both API key and model are available
     if (geminiApiKey) {
       const geminiModel = modelSettings?.gemini?.model?.trim()
+      console.log(`🔧 Gemini initialization - modelSettings.gemini.model: "${geminiModel}"`)
       if (geminiModel) {
+        console.log(`🔧 Using provided model: ${geminiModel}`)
         this.geminiService = new GeminiService(geminiApiKey, geminiModel)
       } else {
         // Check if environment variable has a model as fallback
         const envModel = process.env.GEMINI_MODEL?.trim()
+        console.log(`🔧 Using environment model: ${envModel}`)
         if (envModel) {
           this.geminiService = new GeminiService(geminiApiKey, envModel)
         }
