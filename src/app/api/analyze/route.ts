@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AIAnalysisService, type AnalysisResult } from '@/lib/ai-service'
-import { type AIProvider, type OpenAIFormatSettings, type ModelSettings, type APIKeySettings, type MangaAnalysisResult } from '@/lib/types'
+import { type AIProvider, type OpenAIFormatSettings, type ModelSettings, type APIKeySettings, type MangaAnalysisResult, type ReadingModeResult } from '@/lib/types'
 
 interface AnalysisRequest {
   text?: string
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
       try {
         console.log(`🔄 Trying provider: ${currentProvider}`)
         
-        let result: AnalysisResult | MangaAnalysisResult
+        let result: AnalysisResult | MangaAnalysisResult | ReadingModeResult
         if (imageBase64) {
           if (readingMode) {
             result = await aiService.analyzeImageForReading(imageBase64, currentProvider)
