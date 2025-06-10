@@ -5,19 +5,21 @@ import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Upload, FileImage, Loader2, CheckCircle, AlertCircle, X } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { SUPPORTED_IMAGE_TYPES, type AnalysisResult, type MangaAnalysisResult } from '@/lib/types'
+import { SUPPORTED_IMAGE_TYPES, type AnalysisResult, type MangaAnalysisResult, type ReadingModeResult, type AnalysisMode } from '@/lib/types'
 import { useAIProviderStore } from '@/lib/store'
 import { useClientPanelSegmentation } from '@/hooks/useClientPanelSegmentation'
+import { analyzeImageForReading } from '@/lib/client-api'
 
 interface ImageUploaderProps {
   onAnalysisComplete: (result: AnalysisResult) => void
   onMangaAnalysisComplete: (result: MangaAnalysisResult) => void
+  onReadingModeComplete: (result: ReadingModeResult) => void
   onOriginalImageChange: (imageData: string | null) => void
   onError: (errorMessage: string) => void
-  isMangaMode: boolean
+  analysisMode: AnalysisMode
 }
 
-export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisComplete, onOriginalImageChange, onError, isMangaMode }: ImageUploaderProps) {
+export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisComplete, onReadingModeComplete, onOriginalImageChange, onError, analysisMode }: ImageUploaderProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
@@ -41,10 +43,10 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
         setProgress(20)
 
         try {
-          console.log('🔍 Debug: isMangaMode =', isMangaMode)
+          console.log('🔍 Debug: analysisMode =', analysisMode)
           console.log('🔍 Debug: isClientSegmentationAvailable =', isClientSegmentationAvailable)
           
-          if (isMangaMode) {
+          if (analysisMode === 'panel') {
             // Panel Analysis Mode: Try client-side segmentation first
             if (isClientSegmentationAvailable) {
               try {
@@ -126,8 +128,40 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
             }
           }
           
+          // Reading Mode: Use LLM to identify sentences and their locations
+          if (analysisMode === 'reading') {
+            try {
+              console.log('🔍 Starting reading mode analysis...')
+              setProgress(30)
+              
+              const readingResult = await analyzeImageForReading(imageBase64, {
+                provider: selectedProvider,
+                openaiFormatSettings,
+                modelSettings,
+                apiKeySettings
+              })
+              
+              setProgress(90)
+              
+              if (readingResult) {
+                console.log('✅ Reading mode analysis successful:', readingResult)
+                setProgress(100)
+                setIsAnalyzing(false)
+                toast.success(`✅ Reading mode analysis complete using ${selectedProvider.toUpperCase()}!`)
+                onReadingModeComplete(readingResult)
+                return
+              }
+            } catch (readingError) {
+              console.log('⚠️ Reading mode analysis failed:', readingError)
+              setIsAnalyzing(false)
+              setProgress(0)
+              onError(`Reading mode analysis failed: ${readingError instanceof Error ? readingError.message : String(readingError)}`)
+              return
+            }
+          }
+
           // Simple Analysis Mode: Try LLM-based panel analysis first, fallback to simple text analysis
-          if (!isMangaMode) {
+          if (analysisMode === 'simple') {
             try {
               setSegmentationStatus('segmenting')
               setProgress(30)
@@ -180,7 +214,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
           // Fallback: Use server-side analysis (manga mode for panel analysis, simple for text analysis)
           console.log('🔄 Using fallback analysis method...')
           
-          if (isMangaMode) {
+          if (analysisMode === 'panel') {
             setSegmentationStatus('segmenting')
             setProgress(30)
           }
@@ -197,12 +231,12 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
               modelSettings,
               apiKeySettings,
               openaiFormatSettings,
-              mangaMode: isMangaMode,
-              simpleAnalysisMode: !isMangaMode // Use simple analysis mode when not in manga mode
+              mangaMode: analysisMode === 'panel',
+              simpleAnalysisMode: analysisMode === 'simple' // Use simple analysis mode when in simple mode
             }),
           })
 
-          if (isMangaMode) {
+          if (analysisMode === 'panel') {
             setSegmentationStatus('complete')
           }
 
@@ -218,7 +252,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
           setIsAnalyzing(false)
 
           // Show success message
-          if (isMangaMode) {
+          if (analysisMode === 'panel') {
             toast.success(`✅ Manga analyzed using ${result.provider?.toUpperCase()}!`)
             if ('panels' in result) {
               onMangaAnalysisComplete(result as MangaAnalysisResult)
@@ -258,7 +292,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
       setProgress(0)
       setSegmentationStatus('error')
     }
-  }, [selectedProvider, openaiFormatSettings, modelSettings, apiKeySettings, isMangaMode, onAnalysisComplete, onMangaAnalysisComplete, onError, segmentPanels, isClientSegmentationAvailable])
+  }, [selectedProvider, openaiFormatSettings, modelSettings, apiKeySettings, analysisMode, onAnalysisComplete, onMangaAnalysisComplete, onReadingModeComplete, onError, segmentPanels, isClientSegmentationAvailable])
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -299,7 +333,7 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
     if (isAnalyzing) {
       if (progress < 40) return 'Reading image...'
       if (progress < 70) {
-        if (isMangaMode) {
+        if (analysisMode === 'panel') {
           if (segmentationStatus === 'segmenting') return 'Segmenting manga panels...'
           if (segmentationStatus === 'complete') return 'Analyzing panels with AI...'
           return 'Identifying manga panels...'
@@ -310,10 +344,20 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
         }
         return 'Extracting Japanese text...'
       }
-      if (progress < 100) return isMangaMode ? 'Analyzing panels with AI...' : 'Analyzing with AI...'
+      if (progress < 100) {
+        return analysisMode === 'panel' 
+          ? 'Analyzing panels with AI...' 
+          : analysisMode === 'reading'
+          ? 'Identifying sentences with AI...'
+          : 'Analyzing with AI...'
+      }
     }
     if (progress === 100) return 'Analysis complete!'
-    return isMangaMode ? 'Upload manga page for panel analysis' : 'Upload manga image'
+    return analysisMode === 'panel' 
+      ? 'Upload manga page for panel analysis' 
+      : analysisMode === 'reading'
+      ? 'Upload manga image for reading mode'
+      : 'Upload manga image'
   }
 
   return (

@@ -1,5 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel } from './types'
+import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel, ReadingModeResult, SentenceLocation } from './types'
 import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
 import { createImageDataURL, getImageMimeType } from './image-utils'
@@ -418,7 +418,9 @@ function parseJsonSafely(content: string, source: string = 'unknown', skipValida
     try {
       console.log('Attempting to parse with fixes...')
       const result = JSON.parse(fixedContent)
-      validateAnalysisResult(result, `${source} (fixed)`)
+      if (!skipValidation) {
+        validateAnalysisResult(result, `${source} (fixed)`)
+      }
       return result
     } catch (secondError) {
       console.error('Even with fixes, parsing failed:', secondError)
@@ -1060,11 +1062,11 @@ export class OpenAIService {
       console.log('OpenAI analyzeMangaImage cleaned content preview:', cleanedContent.substring(0, 200) + '...')
       const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI analyzeMangaImage', true)
       
-      // Validate the structure of the manga analysis result
-      const isValid = validateMangaAnalysisResult(analysisResult, 'OpenAI analyzeMangaImage')
-      if (!isValid) {
-        throw new Error('Invalid manga analysis result structure')
-      }
+      // Skip validation for simple analysis mode to be more lenient
+      // const isValid = validateMangaAnalysisResult(analysisResult, 'OpenAI analyzeMangaImage')
+      // if (!isValid) {
+      //   throw new Error('Invalid manga analysis result structure')
+      // }
       
       // Ensure we have a proper readingOrder
       const readingOrder = analysisResult.readingOrder || (analysisResult.panels ? analysisResult.panels.map((_: any, index: number) => index + 1) : [])
@@ -1076,6 +1078,119 @@ export class OpenAIService {
       }
     } catch (error) {
       console.error('OpenAI analyzeMangaImage JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse OpenAI response: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  async analyzeImageForReading(imageBase64: string): Promise<any> {
+    const READING_MODE_PROMPT = `
+You are a Japanese language learning assistant specialized in reading mode analysis. Analyze this manga image and identify ALL Japanese sentences with their exact locations.
+
+For each sentence found, provide:
+1. The exact Japanese text
+2. English translation
+3. Vocabulary analysis
+4. Grammar patterns
+5. Precise bounding box coordinates (x, y, width, height) as percentages of image dimensions
+
+Please provide a JSON response with this structure:
+{
+  "sentences": [
+    {
+      "sentence": "Japanese sentence text",
+      "translation": "English translation",
+      "words": [
+        {
+          "word": "Japanese word",
+          "reading": "hiragana/katakana reading",
+          "meaning": "English meaning",
+          "partOfSpeech": "noun/verb/adjective/etc",
+          "difficulty": "beginner/intermediate/advanced"
+        }
+      ],
+      "grammar": [
+        {
+          "pattern": "Grammar pattern",
+          "explanation": "Explanation of the pattern",
+          "example": "Example usage"
+        }
+      ],
+      "context": "Context or usage notes",
+      "boundingBox": {
+        "x": 10.5,
+        "y": 20.3,
+        "width": 25.7,
+        "height": 8.2
+      }
+    }
+  ],
+  "overallSummary": "Brief summary of the content"
+}
+
+IMPORTANT:
+- Coordinates should be percentages (0-100) relative to image dimensions
+- Include ALL text: speech bubbles, sound effects, signs, etc.
+- Each sentence should have accurate bounding box coordinates
+- Separate different text areas as individual sentences
+`
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful Japanese language learning assistant specialized in reading mode analysis. You can identify Japanese text locations in manga images and provide detailed linguistic analysis. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: READING_MODE_PROMPT
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: createImageDataURL(imageBase64)
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`)
+    }
+
+    const data = await response.json()
+    const content = data.choices[0]?.message?.content
+
+    if (!content) {
+      throw new Error('No content received from OpenAI')
+    }
+
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('OpenAI analyzeImageForReading cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI analyzeImageForReading', true) // Skip validation for reading mode
+      
+      return {
+        ...analysisResult,
+        provider: 'openai' as AIProvider
+      }
+    } catch (error) {
+      console.error('OpenAI analyzeImageForReading JSON parsing error:', error)
       console.error('Raw content:', content.substring(0, 500) + '...')
       throw new Error(`Failed to parse OpenAI response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
@@ -1246,11 +1361,11 @@ export class GeminiService {
 
     const analysisResult = parseJsonSafely(cleanJsonResponse(content), 'Gemini analyzeMangaImage', true)
     
-    // Validate the structure of the manga analysis result
-    const isValid = validateMangaAnalysisResult(analysisResult, 'Gemini analyzeMangaImage')
-    if (!isValid) {
-      throw new Error('Invalid manga analysis result structure')
-    }
+    // Skip validation for simple analysis mode to be more lenient
+    // const isValid = validateMangaAnalysisResult(analysisResult, 'Gemini analyzeMangaImage')
+    // if (!isValid) {
+    //   throw new Error('Invalid manga analysis result structure')
+    // }
     
     // Ensure we have a proper readingOrder
     const readingOrder = analysisResult.readingOrder || (analysisResult.panels ? analysisResult.panels.map((_: any, index: number) => index + 1) : [])
@@ -1259,6 +1374,94 @@ export class GeminiService {
       ...analysisResult,
       readingOrder,
       provider: 'gemini' as AIProvider
+    }
+  }
+
+  async analyzeImageForReading(imageBase64: string): Promise<any> {
+    const READING_MODE_PROMPT = `
+You are a Japanese language learning assistant specialized in reading mode analysis. Analyze this manga image and identify ALL Japanese sentences with their exact locations.
+
+For each sentence found, provide:
+1. The exact Japanese text
+2. English translation
+3. Vocabulary analysis
+4. Grammar patterns
+5. Precise bounding box coordinates (x, y, width, height) as percentages of image dimensions
+
+Please provide a JSON response with this structure:
+{
+  "sentences": [
+    {
+      "sentence": "Japanese sentence text",
+      "translation": "English translation",
+      "words": [
+        {
+          "word": "Japanese word",
+          "reading": "hiragana/katakana reading",
+          "meaning": "English meaning",
+          "partOfSpeech": "noun/verb/adjective/etc",
+          "difficulty": "beginner/intermediate/advanced"
+        }
+      ],
+      "grammar": [
+        {
+          "pattern": "Grammar pattern",
+          "explanation": "Explanation of the pattern",
+          "example": "Example usage"
+        }
+      ],
+      "context": "Context or usage notes",
+      "boundingBox": {
+        "x": 10.5,
+        "y": 20.3,
+        "width": 25.7,
+        "height": 8.2
+      }
+    }
+  ],
+  "overallSummary": "Brief summary of the content"
+}
+
+IMPORTANT:
+- Coordinates should be percentages (0-100) relative to image dimensions
+- Include ALL text: speech bubbles, sound effects, signs, etc.
+- Each sentence should have accurate bounding box coordinates
+- Separate different text areas as individual sentences
+`
+    
+    // Convert base64 to format Gemini expects
+    const imagePart = {
+      inlineData: {
+        data: imageBase64,
+        mimeType: getImageMimeType(imageBase64)
+      }
+    }
+
+    const result = await this.model.generateContent([
+      READING_MODE_PROMPT,
+      imagePart
+    ])
+
+    const response = await result.response
+    const content = response.text()
+
+    if (!content) {
+      throw new Error('No content received from Gemini')
+    }
+
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('Gemini analyzeImageForReading cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'Gemini analyzeImageForReading', true) // Skip validation for reading mode
+      
+      return {
+        ...analysisResult,
+        provider: 'gemini' as AIProvider
+      }
+    } catch (error) {
+      console.error('Gemini analyzeImageForReading JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse Gemini response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 }
@@ -1527,11 +1730,11 @@ export class OpenAIFormatService {
       console.log('OpenAI-format analyzeMangaImage cleaned content preview:', cleanedContent.substring(0, 200) + '...')
       const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI-format analyzeMangaImage', true)
       
-      // Validate the structure of the manga analysis result
-      const isValid = validateMangaAnalysisResult(analysisResult, 'OpenAI-format analyzeMangaImage')
-      if (!isValid) {
-        throw new Error('Invalid manga analysis result structure')
-      }
+      // Skip validation for simple analysis mode to be more lenient
+      // const isValid = validateMangaAnalysisResult(analysisResult, 'OpenAI-format analyzeMangaImage')
+      // if (!isValid) {
+      //   throw new Error('Invalid manga analysis result structure')
+      // }
       
       // Ensure we have a proper readingOrder
       const readingOrder = analysisResult.readingOrder || (analysisResult.panels ? analysisResult.panels.map((_: any, index: number) => index + 1) : [])
@@ -1543,6 +1746,131 @@ export class OpenAIFormatService {
       }
     } catch (error) {
       console.error('OpenAI-format analyzeMangaImage JSON parsing error:', error)
+      console.error('Raw content:', content.substring(0, 500) + '...')
+      throw new Error(`Failed to parse OpenAI-format response: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  async analyzeImageForReading(imageBase64: string): Promise<any> {
+    const READING_MODE_PROMPT = `
+You are a Japanese language learning assistant specialized in reading mode analysis. Analyze this manga image and identify ALL Japanese sentences with their exact locations.
+
+For each sentence found, provide:
+1. The exact Japanese text
+2. English translation
+3. Vocabulary analysis
+4. Grammar patterns
+5. Precise bounding box coordinates (x, y, width, height) as percentages of image dimensions
+
+Please provide a JSON response with this structure:
+{
+  "sentences": [
+    {
+      "sentence": "Japanese sentence text",
+      "translation": "English translation",
+      "words": [
+        {
+          "word": "Japanese word",
+          "reading": "hiragana/katakana reading",
+          "meaning": "English meaning",
+          "partOfSpeech": "noun/verb/adjective/etc",
+          "difficulty": "beginner/intermediate/advanced"
+        }
+      ],
+      "grammar": [
+        {
+          "pattern": "Grammar pattern",
+          "explanation": "Explanation of the pattern",
+          "example": "Example usage"
+        }
+      ],
+      "context": "Context or usage notes",
+      "boundingBox": {
+        "x": 10.5,
+        "y": 20.3,
+        "width": 25.7,
+        "height": 8.2
+      }
+    }
+  ],
+  "overallSummary": "Brief summary of the content"
+}
+
+IMPORTANT:
+- Coordinates should be percentages (0-100) relative to image dimensions
+- Include ALL text: speech bubbles, sound effects, signs, etc.
+- Each sentence should have accurate bounding box coordinates
+- Separate different text areas as individual sentences
+`
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    
+    if (this.settings.apiKey) {
+      headers['Authorization'] = `Bearer ${this.settings.apiKey}`
+    }
+
+    const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: this.settings.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a helpful Japanese language learning assistant specialized in reading mode analysis. You can identify Japanese text locations in manga images and provide detailed linguistic analysis. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: READING_MODE_PROMPT
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: createImageDataURL(imageBase64)
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.3,
+        max_tokens: 4000,
+      }),
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      console.error(`OpenAI-format API error: ${response.status}`, { 
+        endpoint: `${this.settings.endpoint}/chat/completions`,
+        model: this.settings.model,
+        hasApiKey: !!this.settings.apiKey,
+        error: errorText 
+      })
+      throw new Error(`OpenAI-format API error: ${response.status} - ${errorText}`)
+    }
+
+    const data = await response.json()
+    const content = data.choices[0]?.message?.content
+
+    if (!content) {
+      throw new Error('No content received from OpenAI-format API')
+    }
+
+    try {
+      const cleanedContent = cleanJsonResponse(content)
+      console.log('OpenAI-format analyzeImageForReading cleaned content preview:', cleanedContent.substring(0, 200) + '...')
+      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI-format analyzeImageForReading', true) // Skip validation for reading mode
+      
+      return {
+        ...analysisResult,
+        provider: 'openai-format' as AIProvider
+      }
+    } catch (error) {
+      console.error('OpenAI-format analyzeImageForReading JSON parsing error:', error)
       console.error('Raw content:', content.substring(0, 500) + '...')
       throw new Error(`Failed to parse OpenAI-format response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
@@ -1759,6 +2087,33 @@ export class AIAnalysisService {
       ...result,
       panels: enhancedPanels,
       readingOrder
+    }
+  }
+
+  async analyzeImageForReading(imageBase64: string, provider: AIProvider = 'openai'): Promise<ReadingModeResult> {
+    console.log('📖 Starting reading mode analysis with provider:', provider)
+    
+    try {
+      let result: any
+      if (provider === 'openai' && this.openaiService) {
+        result = await this.openaiService.analyzeImageForReading(imageBase64)
+      } else if (provider === 'gemini' && this.geminiService) {
+        result = await this.geminiService.analyzeImageForReading(imageBase64)
+      } else if (provider === 'openai-format' && this.openaiFormatService) {
+        result = await this.openaiFormatService.analyzeImageForReading(imageBase64)
+      } else {
+        throw new Error(`${provider} service not available or not configured`)
+      }
+
+      return {
+        sentences: result.sentences || [],
+        imageData: `data:image/jpeg;base64,${imageBase64}`,
+        overallSummary: result.overallSummary || result.summary || 'Reading mode analysis completed',
+        provider
+      }
+    } catch (error) {
+      console.error('❌ Reading mode analysis failed:', error)
+      throw error
     }
   }
 

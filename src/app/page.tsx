@@ -4,24 +4,27 @@ import { useState } from 'react'
 import ImageUploader from '@/components/ImageUploader'
 import TextAnalyzer from '@/components/TextAnalyzer'
 import MangaAnalyzer from '@/components/MangaAnalyzer'
+import ReadingModeViewer from '@/components/ReadingModeViewer'
 import Header from '@/components/Header'
 import DemoSection from '@/components/DemoSection'
 import { ClientPanelSegmentationDemo } from '@/components/ClientPanelSegmentationDemo'
 import { motion, AnimatePresence } from 'framer-motion'
-import { AnalysisResult, MangaAnalysisResult } from '@/lib/types'
-import { AlertCircle, X, BookOpen, FileText } from 'lucide-react'
+import { AnalysisResult, MangaAnalysisResult, ReadingModeResult, AnalysisMode } from '@/lib/types'
+import { AlertCircle, X, BookOpen, FileText, Eye } from 'lucide-react'
 
 export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [mangaAnalysisResult, setMangaAnalysisResult] = useState<MangaAnalysisResult | null>(null)
+  const [readingModeResult, setReadingModeResult] = useState<ReadingModeResult | null>(null)
   const [originalImageData, setOriginalImageData] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isMangaMode, setIsMangaMode] = useState(true)
+  const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('panel')
   const [selectedPanelId, setSelectedPanelId] = useState<number | null>(null)
 
   const handleAnalysisComplete = (result: AnalysisResult) => {
     setAnalysisResult(result)
     setMangaAnalysisResult(null)
+    setReadingModeResult(null)
     setOriginalImageData(null) // Clear original image data for simple analysis
     setError(null) // Clear any previous errors
     setSelectedPanelId(null)
@@ -30,6 +33,15 @@ export default function Home() {
   const handleMangaAnalysisComplete = (result: MangaAnalysisResult) => {
     setMangaAnalysisResult(result)
     setAnalysisResult(null)
+    setReadingModeResult(null)
+    setError(null) // Clear any previous errors
+    setSelectedPanelId(null)
+  }
+
+  const handleReadingModeComplete = (result: ReadingModeResult) => {
+    setReadingModeResult(result)
+    setAnalysisResult(null)
+    setMangaAnalysisResult(null)
     setError(null) // Clear any previous errors
     setSelectedPanelId(null)
   }
@@ -42,6 +54,7 @@ export default function Home() {
     setError(errorMessage)
     setAnalysisResult(null) // Clear any previous results
     setMangaAnalysisResult(null)
+    setReadingModeResult(null)
     setOriginalImageData(null) // Clear original image data on error
     setSelectedPanelId(null)
   }
@@ -50,10 +63,11 @@ export default function Home() {
     setError(null)
   }
 
-  const toggleMode = () => {
-    setIsMangaMode(!isMangaMode)
+  const setMode = (mode: AnalysisMode) => {
+    setAnalysisMode(mode)
     setAnalysisResult(null)
     setMangaAnalysisResult(null)
+    setReadingModeResult(null)
     setError(null)
     setSelectedPanelId(null)
   }
@@ -90,9 +104,9 @@ export default function Home() {
           {/* Mode Toggle */}
           <div className="flex items-center justify-center gap-4">
             <button
-              onClick={toggleMode}
+              onClick={() => setMode('panel')}
               className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all ${
-                isMangaMode
+                analysisMode === 'panel'
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
@@ -101,9 +115,9 @@ export default function Home() {
               Panel Analysis
             </button>
             <button
-              onClick={toggleMode}
+              onClick={() => setMode('simple')}
               className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all ${
-                !isMangaMode
+                analysisMode === 'simple'
                   ? 'bg-blue-600 text-white shadow-lg'
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
@@ -111,12 +125,25 @@ export default function Home() {
               <FileText size={20} />
               Simple Analysis
             </button>
+            <button
+              onClick={() => setMode('reading')}
+              className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all ${
+                analysisMode === 'reading'
+                  ? 'bg-blue-600 text-white shadow-lg'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Eye size={20} />
+              Reading Mode
+            </button>
           </div>
           
           <p className="text-sm text-gray-500 mt-4">
-            {isMangaMode
+            {analysisMode === 'panel'
               ? 'Extract text from individual manga panels using computer vision and AI analysis'
-              : 'Automatically detect panels with AI, or fallback to simple text extraction'
+              : analysisMode === 'simple'
+              ? 'Automatically detect panels with AI, or fallback to simple text extraction'
+              : 'Interactive reading mode with clickable sentences for translation and analysis'
             }
           </p>
         </motion.div>
@@ -165,9 +192,10 @@ export default function Home() {
             <ImageUploader 
               onAnalysisComplete={handleAnalysisComplete}
               onMangaAnalysisComplete={handleMangaAnalysisComplete}
+              onReadingModeComplete={handleReadingModeComplete}
               onOriginalImageChange={handleOriginalImageChange}
               onError={handleError}
-              isMangaMode={isMangaMode}
+              analysisMode={analysisMode}
             />
           </motion.div>
 
@@ -176,7 +204,20 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
-            {mangaAnalysisResult ? (
+            {readingModeResult ? (
+              // Show reading mode results with interactive sentences
+              <div className="space-y-8">
+                <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                  <h2 className="text-xl font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                    👁️ Interactive Reading Mode
+                  </h2>
+                  <p className="text-gray-600 mb-4">
+                    Click on any highlighted sentence to see translation and analysis
+                  </p>
+                  <ReadingModeViewer result={readingModeResult} />
+                </div>
+              </div>
+            ) : mangaAnalysisResult ? (
               // Show panel analysis results (for both manga mode and simple mode with panel detection)
               <div className="space-y-8">
                 {/* Panel Overview Grid */}
@@ -246,7 +287,7 @@ export default function Home() {
                   analysisResult={mangaAnalysisResult} 
                   selectedPanelId={selectedPanelId}
                   originalImageData={originalImageData || undefined}
-                  isSimpleAnalysisMode={!isMangaMode}
+                  isSimpleAnalysisMode={analysisMode === 'simple'}
                 />
               </div>
             ) : analysisResult ? (

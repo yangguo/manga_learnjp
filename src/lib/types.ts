@@ -42,6 +42,27 @@ export interface SentenceAnalysis {
   context: string
 }
 
+export interface SentenceLocation {
+  sentence: string
+  translation: string
+  words: WordAnalysis[]
+  grammar: GrammarPattern[]
+  context: string
+  boundingBox: {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+}
+
+export interface ReadingModeResult {
+  sentences: SentenceLocation[]
+  imageData: string
+  overallSummary: string
+  provider?: string
+}
+
 export interface AnalysisResult {
   extractedText: string
   sentences: SentenceAnalysis[]
@@ -104,6 +125,8 @@ export interface MangaAnalysisResult {
   readingOrder?: number[]
   provider?: string
 }
+
+export type AnalysisMode = 'panel' | 'simple' | 'reading'
 
 export interface PanelBoundingBox {
   x: number

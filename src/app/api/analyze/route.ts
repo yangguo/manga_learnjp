@@ -11,11 +11,12 @@ interface AnalysisRequest {
   apiKeySettings?: APIKeySettings
   mangaMode?: boolean
   simpleAnalysisMode?: boolean // New flag to distinguish simple analysis from panel analysis
+  readingMode?: boolean // New flag for reading mode analysis
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, imageBase64, provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings, mangaMode = false, simpleAnalysisMode = false }: AnalysisRequest = await request.json()
+    const { text, imageBase64, provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings, mangaMode = false, simpleAnalysisMode = false, readingMode = false }: AnalysisRequest = await request.json()
 
     if (!text && !imageBase64) {
       return NextResponse.json(
@@ -79,7 +80,9 @@ export async function POST(request: NextRequest) {
         
         let result: AnalysisResult | MangaAnalysisResult
         if (imageBase64) {
-          if (mangaMode) {
+          if (readingMode) {
+            result = await aiService.analyzeImageForReading(imageBase64, currentProvider)
+          } else if (mangaMode) {
             result = await aiService.analyzeMangaImage(imageBase64, currentProvider)
           } else if (simpleAnalysisMode) {
             // In simple mode, use manga analysis but skip client-side segmentation
