@@ -2,8 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel, ReadingModeResult, SentenceLocation } from './types'
 import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
-import { createImageDataURL, getImageMimeType, extractBase64FromDataURL } from './image-utils'
-import { compressImageForAPI, isImageTooLarge } from './image-compression'
+import { createImageDataURL, getImageMimeType } from './image-utils'
 
 export interface AnalysisRequest {
   text: string
@@ -1469,9 +1468,46 @@ IMPORTANT:
 
 export class OpenAIFormatService {
   private settings: OpenAIFormatSettings
+  private readonly maxRetries: number = 2
 
   constructor(settings: OpenAIFormatSettings) {
     this.settings = settings
+  }
+
+  // Helper method to execute fetch with retry logic
+  private async executeWithRetry<T>(
+    operation: () => Promise<T>,
+    operationName: string
+  ): Promise<T> {
+    let lastError: Error
+    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
+      try {
+        const startTime = Date.now()
+        const result = await operation()
+        const duration = Date.now() - startTime
+        console.log(`OpenAI-format ${operationName}: Success after ${duration}ms`)
+        return result
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error('Unknown error')
+        
+        // Don't retry on certain types of errors
+        if (error instanceof Error && (
+          error.message.includes('rate_limited') ||
+          error.message.includes('timeout') ||
+          error.message.includes('API error: 4') ||
+          error.message.includes('API error: 5')
+        )) {
+          throw error
+        }
+
+        if (attempt < this.maxRetries) {
+          const delay = Math.pow(2, attempt) * 500 // Faster backoff: 1s, 2s
+          console.log(`OpenAI-format ${operationName}: Attempt ${attempt} failed (${lastError.message}), retrying in ${delay}ms...`)
+          await new Promise(resolve => setTimeout(resolve, delay))
+        }
+      }
+    }
+    throw lastError!
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
@@ -1528,6 +1564,8 @@ export class OpenAIFormatService {
       headers['Authorization'] = `Bearer ${this.settings.apiKey}`
     }
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 80000) // Reduced timeout to 80 seconds for Netlify CLI compatibility
     const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
@@ -1544,12 +1582,18 @@ export class OpenAIFormatService {
           }
         ],
         temperature: 0.3,
-        max_tokens: 4000,
+        max_tokens: 2000,
       }),
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
+      if (response.status === 429) {
+        console.warn('OpenAI-format rate limited on analyzeSingleBatch:', errorText)
+        throw new Error('OpenAI-format rate_limited')
+      }
       console.error(`OpenAI-format API error: ${response.status}`, { 
         endpoint: `${this.settings.endpoint}/chat/completions`,
         model: this.settings.model,
@@ -1597,6 +1641,8 @@ export class OpenAIFormatService {
       headers['Authorization'] = `Bearer ${this.settings.apiKey}`
     }
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 80000) // Reduced timeout to 80 seconds for Netlify CLI compatibility
     const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
@@ -1624,12 +1670,18 @@ export class OpenAIFormatService {
           }
         ],
         temperature: 0.3,
-        max_tokens: 4000,
+        max_tokens: 2000,
       }),
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
+      if (response.status === 429) {
+        console.warn('OpenAI-format rate limited on analyzeImage:', errorText)
+        throw new Error('OpenAI-format rate_limited')
+      }
       console.error(`OpenAI-format API error: ${response.status}`, { 
         endpoint: `${this.settings.endpoint}/chat/completions`,
         model: this.settings.model,
@@ -1677,6 +1729,8 @@ export class OpenAIFormatService {
       headers['Authorization'] = `Bearer ${this.settings.apiKey}`
     }
 
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 80000) // Reduced timeout to 80 seconds for Netlify CLI compatibility
     const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
@@ -1704,12 +1758,18 @@ export class OpenAIFormatService {
           }
         ],
         temperature: 0.3,
-        max_tokens: 4000,
+        max_tokens: 2000,
       }),
+      signal: controller.signal,
     })
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
+      if (response.status === 429) {
+        console.warn('OpenAI-format rate limited on analyzeMangaImage:', errorText)
+        throw new Error('OpenAI-format rate_limited')
+      }
       console.error(`OpenAI-format API error: ${response.status}`, { 
         endpoint: `${this.settings.endpoint}/chat/completions`,
         model: this.settings.model,
@@ -1753,94 +1813,8 @@ export class OpenAIFormatService {
   }
 
   async analyzeImageForReading(imageBase64: string): Promise<any> {
-    console.log('📖 OpenAI-format: Starting reading mode analysis')
-    console.log('🔧 Endpoint:', `${this.settings.endpoint}/chat/completions`)
-    console.log('🤖 Model:', this.settings.model)
-    console.log('🔑 Has API Key:', !!this.settings.apiKey)
-    console.log('📏 Image size:', imageBase64.length, 'characters')
-    console.log('⏳ Reading mode analysis may take longer due to detailed text location analysis...')
-    
-    // Check if image is too large and compress if needed
-    const imageSizeKB = Math.round(imageBase64.length * 3 / 4 / 1024)
-    console.log(`📏 Image size: ${imageSizeKB} KB`)
-    
-    let processedImageBase64 = imageBase64
-    if (imageSizeKB > 500) {
-      console.log('⚠️ Image is large, attempting compression for faster processing...')
-      try {
-        processedImageBase64 = await compressImageForAPI(imageBase64, 500)
-        const compressedSizeKB = Math.round(processedImageBase64.length * 3 / 4 / 1024)
-        console.log(`✅ Image compressed to ${compressedSizeKB} KB`)
-      } catch (compressionError) {
-        console.warn('⚠️ Image compression failed, using original image:', compressionError)
-        // Continue with original image if compression fails
-      }
-    }
-    
-    // Quick API connectivity test
-    try {
-      console.log('🧪 Testing API connectivity...')
-      const testResponse = await fetch(`${this.settings.endpoint}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(this.settings.apiKey && { 'Authorization': `Bearer ${this.settings.apiKey}` })
-        },
-        body: JSON.stringify({
-          model: this.settings.model,
-          messages: [
-            {
-              role: 'user',
-              content: 'Respond with "OK"'
-            }
-          ],
-          max_tokens: 5,
-        }),
-      })
-      
-      if (!testResponse.ok) {
-        const errorText = await testResponse.text()
-        console.error('❌ API connectivity test failed:', testResponse.status, errorText)
-        throw new Error(`API connectivity test failed: ${testResponse.status} - ${errorText}`)
-      }
-      
-      console.log('✅ API connectivity test passed')
-    } catch (testError) {
-      console.error('❌ API connectivity test error:', testError)
-      throw new Error(`API connectivity test failed: ${testError instanceof Error ? testError.message : 'Unknown error'}`)
-    }
-    
-    // Try reading mode analysis with progressive fallback
-    return this.attemptReadingModeAnalysis(processedImageBase64)
-  }
-  
-  private async attemptReadingModeAnalysis(imageBase64: string): Promise<any> {
-    // First attempt with full reading mode analysis
-    try {
-      return await this.performReadingModeAnalysis(imageBase64, 600000) // 10 minutes
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      console.log('❌ Full reading mode analysis failed:', errorMessage)
-      
-      // If it's a timeout error, provide direct fallback
-      if (errorMessage.includes('timeout')) {
-        console.log('🔄 Timeout occurred, providing fallback response...')
-        // Final fallback - return empty result with helpful message
-        return {
-          sentences: [],
-          overallSummary: "Analysis failed due to image complexity or timeout. Please try with a smaller image, simpler content, or use regular analysis mode.",
-          provider: 'openai-format' as any
-        }
-      }
-      
-      // Re-throw non-timeout errors
-      throw error
-    }
-  }
-  
-  private async performReadingModeAnalysis(imageBase64: string, timeoutMs: number): Promise<any> {
-    
-    const READING_MODE_PROMPT = `
+    return this.executeWithRetry(async () => {
+      const READING_MODE_PROMPT = `
 You are a Japanese language learning assistant specialized in reading mode analysis. Analyze this manga image and identify ALL Japanese sentences with their exact locations.
 
 For each sentence found, provide:
@@ -1889,26 +1863,18 @@ IMPORTANT:
 - Include ALL text: speech bubbles, sound effects, signs, etc.
 - Each sentence should have accurate bounding box coordinates
 - Separate different text areas as individual sentences
-- Keep response concise and focused on essential information
-- If the image is complex, focus on the most prominent text first
 `
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    }
-    
-    if (this.settings.apiKey) {
-      headers['Authorization'] = `Bearer ${this.settings.apiKey}`
-    }
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      }
+      
+      if (this.settings.apiKey) {
+        headers['Authorization'] = `Bearer ${this.settings.apiKey}`
+      }
 
-    // Create AbortController for timeout
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => {
-      console.log('⏰ Timeout reached, aborting request...')
-      controller.abort()
-    }, 600000) // 10 minutes timeout for reading mode analysis
-
-    console.log('🚀 Starting fetch request...')
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 80000) // Reduced timeout to 80 seconds for Netlify CLI compatibility
     let response
     try {
       response = await fetch(`${this.settings.endpoint}/chat/completions`, {
@@ -1919,7 +1885,7 @@ IMPORTANT:
           messages: [
             {
               role: 'system',
-              content: 'You are a Japanese language learning assistant specialized in reading mode analysis. Provide concise, accurate responses with JSON format. Focus on essential information to reduce response length.'
+              content: 'You are a helpful Japanese language learning assistant specialized in reading mode analysis. You can identify Japanese text locations in manga images and provide detailed linguistic analysis. Always respond with valid JSON.'
             },
             {
               role: 'user',
@@ -1938,23 +1904,27 @@ IMPORTANT:
             }
           ],
           temperature: 0.3,
-          max_tokens: 1500, // Reduced for faster processing
+          max_tokens: 2000,
         }),
         signal: controller.signal,
       })
-      clearTimeout(timeoutId)
-      console.log('✅ Fetch request completed, response status:', response.status)
     } catch (error) {
       clearTimeout(timeoutId)
-      console.log('❌ Fetch request failed:', error)
       if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request timeout: Reading mode analysis took too long. Please try with a smaller image, simpler content, or use regular analysis mode.')
+        console.error('OpenAI-format analyzeImageForReading: Request was aborted due to timeout')
+        throw new Error('OpenAI-format request timeout: The server took too long to respond. Please try again or check your endpoint configuration.')
       }
-      throw error
+      console.error('OpenAI-format analyzeImageForReading: Network error:', error)
+      throw new Error(`OpenAI-format network error: ${error instanceof Error ? error.message : 'Unknown network error'}`)
     }
+    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
+      if (response.status === 429) {
+        console.warn('OpenAI-format rate limited on analyzeImageForReading:', errorText)
+        throw new Error('OpenAI-format rate_limited')
+      }
       console.error(`OpenAI-format API error: ${response.status}`, { 
         endpoint: `${this.settings.endpoint}/chat/completions`,
         model: this.settings.model,
@@ -1985,9 +1955,8 @@ IMPORTANT:
       console.error('Raw content:', content.substring(0, 500) + '...')
       throw new Error(`Failed to parse OpenAI-format response: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
+    }, 'analyzeImageForReading')
   }
-  
-  
 }
 
 export class AIAnalysisService {
@@ -2102,47 +2071,44 @@ export class AIAnalysisService {
         return await this.analyzeMangaImageDirect(imageBase64, provider)
       }
 
-      // Analyze each panel individually using improved text detection
-      const panelAnalyses = await Promise.allSettled(
-        segmentationResult.panels.map(async (segmentedPanel: SegmentedPanel, index: number) => {
-          try {
-            // Use reading order position as panel number (1-based)
-            const readingOrderPosition = segmentationResult.readingOrder[index]
-            console.log(`🔍 Analyzing panel ${readingOrderPosition} (position ${index + 1}) with improved text detection...`)
-            
-            // Use improved text detection service
-            const panelAnalysis = await this.improvedTextDetection.analyzePanel(
-              segmentedPanel.imageData,
-              this,
-              provider,
-              readingOrderPosition
-            )
-            
-            // Set the position from segmentation result
-            panelAnalysis.position = segmentedPanel.boundingBox
-            
-            return panelAnalysis
-          } catch (error) {
-            console.error(`❌ Error analyzing panel ${segmentationResult.readingOrder[index]}:`, error)
-            return {
-              panelNumber: segmentationResult.readingOrder[index],
-              position: segmentedPanel.boundingBox,
-              imageData: segmentedPanel.imageData,
-              extractedText: '',
-              sentences: [],
-              translation: 'Analysis failed for this panel',
-              words: [],
-              grammar: [],
-              context: 'Unable to analyze this panel'
-            } as MangaPanel
-          }
-        })
-      )
+      // Analyze each panel individually using improved text detection, sequentially to avoid burst calls
+      const panels: MangaPanel[] = []
+      for (let index = 0; index < segmentationResult.panels.length; index++) {
+        const segmentedPanel: SegmentedPanel = segmentationResult.panels[index]
+        try {
+          // Use reading order position as panel number (1-based)
+          const readingOrderPosition = segmentationResult.readingOrder[index]
+          console.log(`🔍 Analyzing panel ${readingOrderPosition} (position ${index + 1}) with improved text detection...`)
 
-      // Extract successful analyses
-      const panels: MangaPanel[] = panelAnalyses
-        .filter((result): result is PromiseFulfilledResult<MangaPanel> => result.status === 'fulfilled')
-        .map(result => result.value)
+          // Use improved text detection service
+          const panelAnalysis = await this.improvedTextDetection.analyzePanel(
+            segmentedPanel.imageData,
+            this,
+            provider,
+            readingOrderPosition
+          )
+
+          // Set the position from segmentation result
+          panelAnalysis.position = segmentedPanel.boundingBox
+
+          panels.push(panelAnalysis)
+        } catch (error) {
+          console.error(`❌ Error analyzing panel ${segmentationResult.readingOrder[index]}:`, error)
+          panels.push({
+            panelNumber: segmentationResult.readingOrder[index],
+            position: segmentedPanel.boundingBox,
+            imageData: segmentedPanel.imageData,
+            extractedText: '',
+            sentences: [],
+            translation: 'Analysis failed for this panel',
+            words: [],
+            grammar: [],
+            context: 'Unable to analyze this panel'
+          } as MangaPanel)
+        }
+        // Small delay to reduce rate-limit bursts
+        await new Promise(res => setTimeout(res, 200))
+      }
 
       console.log('✅ Panel analysis complete:', {
         totalPanels: panels.length,

@@ -14,8 +14,6 @@ interface AnalysisRequest {
   readingMode?: boolean // New flag for reading mode analysis
 }
 
-export const maxDuration = 300 // 5 minutes for reading mode analysis
-
 export async function POST(request: NextRequest) {
   try {
     const { text, imageBase64, provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings, mangaMode = false, simpleAnalysisMode = false, readingMode = false }: AnalysisRequest = await request.json()
@@ -82,15 +80,6 @@ export async function POST(request: NextRequest) {
         
         let result: AnalysisResult | MangaAnalysisResult | ReadingModeResult
         if (imageBase64) {
-          // Check image size and provide appropriate timeout
-          const imageSizeKB = Math.round(imageBase64.length * 3 / 4 / 1024)
-          console.log(`📏 Image size: ${imageSizeKB} KB`)
-          
-          if (readingMode && imageSizeKB > 500) {
-            // For large images in reading mode, suggest using smaller images
-            console.log('⚠️ Large image detected in reading mode, this may take longer')
-          }
-          
           if (readingMode) {
             result = await aiService.analyzeImageForReading(imageBase64, currentProvider)
           } else if (mangaMode) {
@@ -123,27 +112,17 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Analysis error:', error)
     
-    // Extract mangaMode and readingMode from the request for error handling
+    // Extract mangaMode from the request for error handling
     let mangaMode = false
-    let readingMode = false
     try {
       const requestBody = await request.clone().json()
       mangaMode = requestBody.mangaMode || false
-      readingMode = requestBody.readingMode || false
     } catch {
       // If we can't parse the request, default to false
     }
     
-    // Return appropriate fallback response based on mode
-    if (readingMode) {
-      return NextResponse.json({
-        sentences: [],
-        imageData: null,
-        overallSummary: "Reading mode analysis failed. Please try with a smaller image or use regular analysis mode.",
-        provider: 'fallback' as AIProvider,
-        error: error instanceof Error ? error.message : 'Failed to analyze reading mode'
-      }, { status: 500 })
-    } else if (mangaMode) {
+    // Return fallback response if analysis fails
+    if (mangaMode) {
       return NextResponse.json({
         panels: [],
         overallSummary: "Unable to analyze manga panels at this time.",

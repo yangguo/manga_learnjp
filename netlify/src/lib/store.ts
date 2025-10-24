@@ -16,13 +16,13 @@ interface AIProviderState {
 
 export const useAIProviderStore = create<AIProviderState>()(persist(
   (set, get) => ({
-    selectedProvider: 'openai-format',
+    selectedProvider: 'openai',
     setSelectedProvider: (provider) => set({ selectedProvider: provider }),
     
     openaiFormatSettings: {
-      endpoint: process.env.OPENAI_FORMAT_API_URL || '',
-      model: process.env.OPENAI_FORMAT_MODEL || '',
-      apiKey: process.env.OPENAI_FORMAT_API_KEY || ''
+      endpoint: '',
+      model: '',
+      apiKey: ''
     },
     setOpenAIFormatSettings: (settings) => set((state) => ({
       openaiFormatSettings: { ...state.openaiFormatSettings, ...settings }
@@ -46,7 +46,7 @@ export const useAIProviderStore = create<AIProviderState>()(persist(
     
     initializeSmartDefault: async () => {
       try {
-        const response = await fetch('/api/providers')
+        const response = await fetch('/.netlify/functions/providers')
         if (response.ok) {
           const data = await response.json()
           const currentProvider = get().selectedProvider

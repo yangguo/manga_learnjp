@@ -5,7 +5,9 @@ node_modules
 *.tsbuildinfo
 
 # Environment variables
-.env*.local
+.env
+.env.*
+!.env.example
 
 # Debug logs
 npm-debug.log*
@@ -41,3 +43,36 @@ test_*.png
 debug_*.py
 debug-*.js
 test-*.js
+# Local Netlify folder
+.netlify
+
+# Build outputs
+dist/
+build/
+out/
+
+# Coverage and test reports
+coverage/
+*.lcov
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+
+# Logs
+*.log
+logs/
+
+# IDE and editor files
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# Database files
+*.sqlite
+*.sqlite3
+*.db
+
+# Cache directories
+.cache/

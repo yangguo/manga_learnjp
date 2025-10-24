@@ -1,0 +1,50 @@
+[build]
+  publish = ".next"
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+  NPM_FLAGS = "--prefix=/dev/null"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  directory = "functions"
+  
+[functions.analyze]
+  timeout = 90
+
+# Redirect all API routes to Netlify Functions
+[[redirects]]
+  from = "/api/analyze"
+  to = "/.netlify/functions/analyze"
+  status = 200
+
+[[redirects]]
+  from = "/api/providers"
+  to = "/.netlify/functions/providers"
+  status = 200
+
+[[redirects]]
+  from = "/api/test-segmentation"
+  to = "/.netlify/functions/test-segmentation"
+  status = 200
+
+[[redirects]]
+  from = "/api/segment-panels"
+  to = "/.netlify/functions/segment-panels"
+  status = 200
+
+# Handle client-side routing
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[dev]
+  command = "npm run dev"
+  port = 8893
+  publish = ".next"
+  functions = "functions"
+  functionsTimeout = 90
