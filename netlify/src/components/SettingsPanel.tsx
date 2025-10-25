@@ -27,7 +27,7 @@ export default function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   const [showAdvanced, setShowAdvanced] = useState(false)
 
   useEffect(() => {
-    fetch('/.netlify/functions/providers')
+    fetch('/api/providers')
       .then(res => res.json())
       .then(data => {
         setAvailableProviders(data.providers || [])

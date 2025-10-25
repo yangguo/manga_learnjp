@@ -9,6 +9,7 @@ import { SUPPORTED_IMAGE_TYPES, type AnalysisResult, type MangaAnalysisResult, t
 import { useAIProviderStore } from '@/lib/store'
 import { useClientPanelSegmentation } from '@/hooks/useClientPanelSegmentation'
 import { analyzeImageForReading } from '@/lib/client-api'
+import { compressImageForAPI } from '@/lib/image-compression'
 
 interface ImageUploaderProps {
   onAnalysisComplete: (result: AnalysisResult) => void
@@ -66,13 +67,16 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
                   // Now analyze each panel using the API
                   const panelAnalyses = await Promise.allSettled(
                     segmentationResult.panels.map(async (panel, index) => {
-                      const response = await fetch('/.netlify/functions/analyze', {
+                      // Compress panel image before sending (max 400KB per panel)
+                      const compressedPanelImage = await compressImageForAPI(panel.imageData, 400)
+                      
+                      const response = await fetch('/api/analyze', {
                         method: 'POST',
                         headers: {
                           'Content-Type': 'application/json',
                         },
                         body: JSON.stringify({
-                          imageBase64: panel.imageData,
+                          imageBase64: compressedPanelImage,
                           provider: selectedProvider,
                           modelSettings,
                           apiKeySettings,
@@ -168,13 +172,16 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
               
               console.log('🔍 Starting LLM-based panel analysis for simple mode...')
               
-              const response = await fetch('/.netlify/functions/analyze', {
+              // Compress image before sending (max 600KB for simple mode)
+              const compressedSimpleImage = await compressImageForAPI(imageBase64, 600)
+              
+              const response = await fetch('/api/analyze', {
                 method: 'POST',
                 headers: {
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                  imageBase64,
+                  imageBase64: compressedSimpleImage,
                   provider: selectedProvider,
                   modelSettings,
                   apiKeySettings,
@@ -220,13 +227,16 @@ export default function ImageUploader({ onAnalysisComplete, onMangaAnalysisCompl
           }
           setProgress(40)
           
-          const response = await fetch('/.netlify/functions/analyze', {
+          // Compress image before sending (max 600KB for fallback analysis)
+          const compressedFallbackImage = await compressImageForAPI(imageBase64, 600)
+          
+          const response = await fetch('/api/analyze', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              imageBase64,
+              imageBase64: compressedFallbackImage,
               provider: selectedProvider,
               modelSettings,
               apiKeySettings,

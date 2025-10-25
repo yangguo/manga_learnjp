@@ -1,4 +1,5 @@
 import { AIProvider, OpenAIFormatSettings, ModelSettings, APIKeySettings, ReadingModeResult } from './types'
+import { compressImageForAPI } from './image-compression'
 
 interface AnalyzeImageForReadingOptions {
   provider?: AIProvider
@@ -13,13 +14,16 @@ export async function analyzeImageForReading(
 ): Promise<ReadingModeResult> {
   const { provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings } = options
 
-  const response = await fetch('/.netlify/functions/analyze', {
+  // Compress image before sending to API (max 800KB for reading mode to preserve detail)
+  const compressedImage = await compressImageForAPI(imageBase64, 800)
+
+  const response = await fetch('/api/analyze', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      imageBase64,
+      imageBase64: compressedImage,
       provider,
       openaiFormatSettings,
       modelSettings,
