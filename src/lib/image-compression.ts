@@ -1,3 +1,5 @@
+import { createImageDataURL } from './image-utils'
+
 /**
  * Compresses a base64 image to reduce its size for API calls
  * @param base64Data - The base64 image data
