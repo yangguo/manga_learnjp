@@ -169,6 +169,9 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
       ? [provider, ...availableProviders.filter(p => p !== provider)]
       : availableProviders
 
+    // Helper to determine if running in Netlify CLI
+    const isLocalNetlify = process.env.NETLIFY_DEV === 'true' || process.env.NETLIFY_LOCAL === 'true'
+
     // If openai-format is configured, check if it should be skipped
     if (finalOpenAIFormatSettings && providersToTry.includes('openai-format')) {
       const endpointUrl = finalOpenAIFormatSettings.endpoint.replace(/\/$/, '')
@@ -220,7 +223,6 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
     }
 
     // Helper to cap runtime in Netlify CLI to avoid 30s hard kill
-    const isLocalNetlify = process.env.NETLIFY_DEV === 'true' || process.env.NETLIFY_LOCAL === 'true'
     const withTimeout = async <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
       if (!isLocalNetlify) return promise
       return await Promise.race<T>([
