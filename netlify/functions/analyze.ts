@@ -135,12 +135,25 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
       }
     }
 
-    const aiService = new AIAnalysisService(
-      openaiApiKey, 
-      geminiApiKey, 
-      finalOpenAIFormatSettings,
-      modelSettings
-    )
+    let aiService
+    try {
+      aiService = new AIAnalysisService(
+        openaiApiKey, 
+        geminiApiKey, 
+        finalOpenAIFormatSettings,
+        modelSettings
+      )
+    } catch (initError) {
+      console.error('❌ Failed to initialize AIAnalysisService:', initError)
+      return {
+        statusCode: 500,
+        headers,
+        body: JSON.stringify({ 
+          error: `Failed to initialize AI service: ${initError instanceof Error ? initError.message : 'Unknown error'}` 
+        }),
+      }
+    }
+    
     const availableProviders = aiService.getAvailableProviders()
 
     if (availableProviders.length === 0) {
@@ -170,10 +183,18 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
       
       if (lastFailure && lastFailure > fiveMinutesAgo) {
         console.log('⚠️ OpenAI-format endpoint failed recently, skipping to avoid repeated slow timeouts:', endpointUrl)
+        console.log('💡 This endpoint consistently times out. Please configure OpenAI or Gemini API keys for reliable service.')
         providersToTry = providersToTry.filter(p => p !== 'openai-format')
       } else if (lastSlow && lastSlow > tenMinutesAgo) {
         console.log('🐌 OpenAI-format endpoint was slow recently, skipping to avoid long wait times:', endpointUrl)
+        console.log('💡 This endpoint is too slow for Netlify CLI (30s limit). Please use OpenAI or Gemini APIs.')
         providersToTry = providersToTry.filter(p => p !== 'openai-format')
+      } else if (isLocalNetlify) {
+        // In Netlify CLI, skip the reachability check and warn about the 30s timeout
+        console.log('⚠️ Netlify CLI has a hard 30-second timeout limit for functions')
+        console.log('🔍 OpenAI-format endpoint:', endpointUrl)
+        console.log('💡 If this endpoint is slow, the function will fail. Consider using OpenAI/Gemini for faster results.')
+        // Don't do reachability check in Netlify CLI - it wastes time
       } else {
         console.log('🔍 Checking reachability of OpenAI-format endpoint:', endpointUrl)
         const reachable = await isEndpointReachable(endpointUrl)
@@ -184,11 +205,6 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
           providersToTry = providersToTry.filter(p => p !== 'openai-format')
         } else {
           console.log('✅ OpenAI-format endpoint appears reachable, proceeding with provider')
-          
-          // Additional warning for Netlify CLI users about potential timeout issues
-          if (process.env.NETLIFY_DEV === 'true' || process.env.NETLIFY_LOCAL === 'true') {
-            console.log('⚠️ Netlify CLI Warning: OpenAI-format may timeout at 90s. Consider using OpenAI/Gemini APIs for faster results')
-          }
         }
       }
       console.log('📋 Updated providers to try:', providersToTry)
@@ -203,6 +219,19 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
       }
     }
 
+    // Helper to cap runtime in Netlify CLI to avoid 30s hard kill
+    const isLocalNetlify = process.env.NETLIFY_DEV === 'true' || process.env.NETLIFY_LOCAL === 'true'
+    const withTimeout = async <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+      if (!isLocalNetlify) return promise
+      return await Promise.race<T>([
+        promise,
+        new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)) as Promise<T>,
+      ])
+    }
+    
+    // Determine timeout based on provider and environment
+    const timeoutMs = isLocalNetlify ? 25000 : 60000 // 25s for Netlify CLI (under 30s limit), 60s for production
+
     let lastError: Error | null = null
     
     for (const currentProvider of providersToTry) {
@@ -213,19 +242,19 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
         let result: AnalysisResult | MangaAnalysisResult | ReadingModeResult
         if (imageBase64) {
           if (readingMode) {
-            result = await aiService.analyzeImageForReading(imageBase64, currentProvider)
+            result = await withTimeout(aiService.analyzeImageForReading(imageBase64, currentProvider), timeoutMs, 'analyzeImageForReading')
           } else if (mangaMode) {
-            result = await aiService.analyzeMangaImage(imageBase64, currentProvider)
+            result = await withTimeout(aiService.analyzeMangaImage(imageBase64, currentProvider), timeoutMs, 'analyzeMangaImage')
           } else if (simpleAnalysisMode) {
             // In simple mode, use manga analysis but skip client-side segmentation
             // This will fall back to LLM-based analysis and display using panel UI
-            result = await aiService.analyzeMangaImageDirect(imageBase64, currentProvider)
+            result = await withTimeout(aiService.analyzeMangaImageDirect(imageBase64, currentProvider), timeoutMs, 'analyzeMangaImageDirect')
           } else {
             // Regular individual panel analysis or simple image analysis
-            result = await aiService.analyzeImage(imageBase64, currentProvider)
+            result = await withTimeout(aiService.analyzeImage(imageBase64, currentProvider), timeoutMs, 'analyzeImage')
           }
         } else {
-          result = await aiService.analyzeText(text!, currentProvider)
+          result = await withTimeout(aiService.analyzeText(text!, currentProvider), timeoutMs, 'analyzeText')
         }
         
         console.log(`✅ Success with provider: ${currentProvider} (took ${Date.now() - startTime}ms)`)
@@ -249,6 +278,16 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
         if (currentProvider === 'openai-format' && finalOpenAIFormatSettings) {
           const endpointUrl = finalOpenAIFormatSettings.endpoint.replace(/\/$/, '')
           failedEndpoints.set(endpointUrl, Date.now())
+          
+          // Provide more specific guidance for timeout errors
+          const isTimeout = error instanceof Error && error.message.includes('timed out')
+          if (isTimeout) {
+            console.log(`⏱️ OpenAI-format endpoint timed out after ${timeoutMs}ms`)
+            console.log('💡 Suggestions:')
+            console.log('   1. Use a faster endpoint (e.g., OpenAI, Gemini)')
+            console.log('   2. Try a region closer to your location')
+            console.log('   3. Reduce image size/complexity')
+          }
           console.log('💾 Cached openai-format failure to avoid repeated slow requests')
         }
         
@@ -259,11 +298,15 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
 
     // If no providers available to try (e.g., openai-format unreachable and no other providers), fail fast
     if (providersToTry.length === 0) {
+      const errorMessage = isLocalNetlify 
+        ? 'OpenAI-compatible endpoint is too slow for local development (Netlify CLI 30s timeout). Please configure OpenAI or Gemini API keys for reliable local testing.'
+        : 'OpenAI-compatible endpoint appears unreachable. Configure OpenAI or Gemini API keys, or update the OpenAI-format endpoint/model in settings.'
+      
       return {
         statusCode: 500,
         headers,
         body: JSON.stringify({ 
-          error: 'OpenAI-compatible endpoint appears unreachable. Configure OpenAI or Gemini API keys, or update the OpenAI-format endpoint/model in settings.'
+          error: errorMessage
         }),
       }
     }

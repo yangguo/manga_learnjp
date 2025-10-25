@@ -46,7 +46,7 @@ export const useAIProviderStore = create<AIProviderState>()(persist(
     
     initializeSmartDefault: async () => {
       try {
-        const response = await fetch('/.netlify/functions/providers')
+        const response = await fetch('/api/providers')
         if (response.ok) {
           const data = await response.json()
           const currentProvider = get().selectedProvider

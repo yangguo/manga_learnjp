@@ -1,6 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel, ReadingModeResult, SentenceLocation } from './types'
-import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
 import { createImageDataURL, getImageMimeType } from './image-utils'
 
@@ -1963,7 +1962,7 @@ export class AIAnalysisService {
   private openaiService?: OpenAIService
   private geminiService?: GeminiService
   private openaiFormatService?: OpenAIFormatService
-  private panelSegmentationService: ClientPanelSegmentationService
+  private panelSegmentationService: any = null
   private improvedTextDetection: ImprovedTextDetectionService
 
   constructor(
@@ -1972,8 +1971,19 @@ export class AIAnalysisService {
     openaiFormatSettings?: OpenAIFormatSettings,
     modelSettings?: ModelSettings
   ) {
-    // Initialize client-side panel segmentation service
-    this.panelSegmentationService = new ClientPanelSegmentationService()
+    // Initialize client-side panel segmentation service only in browser
+    // Use dynamic import to avoid loading browser-only code on server
+    // Check for browser environment using multiple checks
+    const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined'
+    if (isBrowser) {
+      import('./client-panel-segmentation').then(module => {
+        this.panelSegmentationService = new module.ClientPanelSegmentationService()
+      }).catch(err => {
+        console.warn('Failed to load client panel segmentation:', err)
+      })
+    } else {
+      console.log('🖥️ Running in server environment, skipping client panel segmentation')
+    }
     this.improvedTextDetection = new ImprovedTextDetectionService({
       enableRetry: true,
       maxRetries: 2,
@@ -2048,7 +2058,7 @@ export class AIAnalysisService {
       console.log('🔍 Starting client-side panel segmentation...')
       
       // Check if client-side segmentation is available
-      if (!this.panelSegmentationService.isAvailable()) {
+      if (!this.panelSegmentationService || !this.panelSegmentationService.isAvailable()) {
         console.log('⚠️ Client-side segmentation not available, falling back to direct analysis')
         return await this.analyzeMangaImageDirect(imageBase64, provider)
       }

@@ -47,3 +47,8 @@
   publish = ".next"
   functions = "functions"
   functionsTimeout = 90
+
+  [context.dev.environment]
+    OPENAI_FORMAT_API_URL = "https://ark.cn-beijing.volces.com/api/v3"
+    OPENAI_FORMAT_API_KEY = "0b18782d-6378-444d-bbea-1ead747570f0"
+    OPENAI_FORMAT_MODEL = "doubao-seed-1-6-lite-251015"
