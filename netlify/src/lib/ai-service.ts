@@ -2072,7 +2072,7 @@ export class AIAnalysisService {
       console.log('📊 Segmentation result:', {
         panelCount: segmentationResult.panels.length,
         readingOrder: segmentationResult.readingOrder,
-        hasImageData: segmentationResult.panels.map(p => !!p.imageData)
+        hasImageData: segmentationResult.panels.map((p: SegmentedPanel) => !!p.imageData)
       })
       
       if (segmentationResult.panels.length === 0) {
