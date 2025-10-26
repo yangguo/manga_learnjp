@@ -187,14 +187,39 @@ export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
           const { boundingBox } = sentence
           if (!boundingBox || imageSize.width === 0 || imageSize.height === 0) return null
 
-          // Handle different coordinate formats - some APIs return 0-1 range, others 0-100
-          const normalizeCoord = (coord: number) => coord > 1 ? coord / 100 : coord
-          
-          const left = normalizeCoord(boundingBox.x) * imageSize.width
-          const top = normalizeCoord(boundingBox.y) * imageSize.height
-          // Make rectangles smaller and shorter by reducing width and height by 30%
-          const originalWidth = Math.min(normalizeCoord(boundingBox.width) * imageSize.width, imageSize.width - left)
-          const originalHeight = Math.min(normalizeCoord(boundingBox.height) * imageSize.height, imageSize.height - top)
+          const normalizeCoord = (coord: number | undefined | null) => {
+            if (typeof coord !== 'number' || Number.isNaN(coord) || !Number.isFinite(coord)) {
+              return null
+            }
+            const adjusted = coord > 1 ? coord / 100 : coord
+            return adjusted < 0 ? 0 : adjusted
+          }
+
+          const normalizedX = normalizeCoord(boundingBox.x)
+          const normalizedY = normalizeCoord(boundingBox.y)
+          const normalizedWidth = normalizeCoord(boundingBox.width)
+          const normalizedHeight = normalizeCoord(boundingBox.height)
+
+          if (
+            normalizedX === null ||
+            normalizedY === null ||
+            normalizedWidth === null ||
+            normalizedHeight === null
+          ) {
+            return null
+          }
+
+          const left = normalizedX * imageSize.width
+          const top = normalizedY * imageSize.height
+          const maxWidth = Math.max(imageSize.width - left, 0)
+          const maxHeight = Math.max(imageSize.height - top, 0)
+          const originalWidth = Math.min(normalizedWidth * imageSize.width, maxWidth)
+          const originalHeight = Math.min(normalizedHeight * imageSize.height, maxHeight)
+
+          if (originalWidth <= 0 || originalHeight <= 0) {
+            return null
+          }
+
           const width = originalWidth * 0.7
           const height = originalHeight * 0.6
 
@@ -225,23 +250,32 @@ export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
           Identified Sentences ({result.sentences.length})
         </h3>
         <div className="grid gap-2">
-          {result.sentences.map((sentence, index) => (
-            <div
-              key={index}
-              className="bg-white p-3 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors"
-              onClick={() => handleSentenceClick(sentence)}
-            >
-              <div className="flex items-start gap-3">
-                <span className="bg-red-500 text-white text-xs px-2 py-1 rounded font-medium">
-                  {index + 1}
-                </span>
-                <div className="flex-1">
-                  <p className="text-gray-900 font-medium mb-1">{sentence.sentence}</p>
-                  <p className="text-gray-600 text-sm">{sentence.translation}</p>
+          {result.sentences.map((sentence, index) => {
+            const hasBoundingBox = !!sentence.boundingBox &&
+              typeof sentence.boundingBox.x === 'number' &&
+              typeof sentence.boundingBox.y === 'number'
+
+            return (
+              <div
+                key={index}
+                className="bg-white p-3 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors"
+                onClick={() => handleSentenceClick(sentence)}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded font-medium">
+                    {index + 1}
+                  </span>
+                  <div className="flex-1">
+                    <p className="text-gray-900 font-medium mb-1">{sentence.sentence}</p>
+                    <p className="text-gray-600 text-sm">{sentence.translation}</p>
+                    {!hasBoundingBox && (
+                      <p className="text-amber-600 text-xs mt-1">Location unavailable in provider response.</p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </div>
 

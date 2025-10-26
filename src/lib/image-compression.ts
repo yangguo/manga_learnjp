@@ -11,6 +11,12 @@ export async function compressImageForAPI(base64Data: string, maxSizeKB: number 
     try {
       // Check current size
       const currentSizeKB = Math.round(base64Data.length * 3 / 4 / 1024)
+      const hasBrowserAPIs = typeof window !== 'undefined' && typeof document !== 'undefined' && typeof Image !== 'undefined'
+      
+      if (!hasBrowserAPIs) {
+        resolve(base64Data)
+        return
+      }
       
       // If already small enough, return as is
       if (currentSizeKB <= maxSizeKB) {
