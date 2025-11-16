@@ -129,7 +129,12 @@ function SentenceDetailModal({ sentence, isOpen, onClose }: SentenceDetailModalP
 
 export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
   const [selectedSentence, setSelectedSentence] = useState<SentenceLocation | null>(null)
-  const [imageSize, setImageSize] = useState({ width: 0, height: 0 })
+  const [imageSize, setImageSize] = useState({
+    width: 0,
+    height: 0,
+    naturalWidth: 0,
+    naturalHeight: 0
+  })
   const imageRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
@@ -137,7 +142,9 @@ export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
       if (imageRef.current) {
         setImageSize({
           width: imageRef.current.clientWidth,
-          height: imageRef.current.clientHeight
+          height: imageRef.current.clientHeight,
+          naturalWidth: imageRef.current.naturalWidth || imageRef.current.clientWidth,
+          naturalHeight: imageRef.current.naturalHeight || imageRef.current.clientHeight
         })
       }
     }
@@ -163,6 +170,31 @@ export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
     setSelectedSentence(null)
   }
 
+  const convertToPixels = (
+    value: number | undefined | null,
+    renderedDimension: number,
+    naturalDimension: number
+  ) => {
+    if (typeof value !== 'number' || Number.isNaN(value) || !Number.isFinite(value)) {
+      return null
+    }
+
+    if (renderedDimension === 0) return null
+    const safeNatural = naturalDimension || renderedDimension
+
+    if (value >= 0 && value <= 1) {
+      return value * renderedDimension
+    }
+
+    if (value > 1 && value <= 100) {
+      return (value / 100) * renderedDimension
+    }
+
+    const clampedValue = Math.min(Math.max(value, 0), safeNatural)
+    const ratio = clampedValue / safeNatural
+    return ratio * renderedDimension
+  }
+
   return (
     <div className="space-y-6">
       {/* Summary */}
@@ -185,48 +217,44 @@ export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
         {/* Sentence Rectangles */}
         {result.sentences.map((sentence, index) => {
           const { boundingBox } = sentence
-          if (!boundingBox || imageSize.width === 0 || imageSize.height === 0) return null
-
-          const normalizeCoord = (coord: number | undefined | null) => {
-            if (typeof coord !== 'number' || Number.isNaN(coord) || !Number.isFinite(coord)) {
-              return null
-            }
-            const adjusted = coord > 1 ? coord / 100 : coord
-            return adjusted < 0 ? 0 : adjusted
-          }
-
-          const normalizedX = normalizeCoord(boundingBox.x)
-          const normalizedY = normalizeCoord(boundingBox.y)
-          const normalizedWidth = normalizeCoord(boundingBox.width)
-          const normalizedHeight = normalizeCoord(boundingBox.height)
-
           if (
-            normalizedX === null ||
-            normalizedY === null ||
-            normalizedWidth === null ||
-            normalizedHeight === null
+            !boundingBox ||
+            imageSize.width === 0 ||
+            imageSize.height === 0
           ) {
             return null
           }
 
-          const left = normalizedX * imageSize.width
-          const top = normalizedY * imageSize.height
-          const maxWidth = Math.max(imageSize.width - left, 0)
-          const maxHeight = Math.max(imageSize.height - top, 0)
-          const originalWidth = Math.min(normalizedWidth * imageSize.width, maxWidth)
-          const originalHeight = Math.min(normalizedHeight * imageSize.height, maxHeight)
+          const left = convertToPixels(boundingBox.x, imageSize.width, imageSize.naturalWidth)
+          const top = convertToPixels(boundingBox.y, imageSize.height, imageSize.naturalHeight)
+          const rawWidth = convertToPixels(boundingBox.width, imageSize.width, imageSize.naturalWidth)
+          const rawHeight = convertToPixels(boundingBox.height, imageSize.height, imageSize.naturalHeight)
 
-          if (originalWidth <= 0 || originalHeight <= 0) {
+          if (
+            left === null ||
+            top === null ||
+            rawWidth === null ||
+            rawHeight === null
+          ) {
             return null
           }
 
-          const width = originalWidth * 0.7
-          const height = originalHeight * 0.6
+          const maxWidth = Math.max(imageSize.width - left, 0)
+          const maxHeight = Math.max(imageSize.height - top, 0)
+          const limitedWidth = Math.min(rawWidth, maxWidth)
+          const limitedHeight = Math.min(rawHeight, maxHeight)
+
+          if (limitedWidth <= 0 || limitedHeight <= 0) {
+            return null
+          }
+
+          const width = limitedWidth * 0.7
+          const height = limitedHeight * 0.6
 
           return (
             <div
               key={index}
-              className="absolute border-2 border-red-500 bg-red-500 bg-opacity-20 cursor-pointer hover:bg-opacity-40 transition-all duration-200"
+              className="group absolute border-2 border-red-500 bg-red-500 bg-opacity-20 cursor-pointer hover:bg-opacity-40 transition-all duration-200"
               style={{
                 left: `${left}px`,
                 top: `${top}px`,
@@ -238,6 +266,10 @@ export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
             >
               <div className="absolute -top-6 left-0 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
                 {index + 1}
+              </div>
+              <div className="pointer-events-none absolute left-0 top-full mt-1 hidden min-w-[160px] max-w-[220px] rounded border border-gray-200 bg-white/90 px-2 py-1 text-[11px] leading-snug text-gray-900 shadow-lg group-hover:block">
+                <p className="font-semibold text-xs">Translation</p>
+                <p>{sentence.translation || 'Translation unavailable'}</p>
               </div>
             </div>
           )
