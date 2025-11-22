@@ -10,7 +10,7 @@ import DemoSection from '@/components/DemoSection'
 import { ClientPanelSegmentationDemo } from '@/components/ClientPanelSegmentationDemo'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AnalysisResult, MangaAnalysisResult, ReadingModeResult, AnalysisMode } from '@/lib/types'
-import { AlertCircle, X, BookOpen, FileText, Eye } from 'lucide-react'
+import { AlertCircle, X } from 'lucide-react'
 
 export default function Home() {
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
@@ -48,6 +48,11 @@ export default function Home() {
 
   const handleOriginalImageChange = (imageData: string | null) => {
     setOriginalImageData(imageData)
+    setAnalysisResult(null)
+    setMangaAnalysisResult(null)
+    setReadingModeResult(null)
+    setError(null)
+    setSelectedPanelId(null)
   }
 
   const handleError = (errorMessage: string) => {
@@ -87,68 +92,26 @@ export default function Home() {
     <div className="min-h-screen">
       <Header />
       
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-4 py-6">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6 }}
-          className="text-center mb-12"
+          className="text-center mb-6"
         >
-          <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-4">
+          <h1 className="text-3xl md:text-5xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent mb-3">
             Learn Japanese Through Manga
           </h1>
-          <p className="text-lg md:text-xl text-gray-400 max-w-2xl mx-auto mb-8">
+          <p className="text-base md:text-lg text-gray-400 max-w-2xl mx-auto mb-2">
             Upload manga pages and let AI extract and analyze Japanese text with detailed explanations
           </p>
           
-          {/* Mode Toggle */}
-          <div className="flex items-center justify-center gap-4">
-            <button
-              onClick={() => setMode('panel')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all ${
-                analysisMode === 'panel'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <BookOpen size={20} />
-              Panel Analysis
-            </button>
-            <button
-              onClick={() => setMode('simple')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all ${
-                analysisMode === 'simple'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <FileText size={20} />
-              Simple Analysis
-            </button>
-            <button
-              onClick={() => setMode('reading')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all ${
-                analysisMode === 'reading'
-                  ? 'bg-blue-600 text-white shadow-lg'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <Eye size={20} />
-              Reading Mode
-            </button>
-          </div>
-          
-          <p className="text-sm text-gray-500 mt-4">
-            {analysisMode === 'panel'
-              ? 'Extract text from individual manga panels using computer vision and AI analysis'
-              : analysisMode === 'simple'
-              ? 'Automatically detect panels with AI, or fallback to simple text extraction'
-              : 'Interactive reading mode with clickable sentences for translation and analysis'
-            }
+          <p className="text-xs text-gray-500">
+            Upload once, choose the analysis focus inside the workflow card below, and re-run AI without re-uploading.
           </p>
         </motion.div>
 
-        <div className="space-y-8 max-w-7xl mx-auto">
+        <div className="space-y-6 max-w-7xl mx-auto">
           {/* Error Display */}
           <AnimatePresence>
             {error && (
@@ -196,6 +159,7 @@ export default function Home() {
               onOriginalImageChange={handleOriginalImageChange}
               onError={handleError}
               analysisMode={analysisMode}
+              onModeChange={setMode}
             />
           </motion.div>
 
