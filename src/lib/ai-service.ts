@@ -703,6 +703,17 @@ function parseJsonSafely(content: string, source: string = 'unknown', skipValida
       /"(example|pattern)":\s*"([^"]*?)"\s*→\s*"([^"]*?)"/g,
       '"$1": "$2 → \\"$3\\""'
     )
+
+    // Fix parenthetical translations that appear outside the string
+    // Pattern: "example": "私は……" (I was……) -> "example": "私は…… (I was……)"
+    fixedContent = fixedContent.replace(
+      /"((?:example|translation|context|explanation|pattern))":\s*"([^"]*?)"\s*\(([^)]*?)\)/g,
+      (_, key, value, paren) => {
+        const merged = `${value.trim()} (${paren.trim()})`
+        const escaped = merged.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        return `"${key}": "${escaped}"`
+      }
+    )
     
     // Remove trailing commas before closing brackets/braces
     fixedContent = fixedContent.replace(/,(\s*[}\]])/g, '$1')
