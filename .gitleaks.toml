@@ -1,0 +1,18 @@
+# Gitleaks configuration
+# https://github.com/gitleaks/gitleaks
+
+title = "manga_learnjp gitleaks config"
+
+[extend]
+# Use the default ruleset as a base
+useDefault = true
+
+[allowlist]
+description = "Global allowlist"
+paths = [
+  # Never scan generated/vendor directories
+  '''node_modules''',
+  '''\.next''',
+  '''netlify/\.next''',
+  '''netlify/\.netlify''',
+]
