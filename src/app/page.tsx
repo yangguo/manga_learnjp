@@ -19,6 +19,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('panel')
   const [selectedPanelId, setSelectedPanelId] = useState<number | null>(null)
+  const [panelSelectionVersion, setPanelSelectionVersion] = useState(0)
 
   const handleAnalysisComplete = (result: AnalysisResult) => {
     setAnalysisResult(result)
@@ -76,6 +77,7 @@ export default function Home() {
 
   const scrollToPanelAnalysis = (panelNumber: number) => {
     setSelectedPanelId(panelNumber)
+    setPanelSelectionVersion(v => v + 1)
     setTimeout(() => {
       const element = document.getElementById(`panel-${panelNumber}`)
       if (element) {
@@ -227,6 +229,7 @@ export default function Home() {
                   <MangaAnalyzer 
                     analysisResult={mangaAnalysisResult} 
                     selectedPanelId={selectedPanelId}
+                    selectionVersion={panelSelectionVersion}
                     originalImageData={originalImageData || undefined}
                     isSimpleAnalysisMode={false}
                   />

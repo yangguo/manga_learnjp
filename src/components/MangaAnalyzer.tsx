@@ -8,25 +8,31 @@ import type { MangaAnalysisResult, MangaPanel, WordAnalysis, GrammarPattern } fr
 interface MangaAnalyzerProps {
   analysisResult: MangaAnalysisResult
   selectedPanelId?: number | null
+  selectionVersion?: number
   originalImageData?: string // base64 encoded original image
   isSimpleAnalysisMode?: boolean
 }
 
-export default function MangaAnalyzer({ analysisResult, selectedPanelId, originalImageData, isSimpleAnalysisMode = false }: MangaAnalyzerProps) {
+export default function MangaAnalyzer({ analysisResult, selectedPanelId, selectionVersion = 0, originalImageData, isSimpleAnalysisMode = false }: MangaAnalyzerProps) {
   const [expandedPanels, setExpandedPanels] = useState<Set<number>>(new Set([1]))
-  // Tracks panels the user has explicitly collapsed even when they are the selected panel
-  const [userCollapsedPanels, setUserCollapsedPanels] = useState<Set<number>>(new Set())
+  // Maps panelId → the selectionVersion at which the user explicitly collapsed it while it was selected.
+  // A panel is "user-collapsed" only when the stored version matches the current selectionVersion,
+  // so re-selecting the same panel (new version) always auto-expands it.
+  const [userCollapsedAt, setUserCollapsedAt] = useState<Map<number, number>>(new Map())
   const [showOriginalLayout, setShowOriginalLayout] = useState(true)
 
-  // Auto-expand the selected panel unless the user explicitly collapsed it
+  // Auto-expand the selected panel unless the user explicitly collapsed it in this selection session
   const effectiveExpandedPanels = useMemo(() => {
-    if (selectedPanelId !== null && selectedPanelId !== undefined && !userCollapsedPanels.has(selectedPanelId)) {
-      const merged = new Set(expandedPanels)
-      merged.add(selectedPanelId)
-      return merged
+    if (selectedPanelId != null) {
+      const isUserCollapsed = userCollapsedAt.get(selectedPanelId) === selectionVersion
+      if (!isUserCollapsed) {
+        const merged = new Set(expandedPanels)
+        merged.add(selectedPanelId)
+        return merged
+      }
     }
     return expandedPanels
-  }, [expandedPanels, selectedPanelId, userCollapsedPanels])
+  }, [expandedPanels, selectedPanelId, selectionVersion, userCollapsedAt])
 
   const togglePanel = (panelNumber: number) => {
     const isExpanded = effectiveExpandedPanels.has(panelNumber)
@@ -34,21 +40,21 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
     if (isExpanded) {
       nextExpanded.delete(panelNumber)
       setExpandedPanels(nextExpanded)
-      // If the user is collapsing the selected panel, record it so the useMemo won't re-add it
+      // Record the selectionVersion so we don't re-expand this panel in the same session
       if (panelNumber === selectedPanelId) {
-        setUserCollapsedPanels(prev => {
-          const next = new Set(prev)
-          next.add(panelNumber)
+        setUserCollapsedAt(prev => {
+          const next = new Map(prev)
+          next.set(panelNumber, selectionVersion)
           return next
         })
       }
     } else {
       nextExpanded.add(panelNumber)
       setExpandedPanels(nextExpanded)
-      // Clear user-collapsed when re-opening
-      if (userCollapsedPanels.has(panelNumber)) {
-        setUserCollapsedPanels(prev => {
-          const next = new Set(prev)
+      // Clear the collapse record when user re-opens
+      if (userCollapsedAt.has(panelNumber)) {
+        setUserCollapsedAt(prev => {
+          const next = new Map(prev)
           next.delete(panelNumber)
           return next
         })
