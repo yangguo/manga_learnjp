@@ -18,8 +18,8 @@ export default function Header() {
               <BookOpen className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-gray-800">Manga Learn JP</h1>
-              <p className="text-sm text-gray-600">漫画で日本語を学ぼう</p>
+              <h1 className="text-xl font-bold text-white">Manga Learn JP</h1>
+              <p className="text-sm text-gray-400">漫画で日本語を学ぼう</p>
             </div>
           </div>
           
@@ -28,16 +28,16 @@ export default function Header() {
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
               href="https://github.com"
-              className="p-2 hover:bg-white/50 rounded-lg transition-colors"
+              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
               target="_blank"
               rel="noopener noreferrer"
             >
-              <Github className="w-5 h-5 text-gray-600" />
+              <Github className="w-5 h-5 text-gray-400" />
             </motion.a>
             
-            <div className="flex items-center space-x-1 text-sm text-gray-600">
+            <div className="flex items-center space-x-1 text-sm text-gray-400">
               <span>Made with</span>
-              <Heart className="w-4 h-4 text-red-500 fill-current" />
+              <Heart className="w-4 h-4 text-red-400 fill-current" />
               <span>for learners</span>
             </div>
           </div>

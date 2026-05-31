@@ -42,8 +42,8 @@ export default function DemoSection() {
         transition={{ duration: 0.6, delay: 0.6 }}
         className="text-center mb-12"
       >
-        <h2 className="text-3xl font-bold text-gray-800 mb-4">How It Works</h2>
-        <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+        <h2 className="text-3xl font-bold text-white mb-4">How It Works</h2>
+        <p className="text-lg text-gray-400 max-w-2xl mx-auto">
           Transform your manga reading into an interactive Japanese learning experience
         </p>
       </motion.div>
@@ -61,11 +61,11 @@ export default function DemoSection() {
             onClick={() => setActiveDemo(index)}
           >
             <div className="text-center">
-              <div className={`p-4 rounded-full bg-gray-50 w-16 h-16 flex items-center justify-center mx-auto mb-4`}>
+              <div className={`p-4 rounded-full bg-white/10 w-16 h-16 flex items-center justify-center mx-auto mb-4`}>
                 <step.icon className={`w-8 h-8 ${step.color}`} />
               </div>
-              <h3 className="text-xl font-semibold text-gray-800 mb-2">{step.title}</h3>
-              <p className="text-gray-600 text-sm leading-relaxed">{step.description}</p>
+              <h3 className="text-xl font-semibold text-white mb-2">{step.title}</h3>
+              <p className="text-gray-400 text-sm leading-relaxed">{step.description}</p>
             </div>
           </motion.div>
         ))}
@@ -78,10 +78,10 @@ export default function DemoSection() {
         className="mt-12 text-center"
       >
         <div className="card max-w-2xl mx-auto">
-          <h3 className="text-xl font-semibold text-gray-800 mb-4">
+          <h3 className="text-xl font-semibold text-white mb-4">
             Ready to start your Japanese learning journey?
           </h3>
-          <p className="text-gray-600 mb-6">
+          <p className="text-gray-400 mb-6">
             Upload your first manga page above and discover how easy it is to learn Japanese through the stories you love!
           </p>
           <div className="flex items-center justify-center space-x-4 text-sm text-gray-500">

@@ -26,14 +26,14 @@ function SentenceDetailModal({ sentence, isOpen, onClose }: SentenceDetailModalP
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
+      <div className="bg-gray-900 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto backdrop-blur-md">
         <div className="p-6">
           <div className="flex justify-between items-start mb-4">
-            <h2 className="text-xl font-bold text-gray-800">Sentence Analysis</h2>
+            <h2 className="text-xl font-bold text-white">Sentence Analysis</h2>
             <button
               onClick={onClose}
-              className="text-gray-500 hover:text-gray-700 transition-colors"
+              className="text-gray-400 hover:text-white transition-colors"
             >
               <X size={24} />
             </button>
@@ -42,24 +42,24 @@ function SentenceDetailModal({ sentence, isOpen, onClose }: SentenceDetailModalP
           {/* Japanese Text */}
           <div className="mb-6">
             <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-lg font-semibold text-gray-700">Japanese Text</h3>
+              <h3 className="text-lg font-semibold text-gray-200">Japanese Text</h3>
               <button
                 onClick={() => speakText(sentence.sentence)}
-                className="text-blue-500 hover:text-blue-700 transition-colors"
+                className="text-blue-400 hover:text-blue-300 transition-colors"
                 title="Listen to pronunciation"
               >
                 <Volume2 size={18} />
               </button>
             </div>
-            <p className="text-xl text-gray-900 bg-gray-50 p-3 rounded border-l-4 border-blue-500">
+            <p className="text-xl text-white bg-white/5 p-3 rounded-lg border-l-4 border-purple-500">
               {sentence.sentence}
             </p>
           </div>
 
           {/* Translation */}
           <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-700 mb-2">Translation</h3>
-            <p className="text-gray-800 bg-green-50 p-3 rounded border-l-4 border-green-500">
+            <h3 className="text-lg font-semibold text-gray-200 mb-2">Translation</h3>
+            <p className="text-gray-100 bg-green-500/10 p-3 rounded-lg border-l-4 border-green-500">
               {sentence.translation}
             </p>
           </div>
@@ -67,24 +67,24 @@ function SentenceDetailModal({ sentence, isOpen, onClose }: SentenceDetailModalP
           {/* Vocabulary */}
           {sentence.words && sentence.words.length > 0 && (
             <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-700 mb-3">Vocabulary</h3>
+              <h3 className="text-lg font-semibold text-gray-200 mb-3">Vocabulary</h3>
               <div className="grid gap-3">
                 {sentence.words.map((word, index) => (
-                  <div key={index} className="bg-yellow-50 p-3 rounded border border-yellow-200">
+                  <div key={index} className="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/30">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-gray-900">{word.word}</span>
+                      <span className="font-medium text-white">{word.word}</span>
                       {word.reading && (
-                        <span className="text-sm text-gray-600">({word.reading})</span>
+                        <span className="text-sm text-gray-400">({word.reading})</span>
                       )}
                       <span className={`text-xs px-2 py-1 rounded ${
-                        word.difficulty === 'beginner' ? 'bg-green-100 text-green-800' :
-                        word.difficulty === 'intermediate' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-red-100 text-red-800'
+                        word.difficulty === 'beginner' ? 'bg-green-500/20 text-green-300' :
+                        word.difficulty === 'intermediate' ? 'bg-yellow-500/20 text-yellow-300' :
+                        'bg-red-500/20 text-red-300'
                       }`}>
                         {word.difficulty}
                       </span>
                     </div>
-                    <p className="text-sm text-gray-700">{word.meaning}</p>
+                    <p className="text-sm text-gray-300">{word.meaning}</p>
                     {word.partOfSpeech && (
                       <p className="text-xs text-gray-500 mt-1">Part of speech: {word.partOfSpeech}</p>
                     )}
@@ -97,14 +97,14 @@ function SentenceDetailModal({ sentence, isOpen, onClose }: SentenceDetailModalP
           {/* Grammar */}
           {sentence.grammar && sentence.grammar.length > 0 && (
             <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-700 mb-3">Grammar Patterns</h3>
+              <h3 className="text-lg font-semibold text-gray-200 mb-3">Grammar Patterns</h3>
               <div className="grid gap-3">
                 {sentence.grammar.map((grammar, index) => (
-                  <div key={index} className="bg-purple-50 p-3 rounded border border-purple-200">
-                    <h4 className="font-medium text-purple-900 mb-1">{grammar.pattern}</h4>
-                    <p className="text-sm text-gray-700 mb-2">{grammar.explanation}</p>
+                  <div key={index} className="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30">
+                    <h4 className="font-medium text-purple-300 mb-1">{grammar.pattern}</h4>
+                    <p className="text-sm text-gray-300 mb-2">{grammar.explanation}</p>
                     {grammar.example && (
-                      <p className="text-sm text-purple-700 italic">Example: {grammar.example}</p>
+                      <p className="text-sm text-purple-400 italic">Example: {grammar.example}</p>
                     )}
                   </div>
                 ))}
@@ -115,8 +115,8 @@ function SentenceDetailModal({ sentence, isOpen, onClose }: SentenceDetailModalP
           {/* Context */}
           {sentence.context && (
             <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-700 mb-2">Context</h3>
-              <p className="text-gray-700 bg-blue-50 p-3 rounded border-l-4 border-blue-500">
+              <h3 className="text-lg font-semibold text-gray-200 mb-2">Context</h3>
+              <p className="text-gray-200 bg-blue-500/10 p-3 rounded-lg border-l-4 border-blue-500">
                 {sentence.context}
               </p>
             </div>
