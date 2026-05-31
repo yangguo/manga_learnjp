@@ -1,24 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AIAnalysisService, type AnalysisResult } from '@/lib/ai-service'
-import { type AIProvider, type OpenAIFormatSettings, type ModelSettings, type APIKeySettings, type MangaAnalysisResult, type ReadingModeResult } from '@/lib/types'
+import { type AIProvider, type OpenAIFormatSettings, type MangaAnalysisResult, type ReadingModeResult } from '@/lib/types'
 
 interface AnalysisRequest {
   text?: string
   imageBase64?: string
   provider?: AIProvider
-  openaiFormatSettings?: OpenAIFormatSettings
-  modelSettings?: ModelSettings
-  apiKeySettings?: APIKeySettings
   mangaMode?: boolean
-  simpleAnalysisMode?: boolean // New flag to distinguish simple analysis from panel analysis
-  readingMode?: boolean // New flag for reading mode analysis
+  simpleAnalysisMode?: boolean
+  readingMode?: boolean
 }
 
 export const maxDuration = 300 // 5 minutes for reading mode analysis
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, imageBase64, provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings, mangaMode = false, simpleAnalysisMode = false, readingMode = false }: AnalysisRequest = await request.json()
+    const { text, imageBase64, provider = 'openai', mangaMode = false, simpleAnalysisMode = false, readingMode = false }: AnalysisRequest = await request.json()
 
     if (!text && !imageBase64) {
       return NextResponse.json(
@@ -27,50 +24,38 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Use API keys from request if provided, otherwise fall back to environment variables
-    const openaiApiKey = apiKeySettings?.openai || process.env.OPENAI_API_KEY
-    const geminiApiKey = apiKeySettings?.gemini || process.env.GEMINI_API_KEY
+    // All credentials come exclusively from environment variables
+    const openaiApiKey = process.env.OPENAI_API_KEY
+    const geminiApiKey = process.env.GEMINI_API_KEY
 
-    // For OpenAI-format, use settings from request or fall back to environment variables
-    let finalOpenAIFormatSettings: OpenAIFormatSettings | undefined
-    if (openaiFormatSettings?.endpoint?.trim() && openaiFormatSettings?.model?.trim()) {
-      finalOpenAIFormatSettings = openaiFormatSettings
-    } else if (process.env.OPENAI_FORMAT_API_URL && process.env.OPENAI_FORMAT_MODEL) {
-      finalOpenAIFormatSettings = {
+    let openaiFormatSettings: OpenAIFormatSettings | undefined
+    if (process.env.OPENAI_FORMAT_API_URL && process.env.OPENAI_FORMAT_MODEL) {
+      openaiFormatSettings = {
         endpoint: process.env.OPENAI_FORMAT_API_URL,
         model: process.env.OPENAI_FORMAT_MODEL,
-        apiKey: process.env.OPENAI_FORMAT_API_KEY // Optional
+        apiKey: process.env.OPENAI_FORMAT_API_KEY
       }
     }
 
-    const hasOpenAIFormat = !!finalOpenAIFormatSettings
-
-    if (!openaiApiKey && !geminiApiKey && !hasOpenAIFormat) {
+    if (!openaiApiKey && !geminiApiKey && !openaiFormatSettings) {
       return NextResponse.json(
-        { 
-          error: 'No AI service configured. Please:\n• Set OpenAI API key and select "OpenAI" provider, or\n• Set Gemini API key and select "Gemini" provider, or\n• Configure OpenAI-Compatible API with valid endpoint and model' 
-        },
+        { error: 'No AI service configured. Set OPENAI_API_KEY, GEMINI_API_KEY, or OPENAI_FORMAT_* environment variables.' },
         { status: 500 }
       )
     }
 
-    const aiService = new AIAnalysisService(
-      openaiApiKey, 
-      geminiApiKey, 
-      finalOpenAIFormatSettings,
-      modelSettings
-    )
+    const aiService = new AIAnalysisService(openaiApiKey, geminiApiKey, openaiFormatSettings)
     const availableProviders = aiService.getAvailableProviders()
 
     if (availableProviders.length === 0) {
       return NextResponse.json(
-        { error: 'No AI providers available. Please check your API keys or OpenAI-format settings.' },
+        { error: 'No AI providers available. Please check your environment variables.' },
         { status: 500 }
       )
     }
 
-    // Try providers in order: requested provider first, then all available providers
-    const providersToTry = availableProviders.includes(provider) 
+    // Try requested provider first, then fall back to other available providers
+    const providersToTry = availableProviders.includes(provider)
       ? [provider, ...availableProviders.filter(p => p !== provider)]
       : availableProviders
 
@@ -82,25 +67,16 @@ export async function POST(request: NextRequest) {
         
         let result: AnalysisResult | MangaAnalysisResult | ReadingModeResult
         if (imageBase64) {
-          // Check image size and provide appropriate timeout
           const imageSizeKB = Math.round(imageBase64.length * 3 / 4 / 1024)
           console.log(`📏 Image size: ${imageSizeKB} KB`)
-          
-          if (readingMode && imageSizeKB > 500) {
-            // For large images in reading mode, suggest using smaller images
-            console.log('⚠️ Large image detected in reading mode, this may take longer')
-          }
           
           if (readingMode) {
             result = await aiService.analyzeImageForReading(imageBase64, currentProvider)
           } else if (mangaMode) {
             result = await aiService.analyzeMangaImage(imageBase64, currentProvider)
           } else if (simpleAnalysisMode) {
-            // In simple mode, use manga analysis but skip client-side segmentation
-            // This will fall back to LLM-based analysis and display using panel UI
             result = await aiService.analyzeMangaImageDirect(imageBase64, currentProvider)
           } else {
-            // Regular individual panel analysis or simple image analysis
             result = await aiService.analyzeImage(imageBase64, currentProvider)
           }
         } else {
@@ -117,13 +93,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // If all providers failed, throw the last error
     throw lastError || new Error('All providers failed')
 
   } catch (error) {
     console.error('Analysis error:', error)
     
-    // Extract mangaMode and readingMode from the request for error handling
     let mangaMode = false
     let readingMode = false
     try {
@@ -131,31 +105,30 @@ export async function POST(request: NextRequest) {
       mangaMode = requestBody.mangaMode || false
       readingMode = requestBody.readingMode || false
     } catch {
-      // If we can't parse the request, default to false
+      // ignore parse errors
     }
     
-    // Return appropriate fallback response based on mode
     if (readingMode) {
       return NextResponse.json({
         sentences: [],
         imageData: null,
-        overallSummary: "Reading mode analysis failed. Please try with a smaller image or use regular analysis mode.",
+        overallSummary: 'Reading mode analysis failed. Please try with a smaller image or use regular analysis mode.',
         provider: 'fallback' as AIProvider,
         error: error instanceof Error ? error.message : 'Failed to analyze reading mode'
       }, { status: 500 })
     } else if (mangaMode) {
       return NextResponse.json({
         panels: [],
-        overallSummary: "Unable to analyze manga panels at this time.",
+        overallSummary: 'Unable to analyze manga panels at this time.',
         readingOrder: [],
         provider: 'fallback' as AIProvider,
         error: error instanceof Error ? error.message : 'Failed to analyze manga'
       }, { status: 500 })
     } else {
       return NextResponse.json({
-        extractedText: "Unable to extract text from image",
-        translation: "Translation analysis failed. Please try again.",
-        summary: "Unable to analyze the context at this time.",
+        extractedText: 'Unable to extract text from image',
+        translation: 'Translation analysis failed. Please try again.',
+        summary: 'Unable to analyze the context at this time.',
         words: [],
         grammar: [],
         provider: 'fallback' as AIProvider,

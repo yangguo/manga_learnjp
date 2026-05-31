@@ -35,7 +35,7 @@ export default function ImageUploader({
   const [imageBase64, setImageBase64] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
   const [segmentationStatus, setSegmentationStatus] = useState<'idle' | 'segmenting' | 'complete' | 'error'>('idle')
-  const { selectedProvider, openaiFormatSettings, modelSettings, apiKeySettings } = useAIProviderStore()
+  const { selectedProvider } = useAIProviderStore()
   const { segmentPanels, isAvailable: isClientSegmentationAvailable } = useClientPanelSegmentation()
   const modeOptions: Record<
     AnalysisMode,
@@ -107,9 +107,6 @@ export default function ImageUploader({
                     body: JSON.stringify({
                       imageBase64: panel.imageData,
                       provider: selectedProvider,
-                      modelSettings,
-                      apiKeySettings,
-                      openaiFormatSettings,
                       mangaMode: false // Analyze individual panels as regular images
                     }),
                   })
@@ -169,9 +166,6 @@ export default function ImageUploader({
           
           const readingResult = await analyzeImageForReading(imageForAPI, {
             provider: selectedProvider,
-            openaiFormatSettings,
-            modelSettings,
-            apiKeySettings
           })
           
           setProgress(90)
@@ -209,9 +203,6 @@ export default function ImageUploader({
             body: JSON.stringify({
               imageBase64: imageForAPI,
               provider: selectedProvider,
-              modelSettings,
-              apiKeySettings,
-              openaiFormatSettings,
               mangaMode: false, // Don't use regular manga mode
               simpleAnalysisMode: true // Use simple analysis mode which triggers LLM-based panel detection
             }),
@@ -261,9 +252,6 @@ export default function ImageUploader({
         body: JSON.stringify({
           imageBase64: imageForAPI,
           provider: selectedProvider,
-          modelSettings,
-          apiKeySettings,
-          openaiFormatSettings,
           mangaMode: analysisMode === 'panel',
           simpleAnalysisMode: analysisMode === 'simple'
         }),
@@ -308,7 +296,7 @@ export default function ImageUploader({
       setProgress(0)
       setSegmentationStatus('error')
     }
-  }, [analysisMode, apiKeySettings, isClientSegmentationAvailable, modelSettings, onAnalysisComplete, onError, onMangaAnalysisComplete, onReadingModeComplete, openaiFormatSettings, segmentPanels, selectedProvider])
+  }, [analysisMode, isClientSegmentationAvailable, onAnalysisComplete, onError, onMangaAnalysisComplete, onReadingModeComplete, segmentPanels, selectedProvider])
 
   const prepareImage = useCallback((file: File) => {
     if (!file) return

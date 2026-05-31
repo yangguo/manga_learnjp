@@ -1,17 +1,14 @@
-import { AIProvider, OpenAIFormatSettings, ModelSettings, APIKeySettings, ReadingModeResult } from './types'
+import { AIProvider, ReadingModeResult } from './types'
 
 interface AnalyzeImageForReadingOptions {
   provider?: AIProvider
-  openaiFormatSettings?: OpenAIFormatSettings
-  modelSettings?: ModelSettings
-  apiKeySettings?: APIKeySettings
 }
 
 export async function analyzeImageForReading(
   imageBase64: string,
   options: AnalyzeImageForReadingOptions = {}
 ): Promise<ReadingModeResult> {
-  const { provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings } = options
+  const { provider = 'openai' } = options
 
   const response = await fetch('/api/analyze', {
     method: 'POST',
@@ -21,9 +18,6 @@ export async function analyzeImageForReading(
     body: JSON.stringify({
       imageBase64,
       provider,
-      openaiFormatSettings,
-      modelSettings,
-      apiKeySettings,
       readingMode: true
     }),
   })
