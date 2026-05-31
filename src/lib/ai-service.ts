@@ -1,4 +1,3 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel, ReadingModeResult, SentenceLocation } from './types'
 import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
@@ -1648,320 +1647,6 @@ IMPORTANT:
   }
 }
 
-export class GeminiService {
-  private genAI: GoogleGenerativeAI
-  private model: any
-
-  constructor(apiKey: string, modelName?: string) {
-    this.genAI = new GoogleGenerativeAI(apiKey)
-    const finalModelName = modelName || process.env.GEMINI_MODEL || 'gemini-pro-vision'
-    console.log(`🔧 Gemini service initializing with model: ${finalModelName}`)
-    this.model = this.genAI.getGenerativeModel({ model: finalModelName })
-  }
-
-  async analyzeText(text: string): Promise<AnalysisResult> {
-    // Split text into sentences for batching
-    const sentences = splitTextIntoSentences(text)
-    console.log(`Gemini analyzeText: Split text into ${sentences.length} sentences`)
-    
-    // If we have few sentences, analyze all at once
-    if (sentences.length <= 3) {
-      return this.analyzeSingleBatch(text)
-    }
-    
-    // Create batches for longer texts
-    const batches = createTextBatches(sentences, 3) // 3 sentences per batch
-    console.log(`Gemini analyzeText: Created ${batches.length} batches`)
-    
-    const batchResults: any[] = []
-    
-    // Process each batch
-    for (let i = 0; i < batches.length; i++) {
-      const batch = batches[i]
-      const batchText = batch.join('')
-      console.log(`Gemini analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
-      
-      try {
-        const batchResult = await this.analyzeSingleBatch(batchText)
-        batchResults.push(batchResult)
-      } catch (error) {
-        console.error(`Gemini analyzeText: Error processing batch ${i + 1}:`, error)
-        // Continue with other batches rather than failing completely
-      }
-    }
-    
-    if (batchResults.length === 0) {
-      throw new Error('All batches failed to process')
-    }
-    
-    // Combine results from all batches
-    const combinedResult = combineBatchResults(batchResults)
-    console.log(`Gemini analyzeText: Combined ${batchResults.length} batch results into final result`)
-    
-    return {
-      ...combinedResult,
-      provider: 'gemini' as AIProvider
-    }
-  }
-
-  private async analyzeSingleBatch(text: string): Promise<AnalysisResult> {
-    const prompt = ANALYSIS_PROMPT(text)
-    
-    const result = await this.model.generateContent([
-      {
-        text: prompt
-      }
-    ])
-
-    const response = await result.response
-    const content = response.text()
-
-    if (!content) {
-      throw new Error('No content received from Gemini')
-    }
-
-    try {
-      const cleanedContent = cleanJsonResponse(content)
-      console.log('Gemini analyzeSingleBatch cleaned content preview:', cleanedContent.substring(0, 200) + '...')
-      const analysisResult = parseJsonSafely(cleanedContent, 'Gemini analyzeSingleBatch')
-      
-      // Validate the structure of the analysis result
-      const isValid = validateAnalysisResult(analysisResult, 'Gemini analyzeSingleBatch')
-      if (!isValid) {
-        throw new Error('Invalid analysis result structure')
-      }
-      
-      return {
-        ...analysisResult,
-        provider: 'gemini' as AIProvider
-      }
-    } catch (error) {
-      console.error('Gemini analyzeSingleBatch JSON parsing error:', error)
-      console.error('Raw content:', content.substring(0, 500) + '...')
-      throw new Error(`Failed to parse Gemini response: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
-  async analyzeImage(imageBase64: string): Promise<AnalysisResult> {
-    const prompt = ANALYSIS_PROMPT()
-    
-    // Convert base64 to format Gemini expects
-    const imagePart = {
-      inlineData: {
-        data: imageBase64,
-        mimeType: getImageMimeType(imageBase64)
-      }
-    }
-
-    const result = await this.model.generateContent([
-      prompt,
-      imagePart
-    ])
-
-    const response = await result.response
-    const content = response.text()
-
-    if (!content) {
-      throw new Error('No content received from Gemini')
-    }
-
-    try {
-      const cleanedContent = cleanJsonResponse(content)
-      console.log('Gemini analyzeImage cleaned content preview:', cleanedContent.substring(0, 200) + '...')
-      const analysisResult = parseJsonSafely(cleanedContent, 'Gemini analyzeImage')
-      
-      // Validate the structure of the analysis result
-      const isValid = validateAnalysisResult(analysisResult, 'Gemini analyzeImage')
-      if (!isValid) {
-        throw new Error('Invalid analysis result structure')
-      }
-      
-      return {
-        ...analysisResult,
-        provider: 'gemini' as AIProvider
-      }
-    } catch (error) {
-      console.error('Gemini analyzeImage JSON parsing error:', error)
-      console.error('Raw content:', content.substring(0, 500) + '...')
-      throw new Error(`Failed to parse Gemini response: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
-  async analyzeMangaImage(imageBase64: string): Promise<MangaAnalysisResult> {
-    const prompt = MANGA_PANEL_ANALYSIS_PROMPT()
-    
-    // Convert base64 to format Gemini expects
-    const imagePart = {
-      inlineData: {
-        data: imageBase64,
-        mimeType: getImageMimeType(imageBase64)
-      }
-    }
-
-    const result = await this.model.generateContent([
-      prompt,
-      imagePart
-    ])
-
-    const response = await result.response
-    const content = response.text()
-
-    if (!content) {
-      throw new Error('No content received from Gemini')
-    }
-
-    const analysisResult = parseJsonSafely(cleanJsonResponse(content), 'Gemini analyzeMangaImage', true)
-    
-    // Skip validation for simple analysis mode to be more lenient
-    // const isValid = validateMangaAnalysisResult(analysisResult, 'Gemini analyzeMangaImage')
-    // if (!isValid) {
-    //   throw new Error('Invalid manga analysis result structure')
-    // }
-    
-    // Ensure we have a proper readingOrder
-    const readingOrder = analysisResult.readingOrder || (analysisResult.panels ? analysisResult.panels.map((_: any, index: number) => index + 1) : [])
-    
-    return {
-      ...analysisResult,
-      readingOrder,
-      provider: 'gemini' as AIProvider
-    }
-  }
-
-  async analyzeImageForReading(imageBase64: string): Promise<any> {
-    console.log('📖 Gemini: Starting two-step reading mode analysis')
-    
-    // Step 1: Vision model to detect text and bounding boxes
-    const TEXT_DETECTION_PROMPT = `
-Analyze this manga image and identify ALL Japanese text with their precise locations.
-
-For each text segment found, provide:
-1. The exact Japanese text (character by character)
-2. Precise bounding box coordinates (x, y, width, height) as percentages (0-100) of image dimensions
-
-Provide a JSON response:
-{
-  "textSegments": [
-    {
-      "text": "Japanese text",
-      "boundingBox": {
-        "x": 10.5,
-        "y": 20.3,
-        "width": 25.7,
-        "height": 8.2
-      }
-    }
-  ]
-}
-
-IMPORTANT:
-- Include ALL text: speech bubbles, sound effects, signs, narration
-- Coordinates are percentages (0-100) relative to image dimensions
-- Each distinct text area should be a separate segment
-- Be precise with bounding boxes to cover the entire text area
-`
-    
-    // Convert base64 to format Gemini expects
-    const imagePart = {
-      inlineData: {
-        data: imageBase64,
-        mimeType: getImageMimeType(imageBase64)
-      }
-    }
-
-    console.log('🔍 Step 1: Detecting text and locations...')
-    const detectionResult = await this.model.generateContent([
-      TEXT_DETECTION_PROMPT,
-      imagePart
-    ])
-
-    const detectionResponse = await detectionResult.response
-    const detectionContent = detectionResponse.text()
-
-    if (!detectionContent) {
-      throw new Error('No content received from Gemini detection')
-    }
-
-    const cleanedDetection = cleanJsonResponse(detectionContent)
-    const parsedDetection = parseJsonSafely(cleanedDetection, 'Gemini text detection', true)
-    
-    console.log(`✅ Step 1 complete: Found ${parsedDetection.textSegments?.length || 0} text segments`)
-
-    // Step 2: Analyze each text segment linguistically
-    console.log('📚 Step 2: Analyzing text linguistically...')
-    const sentences = await Promise.all(
-      (parsedDetection.textSegments || []).map(async (segment: any, index: number) => {
-        const LINGUISTIC_ANALYSIS_PROMPT = `
-Analyze this Japanese sentence for language learning:
-
-Text: "${segment.text}"
-
-Provide a JSON response:
-{
-  "translation": "English translation",
-  "words": [
-    {
-      "word": "Japanese word",
-      "reading": "hiragana/katakana",
-      "meaning": "English meaning",
-      "partOfSpeech": "noun/verb/adjective/etc",
-      "difficulty": "beginner/intermediate/advanced"
-    }
-  ],
-  "grammar": [
-    {
-      "pattern": "Grammar pattern",
-      "explanation": "Brief explanation",
-      "example": "Example usage"
-    }
-  ],
-  "context": "Brief context or usage notes"
-}
-
-IMPORTANT:
-- Include only the 3-5 most important words
-- Limit to 1-2 key grammar patterns
-- Keep explanations concise
-`
-
-        try {
-          const analysisResult = await this.model.generateContent([LINGUISTIC_ANALYSIS_PROMPT])
-          const analysisResponse = await analysisResult.response
-          const analysisContent = analysisResponse.text()
-          const cleanedAnalysis = cleanJsonResponse(analysisContent)
-          const linguisticResult = parseJsonSafely(cleanedAnalysis, `Gemini linguistic analysis ${index + 1}`, true)
-
-          return {
-            sentence: segment.text,
-            translation: linguisticResult.translation || '',
-            words: linguisticResult.words || [],
-            grammar: linguisticResult.grammar || [],
-            context: linguisticResult.context || '',
-            boundingBox: segment.boundingBox
-          }
-        } catch (error) {
-          console.warn(`Error analyzing segment ${index + 1}:`, error)
-          return {
-            sentence: segment.text,
-            translation: 'Translation unavailable',
-            words: [],
-            grammar: [],
-            context: 'Analysis error',
-            boundingBox: segment.boundingBox
-          }
-        }
-      })
-    )
-
-    console.log(`✅ Step 2 complete: Analyzed ${sentences.length} sentences`)
-
-    return {
-      sentences,
-      overallSummary: `Found and analyzed ${sentences.length} text segments in the manga image.`,
-      provider: 'gemini' as AIProvider
-    }
-  }
-}
 
 export class OpenAIFormatService {
   private settings: OpenAIFormatSettings
@@ -2472,14 +2157,12 @@ IMPORTANT:
 
 export class AIAnalysisService {
   private openaiService?: OpenAIService
-  private geminiService?: GeminiService
   private openaiFormatService?: OpenAIFormatService
   private panelSegmentationService: ClientPanelSegmentationService
   private improvedTextDetection: ImprovedTextDetectionService
 
   constructor(
-    openaiApiKey?: string, 
-    geminiApiKey?: string, 
+    openaiApiKey?: string,
     openaiFormatSettings?: OpenAIFormatSettings,
     modelSettings?: ModelSettings
   ) {
@@ -2497,30 +2180,10 @@ export class AIAnalysisService {
       if (openaiModel) {
         this.openaiService = new OpenAIService(openaiApiKey, openaiModel)
       } else {
-        // Check if environment variable has a model as fallback
         const envModel = process.env.OPENAI_MODEL?.trim()
         if (envModel) {
           this.openaiService = new OpenAIService(openaiApiKey, envModel)
         }
-        // If no model available, don't initialize the service
-      }
-    }
-    
-    // Only initialize Gemini service if both API key and model are available
-    if (geminiApiKey) {
-      const geminiModel = modelSettings?.gemini?.model?.trim()
-      console.log(`🔧 Gemini initialization - modelSettings.gemini.model: "${geminiModel}"`)
-      if (geminiModel) {
-        console.log(`🔧 Using provided model: ${geminiModel}`)
-        this.geminiService = new GeminiService(geminiApiKey, geminiModel)
-      } else {
-        // Check if environment variable has a model as fallback
-        const envModel = process.env.GEMINI_MODEL?.trim()
-        console.log(`🔧 Using environment model: ${envModel}`)
-        if (envModel) {
-          this.geminiService = new GeminiService(geminiApiKey, envModel)
-        }
-        // If no model available, don't initialize the service
       }
     }
     
@@ -2533,8 +2196,6 @@ export class AIAnalysisService {
   async analyzeText(text: string, provider: AIProvider = 'openai'): Promise<AnalysisResult> {
     if (provider === 'openai' && this.openaiService) {
       return await this.openaiService.analyzeText(text)
-    } else if (provider === 'gemini' && this.geminiService) {
-      return await this.geminiService.analyzeText(text)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
       return await this.openaiFormatService.analyzeText(text)
     } else {
@@ -2545,8 +2206,6 @@ export class AIAnalysisService {
   async analyzeImage(imageBase64: string, provider: AIProvider = 'openai'): Promise<AnalysisResult> {
     if (provider === 'openai' && this.openaiService) {
       return await this.openaiService.analyzeImage(imageBase64)
-    } else if (provider === 'gemini' && this.geminiService) {
-      return await this.geminiService.analyzeImage(imageBase64)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
       return await this.openaiFormatService.analyzeImage(imageBase64)
     } else {
@@ -2659,8 +2318,6 @@ export class AIAnalysisService {
     let result: MangaAnalysisResult
     if (provider === 'openai' && this.openaiService) {
       result = await this.openaiService.analyzeMangaImage(imageBase64)
-    } else if (provider === 'gemini' && this.geminiService) {
-      result = await this.geminiService.analyzeMangaImage(imageBase64)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
       result = await this.openaiFormatService.analyzeMangaImage(imageBase64)
     } else {
@@ -2690,8 +2347,6 @@ export class AIAnalysisService {
       let result: any
       if (provider === 'openai' && this.openaiService) {
         result = await this.openaiService.analyzeImageForReading(imageBase64)
-      } else if (provider === 'gemini' && this.geminiService) {
-        result = await this.geminiService.analyzeImageForReading(imageBase64)
       } else if (provider === 'openai-format' && this.openaiFormatService) {
         result = await this.openaiFormatService.analyzeImageForReading(imageBase64)
       } else {
@@ -2727,7 +2382,6 @@ export class AIAnalysisService {
   getAvailableProviders(): AIProvider[] {
     const providers: AIProvider[] = []
     if (this.openaiService) providers.push('openai')
-    if (this.geminiService) providers.push('gemini')
     if (this.openaiFormatService) providers.push('openai-format')
     return providers
   }

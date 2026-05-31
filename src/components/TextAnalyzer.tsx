@@ -72,18 +72,14 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
           <div className="flex items-center justify-center w-10 h-10 rounded-full bg-gradient-to-r from-purple-500/20 to-pink-500/20">
             {analysisResult?.provider && (
               <div className="text-lg">
-                {analysisResult.provider === 'gemini' ? (
-                  <span className="text-blue-400">🤖</span>
-                ) : (
-                  <span className="text-green-400">🧠</span>
-                )}
+                <span className="text-green-400">🧠</span>
               </div>
             )}
           </div>
           <div>
             <h3 className="text-lg font-semibold text-white">Analysis Complete</h3>
             <p className="text-gray-400 text-sm">
-              Powered by {analysisResult.provider === 'gemini' ? 'Google Gemini' : 'OpenAI GPT-4'}
+              Powered by AI
             </p>
           </div>
         </div>

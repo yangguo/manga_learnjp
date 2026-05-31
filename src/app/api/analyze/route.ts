@@ -26,7 +26,6 @@ export async function POST(request: NextRequest) {
 
     // All credentials come exclusively from environment variables
     const openaiApiKey = process.env.OPENAI_API_KEY
-    const geminiApiKey = process.env.GEMINI_API_KEY
 
     let openaiFormatSettings: OpenAIFormatSettings | undefined
     if (process.env.OPENAI_FORMAT_API_URL && process.env.OPENAI_FORMAT_MODEL) {
@@ -37,14 +36,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (!openaiApiKey && !geminiApiKey && !openaiFormatSettings) {
+    if (!openaiApiKey && !openaiFormatSettings) {
       return NextResponse.json(
-        { error: 'No AI service configured. Set OPENAI_API_KEY, GEMINI_API_KEY, or OPENAI_FORMAT_* environment variables.' },
+        { error: 'No AI service configured. Set OPENAI_API_KEY or OPENAI_FORMAT_* environment variables.' },
         { status: 500 }
       )
     }
 
-    const aiService = new AIAnalysisService(openaiApiKey, geminiApiKey, openaiFormatSettings)
+    const aiService = new AIAnalysisService(openaiApiKey, openaiFormatSettings)
     const availableProviders = aiService.getAvailableProviders()
 
     if (availableProviders.length === 0) {

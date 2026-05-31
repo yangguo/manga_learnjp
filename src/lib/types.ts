@@ -20,19 +20,15 @@ export interface OpenAIFormatSettings {
 
 export interface APIKeySettings {
   openai?: string
-  gemini?: string
 }
 
 export interface ModelSettings {
   openai: {
     model: string
   }
-  gemini: {
-    model: string
-  }
 }
 
-export type AIProvider = 'openai' | 'gemini' | 'openai-format'
+export type AIProvider = 'openai' | 'openai-format'
 
 export interface SentenceAnalysis {
   sentence: string
