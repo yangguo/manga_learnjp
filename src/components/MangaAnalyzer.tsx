@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { Copy, ChevronRight, ChevronDown } from 'lucide-react'
 import PanelImageViewer from './PanelImageViewer'
 import type { MangaAnalysisResult, MangaPanel, WordAnalysis, GrammarPattern } from '@/lib/types'
@@ -16,16 +16,14 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
   const [expandedPanels, setExpandedPanels] = useState<Set<number>>(new Set([1]))
   const [showOriginalLayout, setShowOriginalLayout] = useState(true)
 
-  // Auto-expand the selected panel when selectedPanelId changes
-  useEffect(() => {
+  const effectiveExpandedPanels = useMemo(() => {
     if (selectedPanelId !== null && selectedPanelId !== undefined) {
-      setExpandedPanels(prev => {
-        const newSet = new Set(prev)
-        newSet.add(selectedPanelId)
-        return newSet
-      })
+      const merged = new Set(expandedPanels)
+      merged.add(selectedPanelId)
+      return merged
     }
-  }, [selectedPanelId])
+    return expandedPanels
+  }, [expandedPanels, selectedPanelId])
 
   const togglePanel = (panelNumber: number) => {
     const newExpanded = new Set(expandedPanels)
@@ -174,7 +172,7 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
                     </div>
                   </div>
                 </div>
-                {expandedPanels.has(panel.panelNumber) ? (
+                {effectiveExpandedPanels.has(panel.panelNumber) ? (
                   <ChevronDown size={20} className="text-gray-400" />
                 ) : (
                   <ChevronRight size={20} className="text-gray-400" />
@@ -182,7 +180,7 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, origina
               </button>
 
             {/* Panel Content */}
-            {expandedPanels.has(panel.panelNumber) && (
+            {effectiveExpandedPanels.has(panel.panelNumber) && (
               <div className="p-6 space-y-6">
                 {/* Panel Analysis */}
                 <div className="grid grid-cols-1 gap-6">

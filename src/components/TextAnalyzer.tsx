@@ -183,7 +183,7 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
               </div>
               <div>
                 <h3 className="text-lg font-semibold text-white">Context Summary</h3>
-                <p className="text-gray-400 text-sm">What's happening in this scene</p>
+                <p className="text-gray-400 text-sm">What&apos;s happening in this scene</p>
               </div>
             </div>
           </div>

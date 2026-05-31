@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef } from 'react'
 import { ZoomIn, ZoomOut, RotateCcw, Maximize2, Eye } from 'lucide-react'
 
 interface PanelImageViewerProps {
@@ -114,42 +114,39 @@ export default function PanelImageViewer({
   }
 
   // Set initial zoom when panel changes
-  useEffect(() => {
+  // DOM measurement: use useLayoutEffect to sync zoom/pan state with container dimensions
+  useLayoutEffect(() => {
     if (viewMode === 'panel') {
-      const optimalZoom = calculateOptimalZoom()
-      setZoom(optimalZoom)
+      const computedZoom = calculateOptimalZoom()
+      setZoom(computedZoom)
       setPanPosition({ x: 0, y: 0 })
     } else if (viewMode === 'context') {
       const contextView = calculateContextViewPosition()
       setZoom(contextView.zoom)
       setPanPosition(contextView.panPosition)
     }
-    
-    // In simple analysis mode, default to context view to show panel location
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelPosition, panelNumber, viewMode])
+
+  // Auto-switch view mode based on panel size and analysis mode
+  useEffect(() => {
     if (isSimpleAnalysisMode && originalImageData && panelPosition) {
       setViewMode('context')
       return
     }
-    
-    // Auto-suggest context view for very small panels if original image is available
     if (originalImageData && panelPosition) {
       const panelArea = panelPosition.width * panelPosition.height
       const avgDimension = Math.sqrt(panelArea)
-      if (avgDimension < 80) {
-        // For very small panels, start with context view to show location
-        setViewMode('context')
-      } else {
-        setViewMode('panel')
-      }
+      setViewMode(avgDimension < 80 ? 'context' : 'panel')
     }
-  }, [panelPosition, panelNumber, originalImageData, viewMode, isSimpleAnalysisMode])
+  }, [panelPosition, panelNumber, originalImageData, isSimpleAnalysisMode])
 
   const handleViewModeChange = (newMode: 'panel' | 'context') => {
     setViewMode(newMode)
     
     if (newMode === 'panel') {
-      const optimalZoom = calculateOptimalZoom()
-      setZoom(optimalZoom)
+      const computedZoom = calculateOptimalZoom()
+      setZoom(computedZoom)
       setPanPosition({ x: 0, y: 0 })
     } else if (newMode === 'context') {
       const contextView = calculateContextViewPosition()
@@ -160,8 +157,8 @@ export default function PanelImageViewer({
 
   const resetView = () => {
     if (viewMode === 'panel') {
-      const optimalZoom = calculateOptimalZoom()
-      setZoom(optimalZoom)
+      const computedZoom = calculateOptimalZoom()
+      setZoom(computedZoom)
       setPanPosition({ x: 0, y: 0 })
     } else if (viewMode === 'context') {
       const contextView = calculateContextViewPosition()
@@ -238,12 +235,10 @@ export default function PanelImageViewer({
   }, [isDragging])
 
   const calculatePanelOverlay = () => {
-    if (!panelPosition || !originalImageDimensions || !imageRef.current) {
+    if (!panelPosition || !originalImageDimensions) {
       return null
     }
 
-    const img = imageRef.current
-    
     // Calculate the panel position as a percentage of the image
     const panelLeftPercent = (panelPosition.x / originalImageDimensions.width) * 100
     const panelTopPercent = (panelPosition.y / originalImageDimensions.height) * 100
@@ -384,9 +379,9 @@ export default function PanelImageViewer({
         </div>
 
         {/* Zoom indicator */}
-        {zoom !== calculateOptimalZoom() && (
+        {zoom !== 1 && (
           <div className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
-            {Math.round(zoom * 100)}% {zoom < calculateOptimalZoom() ? '(Zoomed out)' : '(Zoomed in)'}
+            {Math.round(zoom * 100)}% {zoom < 1 ? '(Zoomed out)' : '(Zoomed in)'}
           </div>
         )}
 
@@ -399,9 +394,6 @@ export default function PanelImageViewer({
             )}
             {viewMode === 'context' && !isSimpleAnalysisMode && (
               <div className="text-yellow-300 mt-1">🎯 Centered on Panel {panelNumber}</div>
-            )}
-            {viewMode === 'panel' && zoom === calculateOptimalZoom() && zoom > 1 && (
-              <div className="text-yellow-300 mt-1">✨ Auto-fitted for optimal viewing</div>
             )}
           </div>
         )}

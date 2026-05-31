@@ -50,5 +50,5 @@
 
   [context.dev.environment]
     OPENAI_FORMAT_API_URL = "https://ark.cn-beijing.volces.com/api/v3"
-    OPENAI_FORMAT_API_KEY = "REDACTED_ROTATE_ME"
+    OPENAI_FORMAT_API_KEY = ""  # Set via environment variable, never commit keys here
     OPENAI_FORMAT_MODEL = "doubao-seed-1-6-lite-251015"

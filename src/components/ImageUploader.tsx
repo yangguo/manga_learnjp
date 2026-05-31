@@ -9,6 +9,7 @@ import { SUPPORTED_IMAGE_TYPES, type AnalysisResult, type MangaAnalysisResult, t
 import { useAIProviderStore } from '@/lib/store'
 import { useClientPanelSegmentation } from '@/hooks/useClientPanelSegmentation'
 import { analyzeImageForReading } from '@/lib/client-api'
+import { compressImageForAPI } from '@/lib/image-compression'
 
 interface ImageUploaderProps {
   onAnalysisComplete: (result: AnalysisResult) => void
@@ -69,6 +70,10 @@ export default function ImageUploader({
     setIsAnalyzing(true)
     setProgress(20)
     setSegmentationStatus('idle')
+
+    // Compress to stay under Vercel's 4.5 MB request payload limit.
+    // 3500 KB base64 ≈ 2.6 MB raw; total JSON body stays well under 4.5 MB.
+    const imageForAPI = await compressImageForAPI(imageToAnalyze, 3500)
 
     try {
       console.log('🔍 Debug: analysisMode =', analysisMode)
@@ -162,7 +167,7 @@ export default function ImageUploader({
           console.log('🔍 Starting reading mode analysis...')
           setProgress(30)
           
-          const readingResult = await analyzeImageForReading(imageToAnalyze, {
+          const readingResult = await analyzeImageForReading(imageForAPI, {
             provider: selectedProvider,
             openaiFormatSettings,
             modelSettings,
@@ -202,7 +207,7 @@ export default function ImageUploader({
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              imageBase64: imageToAnalyze,
+              imageBase64: imageForAPI,
               provider: selectedProvider,
               modelSettings,
               apiKeySettings,
@@ -254,13 +259,13 @@ export default function ImageUploader({
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          imageBase64: imageToAnalyze,
+          imageBase64: imageForAPI,
           provider: selectedProvider,
           modelSettings,
           apiKeySettings,
           openaiFormatSettings,
           mangaMode: analysisMode === 'panel',
-          simpleAnalysisMode: analysisMode === 'simple' // Use simple analysis mode when in simple mode
+          simpleAnalysisMode: analysisMode === 'simple'
         }),
       })
 
