@@ -7,8 +7,6 @@ This is the Netlify deployment version of the Manga LearnJP application, adapted
 ### API Routes → Netlify Functions
 - `/api/analyze` → `/.netlify/functions/analyze`
 - `/api/providers` → `/.netlify/functions/providers`
-- `/api/test-segmentation` → `/.netlify/functions/test-segmentation`
-- `/api/segment-panels` → `/.netlify/functions/segment-panels`
 
 ### Configuration Files
 - `netlify.toml` - Netlify deployment configuration
@@ -19,8 +17,6 @@ This is the Netlify deployment version of the Manga LearnJP application, adapted
 All API routes have been converted to Netlify Functions in the `functions/` directory:
 - `functions/analyze.ts` - Main analysis endpoint
 - `functions/providers.ts` - Available AI providers endpoint
-- `functions/test-segmentation.ts` - Panel segmentation testing
-- `functions/segment-panels.ts` - Panel segmentation endpoint
 
 ## Deployment Instructions
 

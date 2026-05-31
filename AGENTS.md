@@ -4,7 +4,7 @@
 - `src/app`: App Router entry points, global styles, and the `/api/analyze` server route that orchestrates AI providers.
 - `src/components`: Client UI for uploads, panel viewers, and reading mode; keep presentation logic here.
 - `src/lib` & `src/hooks`: Core services (AI adapters, segmentation utilities, Zustand store) and reusable hooks; co-locate shared types in `src/lib/types.ts`.
-- `public` holds static assets, `netlify/functions` mirrors production handlers, and panel-segmentation helpers live at the repo root (`setup_panel_segmentation.*`).
+- `public` holds static assets, and `netlify/functions` mirrors production handlers.
 
 ## Build, Test, and Development Commands
 - `npm install`: Install Node dependencies; rerun after SDK upgrades.
@@ -12,7 +12,6 @@
 - `npm run build`: Create the production bundle; run before shipping or updating Netlify artifacts.
 - `npm run start`: Serve the production build to reproduce deployment issues.
 - `npm run lint`: Execute `next lint`; resolve all warnings.
-- `./setup_panel_segmentation.sh` (or `.bat`/`.ps1`): Install OpenCV deps for local segmentation checks.
 
 ## Coding Style & Naming Conventions
 - TypeScript first, two-space indentation, single quotes, and no trailing semicolons match the current code.

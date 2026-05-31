@@ -14,25 +14,46 @@ interface MangaAnalyzerProps {
 
 export default function MangaAnalyzer({ analysisResult, selectedPanelId, originalImageData, isSimpleAnalysisMode = false }: MangaAnalyzerProps) {
   const [expandedPanels, setExpandedPanels] = useState<Set<number>>(new Set([1]))
+  // Tracks panels the user has explicitly collapsed even when they are the selected panel
+  const [userCollapsedPanels, setUserCollapsedPanels] = useState<Set<number>>(new Set())
   const [showOriginalLayout, setShowOriginalLayout] = useState(true)
 
+  // Auto-expand the selected panel unless the user explicitly collapsed it
   const effectiveExpandedPanels = useMemo(() => {
-    if (selectedPanelId !== null && selectedPanelId !== undefined) {
+    if (selectedPanelId !== null && selectedPanelId !== undefined && !userCollapsedPanels.has(selectedPanelId)) {
       const merged = new Set(expandedPanels)
       merged.add(selectedPanelId)
       return merged
     }
     return expandedPanels
-  }, [expandedPanels, selectedPanelId])
+  }, [expandedPanels, selectedPanelId, userCollapsedPanels])
 
   const togglePanel = (panelNumber: number) => {
-    const newExpanded = new Set(expandedPanels)
-    if (newExpanded.has(panelNumber)) {
-      newExpanded.delete(panelNumber)
+    const isExpanded = effectiveExpandedPanels.has(panelNumber)
+    const nextExpanded = new Set(expandedPanels)
+    if (isExpanded) {
+      nextExpanded.delete(panelNumber)
+      setExpandedPanels(nextExpanded)
+      // If the user is collapsing the selected panel, record it so the useMemo won't re-add it
+      if (panelNumber === selectedPanelId) {
+        setUserCollapsedPanels(prev => {
+          const next = new Set(prev)
+          next.add(panelNumber)
+          return next
+        })
+      }
     } else {
-      newExpanded.add(panelNumber)
+      nextExpanded.add(panelNumber)
+      setExpandedPanels(nextExpanded)
+      // Clear user-collapsed when re-opening
+      if (userCollapsedPanels.has(panelNumber)) {
+        setUserCollapsedPanels(prev => {
+          const next = new Set(prev)
+          next.delete(panelNumber)
+          return next
+        })
+      }
     }
-    setExpandedPanels(newExpanded)
   }
 
   const copyToClipboard = (text: string) => {

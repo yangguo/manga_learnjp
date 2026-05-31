@@ -25,16 +25,6 @@
   to = "/.netlify/functions/providers"
   status = 200
 
-[[redirects]]
-  from = "/api/test-segmentation"
-  to = "/.netlify/functions/test-segmentation"
-  status = 200
-
-[[redirects]]
-  from = "/api/segment-panels"
-  to = "/.netlify/functions/segment-panels"
-  status = 200
-
 # Handle client-side routing
 [[redirects]]
   from = "/*"

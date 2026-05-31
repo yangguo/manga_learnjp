@@ -29,6 +29,15 @@ export const useAIProviderStore = create<AIProviderState>()(persist(
     }
   }),
   {
-    name: 'ai-provider-storage'
+    name: 'ai-provider-storage',
+    version: 1,
+    migrate: (persisted: unknown) => {
+      // Strip API key / model settings that were removed in v1
+      const s = persisted as Record<string, unknown>
+      delete s.apiKeySettings
+      delete s.modelSettings
+      delete s.openaiFormatSettings
+      return s
+    }
   }
 ))
