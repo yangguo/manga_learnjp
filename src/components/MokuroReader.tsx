@@ -21,6 +21,7 @@ import { analyzeText } from '@/lib/client-api'
 import {
   MOKURO_ANALYSIS_CACHE_FILENAME,
   createMokuroAnalysisCacheKey,
+  clampPageRange,
   createMokuroImageLookup,
   findMokuroPageImageFile,
   getMokuroBlockText,
@@ -258,11 +259,14 @@ export default function MokuroReader() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false)
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null)
+  const [batchRangeFrom, setBatchRangeFrom] = useState('1')
+  const [batchRangeTo, setBatchRangeTo] = useState('1')
   const [cacheStorageMode, setCacheStorageMode] = useState<CacheStorageMode>('browser')
   const [cacheStatus, setCacheStatus] = useState<string>(UI_TEXT.zh.noCache)
   const [error, setError] = useState<string | null>(null)
   const directoryInputRef = useRef<HTMLInputElement | null>(null)
   const directoryHandleRef = useRef<BrowserFileSystemDirectoryHandle | null>(null)
+  const cancelBatchRef = useRef(false)
   const { selectedProvider } = useAIProviderStore()
 
   const t = UI_TEXT[analysisLanguage]
@@ -383,6 +387,8 @@ export default function MokuroReader() {
     setAnalysisCache(loadedCache)
     setActiveAnalysis(null)
     setBatchProgress(null)
+    setBatchRangeFrom('1')
+    setBatchRangeTo(String(parsedMokuro.pages.length))
     setCacheStorageMode(storageMode)
     setCacheStatus(Object.keys(loadedCache).length > 0 ? UI_TEXT[analysisLanguage].loadedCache : UI_TEXT[analysisLanguage].noCache)
     setError(null)
@@ -532,6 +538,103 @@ export default function MokuroReader() {
     toast.success(UI_TEXT[analysisLanguage].batchComplete)
   }
 
+  const analyzePageRange = async () => {
+    if (!mokuroFile || isBatchAnalyzing) return
+
+    const range = clampPageRange(
+      Number(batchRangeFrom),
+      Number(batchRangeTo),
+      mokuroFile.pages.length
+    )
+    if (!range) return
+
+    const t = UI_TEXT[analysisLanguage]
+    cancelBatchRef.current = false
+    setIsBatchAnalyzing(true)
+    setBatchProgress({
+      total: 0,
+      completed: 0,
+      skipped: 0,
+      failed: 0,
+      currentPage: range.from,
+      totalPages: range.to - range.from + 1
+    })
+    setError(null)
+
+    for (let pageIdx = range.from - 1; pageIdx <= range.to - 1; pageIdx += 1) {
+      if (cancelBatchRef.current) break
+
+      const page = mokuroFile.pages[pageIdx]
+      const blocks = (page?.blocks ?? [])
+        .map((block, blockIndex) => ({ block, blockIndex, text: getMokuroBlockText(block) }))
+        .filter(block => block.text.length > 0)
+
+      setBatchProgress(prev => ({
+        ...(prev ?? { completed: 0, skipped: 0, failed: 0, total: blocks.length }),
+        total: blocks.length,
+        completed: 0,
+        skipped: 0,
+        failed: 0,
+        currentPage: pageIdx + 1
+      }))
+
+      for (const block of blocks) {
+        if (cancelBatchRef.current) break
+
+        const cacheKey = getCacheKey({
+          pageIndex: pageIdx,
+          blockIndex: block.blockIndex,
+          text: block.text
+        })
+
+        if (analysisCacheRef.current[cacheKey]) {
+          setBatchProgress(prev => ({
+            ...(prev ?? { total: blocks.length, completed: 0, skipped: 0, failed: 0 }),
+            skipped: (prev?.skipped ?? 0) + 1
+          }))
+          continue
+        }
+
+        try {
+          const result = await analyzeText(block.text, {
+            provider: selectedProvider,
+            language: analysisLanguage
+          })
+          const nextCache = {
+            ...analysisCacheRef.current,
+            [cacheKey]: result
+          }
+          analysisCacheRef.current = nextCache
+          setAnalysisCache(nextCache)
+          setBatchProgress(prev => ({
+            ...(prev ?? { total: blocks.length, completed: 0, skipped: 0, failed: 0 }),
+            completed: (prev?.completed ?? 0) + 1
+          }))
+          await persistAnalysisCache(nextCache)
+        } catch (batchError) {
+          setBatchProgress(prev => ({
+            ...(prev ?? { total: blocks.length, completed: 0, skipped: 0, failed: 0 }),
+            failed: (prev?.failed ?? 0) + 1
+          }))
+          console.error('Failed to analyze Mokuro page block:', batchError)
+        }
+      }
+    }
+
+    const cancelled = cancelBatchRef.current
+    setIsBatchAnalyzing(false)
+    setBatchProgress(null)
+    if (cancelled) {
+      toast.error(t.rangeCancelled)
+    } else {
+      toast.success(t.rangeComplete)
+    }
+  }
+
+  const cancelBatch = () => {
+    cancelBatchRef.current = true
+  }
+
   const handleBlockSelect = (blockIndex: number, text: string) => {
     if (!text) {
       toast.error(UI_TEXT[analysisLanguage].noText)
@@ -557,6 +660,8 @@ export default function MokuroReader() {
     setAnalysisCache({})
     setActiveAnalysis(null)
     setBatchProgress(null)
+    setBatchRangeFrom('1')
+    setBatchRangeTo('1')
     setCacheStatus(UI_TEXT[analysisLanguage].noCache)
     setError(null)
   }
