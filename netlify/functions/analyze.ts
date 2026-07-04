@@ -111,7 +111,6 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
 
     // Use API keys from request if provided, otherwise fall back to environment variables
     const openaiApiKey = apiKeySettings?.openai || process.env.OPENAI_API_KEY
-    const geminiApiKey = apiKeySettings?.gemini || process.env.GEMINI_API_KEY
 
     // For OpenAI-format, use settings from request or fall back to environment variables
     let finalOpenAIFormatSettings: OpenAIFormatSettings | undefined
@@ -127,12 +126,12 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
 
     const hasOpenAIFormat = !!finalOpenAIFormatSettings
 
-    if (!openaiApiKey && !geminiApiKey && !hasOpenAIFormat) {
+    if (!openaiApiKey && !hasOpenAIFormat) {
       return {
         statusCode: 500,
         headers,
-        body: JSON.stringify({ 
-          error: 'No AI service configured. Please:\n• Set OpenAI API key and select "OpenAI" provider, or\n• Set Gemini API key and select "Gemini" provider, or\n• Configure OpenAI-Compatible API with valid endpoint and model' 
+        body: JSON.stringify({
+          error: 'No AI service configured. Please:\n• Set OpenAI API key and select "OpenAI" provider, or\n• Configure OpenAI-Compatible API with valid endpoint and model'
         }),
       }
     }
@@ -140,8 +139,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
     let aiService
     try {
       aiService = new AIAnalysisService(
-        openaiApiKey, 
-        geminiApiKey, 
+        openaiApiKey,
         finalOpenAIFormatSettings,
         modelSettings
       )
@@ -246,7 +244,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
         let result: AnalysisResult | MangaAnalysisResult | ReadingModeResult
         if (imageBase64) {
           if (readingMode) {
-            result = await withTimeout(aiService.analyzeImageForReading(imageBase64, currentProvider), timeoutMs, 'analyzeImageForReading')
+            result = await withTimeout(aiService.analyzeImageForReading(imageBase64, currentProvider, analysisLanguage), timeoutMs, 'analyzeImageForReading')
           } else if (mangaMode) {
             result = await withTimeout(aiService.analyzeMangaImage(imageBase64, currentProvider), timeoutMs, 'analyzeMangaImage')
           } else if (simpleAnalysisMode) {
@@ -255,7 +253,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
             result = await withTimeout(aiService.analyzeMangaImageDirect(imageBase64, currentProvider), timeoutMs, 'analyzeMangaImageDirect')
           } else {
             // Regular individual panel analysis or simple image analysis
-            result = await withTimeout(aiService.analyzeImage(imageBase64, currentProvider), timeoutMs, 'analyzeImage')
+            result = await withTimeout(aiService.analyzeImage(imageBase64, currentProvider, analysisLanguage, excludeN5), timeoutMs, 'analyzeImage')
           }
         } else {
           result = await withTimeout(aiService.analyzeText(text!, currentProvider, analysisLanguage, excludeN5), timeoutMs, 'analyzeText')

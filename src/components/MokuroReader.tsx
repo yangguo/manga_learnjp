@@ -232,6 +232,7 @@ export default function MokuroReader() {
   const [currentPageIndex, setCurrentPageIndex] = useState(0)
   const [selectedBlock, setSelectedBlock] = useState<SelectedMokuroBlock | null>(null)
   const [analysisCache, setAnalysisCache] = useState<Record<string, AnalysisResult>>({})
+  const analysisCacheRef = useRef<Record<string, AnalysisResult>>({})
   const [activeAnalysis, setActiveAnalysis] = useState<AnalysisResult | null>(null)
   const [analysisLanguage, setAnalysisLanguage] = useState<AnalysisLanguage>('zh')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -253,6 +254,13 @@ export default function MokuroReader() {
   }, [imageFiles])
 
   const imageLookup = useMemo(() => createMokuroImageLookup(imageFiles), [imageFiles])
+
+  // Keep a ref in sync with analysisCache so async handlers can read the latest
+  // cache without capturing a stale closure, and update it immediately when they
+  // compute a new cache so concurrent analyses don't overwrite each other.
+  useEffect(() => {
+    analysisCacheRef.current = analysisCache
+  }, [analysisCache])
   const currentPage = mokuroFile?.pages[currentPageIndex] ?? null
   const currentImage = currentPage ? findMokuroPageImageFile(currentPage, imageLookup) : null
   const pageCount = mokuroFile?.pages.length ?? 0
@@ -351,6 +359,7 @@ export default function MokuroReader() {
     setImageFiles(loadedImages)
     setCurrentPageIndex(0)
     setSelectedBlock(null)
+    analysisCacheRef.current = loadedCache
     setAnalysisCache(loadedCache)
     setActiveAnalysis(null)
     setBatchProgress(null)
@@ -435,9 +444,10 @@ export default function MokuroReader() {
         language: analysisLanguage
       })
       const nextCache = {
-        ...analysisCache,
+        ...analysisCacheRef.current,
         [cacheKey]: result
       }
+      analysisCacheRef.current = nextCache
       setAnalysisCache(nextCache)
       setActiveAnalysis(result)
       await persistAnalysisCache(nextCache)
@@ -455,7 +465,6 @@ export default function MokuroReader() {
     if (!currentPage || currentBlocks.length === 0 || isBatchAnalyzing) return
 
     const blocksToAnalyze = currentBlocks.filter(block => block.text.length > 0)
-    let nextCache = { ...analysisCache }
     let completed = 0
     let skipped = 0
     let failed = 0
@@ -472,7 +481,7 @@ export default function MokuroReader() {
       }
       const cacheKey = getCacheKey(selection)
 
-      if (nextCache[cacheKey]) {
+      if (analysisCacheRef.current[cacheKey]) {
         skipped += 1
         setBatchProgress({ total: blocksToAnalyze.length, completed, skipped, failed })
         continue
@@ -483,12 +492,13 @@ export default function MokuroReader() {
           provider: selectedProvider,
           language: analysisLanguage
         })
-        nextCache = {
-          ...nextCache,
+        const nextCache = {
+          ...analysisCacheRef.current,
           [cacheKey]: result
         }
-        completed += 1
+        analysisCacheRef.current = nextCache
         setAnalysisCache(nextCache)
+        completed += 1
         await persistAnalysisCache(nextCache)
       } catch (batchError) {
         failed += 1
@@ -523,6 +533,7 @@ export default function MokuroReader() {
     setImageFiles([])
     setCurrentPageIndex(0)
     setSelectedBlock(null)
+    analysisCacheRef.current = {}
     setAnalysisCache({})
     setActiveAnalysis(null)
     setBatchProgress(null)
@@ -750,6 +761,7 @@ export default function MokuroReader() {
                           aria-label={`OCR block ${blockIndex + 1}: ${text}`}
                           title={text || 'Empty OCR block'}
                           onClick={() => handleBlockSelect(blockIndex, text)}
+                          disabled={isBatchAnalyzing}
                           style={getBlockStyle(block, currentPage)}
                           className={`absolute rounded-sm border transition-colors ${
                             selected
@@ -802,7 +814,7 @@ export default function MokuroReader() {
                       key={`block-list-${blockIndex}`}
                       type="button"
                       onClick={() => handleBlockSelect(blockIndex, text)}
-                      disabled={!text}
+                      disabled={!text || isBatchAnalyzing}
                       className={`w-full rounded-lg border p-3 text-left transition-colors ${
                         selected
                           ? 'border-amber-300/70 bg-amber-400/20'
