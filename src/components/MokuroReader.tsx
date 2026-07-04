@@ -9,10 +9,12 @@ import {
   ChevronRight,
   FolderOpen,
   Languages,
+  Layers,
   Loader2,
   RotateCw,
   Search,
   Trash2,
+  X,
   Zap
 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -755,6 +757,53 @@ export default function MokuroReader() {
               {isBatchAnalyzing ? t.analyzingPage : t.analyzePage}
             </button>
           )}
+
+          {mokuroFile && (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-400">{t.fromPageLabel}</span>
+              <input
+                type="number"
+                min={1}
+                max={mokuroFile.pages.length}
+                value={batchRangeFrom}
+                onChange={event => setBatchRangeFrom(event.target.value)}
+                disabled={isBatchAnalyzing}
+                className="h-9 w-20 rounded-lg border border-white/10 bg-gray-950 px-2 text-center text-sm text-white disabled:opacity-50"
+              />
+              <span className="text-xs text-gray-400">{t.toPageLabel}</span>
+              <input
+                type="number"
+                min={1}
+                max={mokuroFile.pages.length}
+                value={batchRangeTo}
+                onChange={event => setBatchRangeTo(event.target.value)}
+                disabled={isBatchAnalyzing}
+                className="h-9 w-20 rounded-lg border border-white/10 bg-gray-950 px-2 text-center text-sm text-white disabled:opacity-50"
+              />
+              <button
+                type="button"
+                onClick={() => void analyzePageRange()}
+                disabled={isBatchAnalyzing || Number(batchRangeFrom) > Number(batchRangeTo)}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-500/20 px-3 py-2 text-sm font-medium text-purple-100 transition-colors hover:bg-purple-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isBatchAnalyzing ? <Loader2 size={16} className="animate-spin" /> : <Layers size={16} />}
+                {isBatchAnalyzing ? t.analyzingRange : t.analyzeRange}
+              </button>
+              {isBatchAnalyzing && (
+                <button
+                  type="button"
+                  onClick={cancelBatch}
+                  className="inline-flex items-center justify-center gap-2 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-200 transition-colors hover:bg-red-500/20"
+                >
+                  <X size={16} />
+                  {t.cancelBatch}
+                </button>
+              )}
+              {Number(batchRangeFrom) > Number(batchRangeTo) && !isBatchAnalyzing && (
+                <span className="text-xs text-red-300">{t.rangeInvalid}</span>
+              )}
+            </div>
+          )}
         </div>
 
         {mokuroFile && (
@@ -790,7 +839,13 @@ export default function MokuroReader() {
         {batchProgress && (
           <div className="mt-4 rounded-lg border border-white/10 bg-gray-950/40 p-3">
             <div className="mb-2 flex items-center justify-between text-xs text-gray-400">
-              <span>{t.analyzePage}</span>
+              <span>
+                {batchProgress.currentPage
+                  ? t.pageOf
+                      .replace('{current}', String(batchProgress.currentPage))
+                      .replace('{total}', String(batchProgress.totalPages ?? 0))
+                  : t.analyzePage}
+              </span>
               <span>
                 {batchProgress.completed + batchProgress.skipped + batchProgress.failed} / {batchProgress.total}
               </span>
