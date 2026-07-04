@@ -4,11 +4,16 @@ import {
   clampPageRange,
   createMokuroAnalysisCacheKey,
   createMokuroImageLookup,
+  filterAnalysesByPageIndex,
   findMokuroPageImageFile,
+  getPageCacheFilename,
   getMokuroBlockText,
+  groupAnalysesByPageIndex,
   planMokuroDirectoryImport,
   parseMokuroAnalysisCacheContent,
+  parseMokuroPageAnalysisCacheContent,
   serializeMokuroAnalysisCache,
+  serializeMokuroPageAnalysisCache,
   parseMokuroFileContent
 } from './mokuro'
 
@@ -144,5 +149,65 @@ describe('clampPageRange', () => {
 
   it('clamps start below 1 to 1', () => {
     expect(clampPageRange(-2, 4, 10)).toEqual({ from: 1, to: 4 })
+  })
+})
+
+describe('getPageCacheFilename', () => {
+  it('zero-pads to the page count width (min 3)', () => {
+    expect(getPageCacheFilename(0, 220)).toBe('page-001.json')
+    expect(getPageCacheFilename(219, 220)).toBe('page-220.json')
+  })
+
+  it('uses at least 3 digits even for small volumes', () => {
+    expect(getPageCacheFilename(0, 5)).toBe('page-001.json')
+  })
+
+  it('widens for 1000+ pages', () => {
+    expect(getPageCacheFilename(999, 1000)).toBe('page-1000.json')
+  })
+})
+
+describe('serializeMokuroPageAnalysisCache / parseMokuroPageAnalysisCacheContent', () => {
+  const key = createMokuroAnalysisCacheKey({ provider: 'openai-format', language: 'zh', pageIndex: 2, blockIndex: 0 })
+  const analyses = {
+    [key]: {
+      extractedText: 'こんにちは',
+      sentences: [],
+      translation: 'Hello',
+      summary: 'greeting',
+      provider: 'openai-format'
+    }
+  }
+
+  it('round-trips a page cache file', () => {
+    const content = serializeMokuroPageAnalysisCache(2, analyses)
+    const parsed = parseMokuroPageAnalysisCacheContent(content)
+    expect(parsed.pageIndex).toBe(2)
+    expect(parsed.analyses[key]).toEqual(analyses[key])
+  })
+
+  it('throws on invalid JSON', () => {
+    expect(() => parseMokuroPageAnalysisCacheContent('{not json')).toThrow('valid JSON')
+  })
+})
+
+describe('groupAnalysesByPageIndex / filterAnalysesByPageIndex', () => {
+  const page0 = createMokuroAnalysisCacheKey({ provider: 'openai-format', language: 'zh', pageIndex: 0, blockIndex: 0 })
+  const page1 = createMokuroAnalysisCacheKey({ provider: 'openai-format', language: 'zh', pageIndex: 1, blockIndex: 0 })
+  const analyses = {
+    [page0]: { extractedText: 'a', sentences: [], translation: 'a', summary: 'a', provider: 'openai-format' },
+    [page1]: { extractedText: 'b', sentences: [], translation: 'b', summary: 'b', provider: 'openai-format' }
+  }
+
+  it('groups entries by page index', () => {
+    const groups = groupAnalysesByPageIndex(analyses)
+    expect(groups.size).toBe(2)
+    expect(groups.get(0)).toHaveProperty(page0)
+    expect(groups.get(1)).toHaveProperty(page1)
+  })
+
+  it('filters to a single page', () => {
+    const filtered = filterAnalysesByPageIndex(analyses, 1)
+    expect(Object.keys(filtered)).toEqual([page1])
   })
 })

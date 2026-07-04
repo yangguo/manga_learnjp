@@ -19,6 +19,7 @@ export interface MokuroAnalysisCacheKeyInput {
 }
 
 export const MOKURO_ANALYSIS_CACHE_FILENAME = 'mokuro-analysis-cache.json'
+export const MOKURO_ANALYSIS_CACHE_DIRNAME = 'mokuro-analysis-cache'
 
 type JsonRecord = Record<string, unknown>
 
@@ -267,4 +268,86 @@ export const clampPageRange = (from: number, to: number, pageCount: number): Pag
 
   if (clampedFrom > clampedTo) return null
   return { from: clampedFrom, to: clampedTo }
+}
+
+// 1-based, zero-padded to the page count's digit width (min 3).
+export const getPageCacheFilename = (pageIndex: number, pageCount: number): string => {
+  const width = Math.max(3, String(pageCount).length)
+  return `page-${String(pageIndex + 1).padStart(width, '0')}.json`
+}
+
+export const serializeMokuroPageAnalysisCache = (
+  pageIndex: number,
+  analyses: Record<string, AnalysisResult>
+): string => {
+  const file = {
+    version: 1 as const,
+    savedAt: new Date().toISOString(),
+    pageIndex,
+    analyses
+  }
+  return `${JSON.stringify(file, null, 2)}\n`
+}
+
+export interface ParsedMokuroPageAnalysisCache {
+  pageIndex: number
+  analyses: Record<string, AnalysisResult>
+}
+
+export const parseMokuroPageAnalysisCacheContent = (content: string): ParsedMokuroPageAnalysisCache => {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(content)
+  } catch {
+    throw new Error('Mokuro page analysis cache must contain valid JSON')
+  }
+
+  if (!isRecord(parsed) || parsed.version !== 1 || !isRecord(parsed.analyses)) {
+    throw new Error('Mokuro page analysis cache has an invalid format')
+  }
+
+  const analyses: Record<string, AnalysisResult> = {}
+  Object.entries(parsed.analyses).forEach(([key, value]) => {
+    if (isAnalysisResult(value)) {
+      analyses[key] = value
+    }
+  })
+
+  return {
+    pageIndex: isFiniteNumber(parsed.pageIndex) ? parsed.pageIndex : -1,
+    analyses
+  }
+}
+
+const pageIndexFromCacheKey = (key: string): number | null => {
+  const parts = key.split(':')
+  const pageIndex = Number(parts[2])
+  return Number.isFinite(pageIndex) ? pageIndex : null
+}
+
+export const groupAnalysesByPageIndex = (
+  analyses: Record<string, AnalysisResult>
+): Map<number, Record<string, AnalysisResult>> => {
+  const groups = new Map<number, Record<string, AnalysisResult>>()
+  for (const [key, value] of Object.entries(analyses)) {
+    const pageIndex = pageIndexFromCacheKey(key)
+    if (pageIndex === null) continue
+    const group = groups.get(pageIndex) ?? {}
+    group[key] = value
+    groups.set(pageIndex, group)
+  }
+  return groups
+}
+
+export const filterAnalysesByPageIndex = (
+  analyses: Record<string, AnalysisResult>,
+  pageIndex: number
+): Record<string, AnalysisResult> => {
+  const result: Record<string, AnalysisResult> = {}
+  for (const [key, value] of Object.entries(analyses)) {
+    if (pageIndexFromCacheKey(key) === pageIndex) {
+      result[key] = value
+    }
+  }
+  return result
 }
