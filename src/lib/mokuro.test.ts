@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   MOKURO_ANALYSIS_CACHE_FILENAME,
+  clampPageRange,
   createMokuroAnalysisCacheKey,
   createMokuroImageLookup,
   findMokuroPageImageFile,
@@ -125,5 +126,23 @@ describe('mokuro analysis cache', () => {
     expect(parsed.version).toBe(1)
     expect(parsed.source.title).toBe('spy6')
     expect(parsed.analyses[key]).toEqual(result)
+  })
+})
+
+describe('clampPageRange', () => {
+  it('returns null when from > to', () => {
+    expect(clampPageRange(5, 3, 10)).toBeNull()
+  })
+
+  it('clamps to the page bounds', () => {
+    expect(clampPageRange(0, 20, 10)).toEqual({ from: 1, to: 10 })
+  })
+
+  it('passes through a valid range unchanged', () => {
+    expect(clampPageRange(3, 7, 10)).toEqual({ from: 3, to: 7 })
+  })
+
+  it('clamps start below 1 to 1', () => {
+    expect(clampPageRange(-2, 4, 10)).toEqual({ from: 1, to: 4 })
   })
 })

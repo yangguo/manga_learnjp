@@ -250,3 +250,21 @@ export const serializeMokuroAnalysisCache = (
 
   return `${JSON.stringify(cacheFile, null, 2)}\n`
 }
+
+export interface PageRange {
+  from: number
+  to: number
+}
+
+// Validate and clamp a 1-based inclusive page range. Returns null when the
+// range is empty (from > to) or the document has no pages.
+export const clampPageRange = (from: number, to: number, pageCount: number): PageRange | null => {
+  if (!Number.isFinite(from) || !Number.isFinite(to) || pageCount <= 0) return null
+  if (from > to) return null
+
+  const clampedFrom = Math.min(Math.max(Math.floor(from), 1), pageCount)
+  const clampedTo = Math.min(Math.max(Math.floor(to), 1), pageCount)
+
+  if (clampedFrom > clampedTo) return null
+  return { from: clampedFrom, to: clampedTo }
+}
