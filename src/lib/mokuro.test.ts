@@ -86,7 +86,19 @@ describe('mokuro directory import planning', () => {
 
     expect(plan.mokuroFile).toBe(mokuroFile)
     expect(plan.imageFiles).toEqual([imageFile])
-    expect(plan.cacheFile).toBe(cacheFile)
+    expect(plan.legacyCacheFile).toBe(cacheFile)
+    expect(plan.cachePageFiles).toEqual([])
+  })
+
+  it('detects per-page cache files in the mokuro-analysis-cache directory', () => {
+    const mokuroFile = { name: 'spy6.mokuro', webkitRelativePath: 'spy6-output/spy6.mokuro' }
+    const pageCacheFile = { name: 'page-001.json', webkitRelativePath: 'spy6-output/mokuro-analysis-cache/page-001.json' }
+    const decoyFile = { name: 'page-002.json', webkitRelativePath: 'spy6-output/spy6/page-002.json' }
+
+    const plan = planMokuroDirectoryImport([decoyFile, pageCacheFile, mokuroFile])
+
+    expect(plan.cachePageFiles).toEqual([pageCacheFile])
+    expect(plan.legacyCacheFile).toBeNull()
   })
 
   it('rejects directory selections without a Mokuro file', () => {

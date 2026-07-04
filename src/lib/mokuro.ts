@@ -8,7 +8,8 @@ export interface MokuroImageCandidate {
 export interface MokuroDirectoryImportPlan<T extends MokuroImageCandidate> {
   mokuroFile: T
   imageFiles: T[]
-  cacheFile: T | null
+  cachePageFiles: T[]
+  legacyCacheFile: T | null
 }
 
 export interface MokuroAnalysisCacheKeyInput {
@@ -178,10 +179,16 @@ export const planMokuroDirectoryImport = <T extends MokuroImageCandidate>(
     return aPath.localeCompare(bPath)
   })
 
+  const isPageCacheFile = (file: T): boolean => {
+    const path = (file.webkitRelativePath ?? file.name).replace(/\\/g, '/')
+    return /(^|\/)mokuro-analysis-cache\/page-\d+\.json$/.test(path)
+  }
+
   return {
     mokuroFile: sortedMokuroFiles[0],
     imageFiles: files.filter(file => isImageFileName(file.name)),
-    cacheFile: files.find(file => file.name === MOKURO_ANALYSIS_CACHE_FILENAME) ?? null
+    cachePageFiles: files.filter(isPageCacheFile),
+    legacyCacheFile: files.find(file => file.name === MOKURO_ANALYSIS_CACHE_FILENAME) ?? null
   }
 }
 
