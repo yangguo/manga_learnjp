@@ -89,6 +89,8 @@ interface BatchProgress {
   completed: number
   skipped: number
   failed: number
+  currentPage?: number
+  totalPages?: number
 }
 
 type CacheStorageMode = 'directory' | 'browser'
@@ -126,7 +128,16 @@ const UI_TEXT = {
     loadedCache: '已加载历史分析缓存',
     noCache: '暂无缓存',
     unsupportedWrite: '当前浏览器不能直接写回目录，分析结果会保存到浏览器本地缓存。',
-    batchComplete: '本页批量分析完成'
+    batchComplete: '本页批量分析完成',
+    analyzeRange: '批量分析范围',
+    analyzingRange: '正在分析范围...',
+    cancelBatch: '取消',
+    fromPageLabel: '从第',
+    toPageLabel: '页到第',
+    rangeInvalid: '起始页不能大于结束页',
+    rangeComplete: '范围批量分析完成',
+    rangeCancelled: '已取消范围批量分析',
+    pageOf: '第 {current} / {total} 页'
   },
   en: {
     title: 'Mokuro Reader',
@@ -160,7 +171,16 @@ const UI_TEXT = {
     loadedCache: 'Loaded saved analysis cache',
     noCache: 'No saved cache yet',
     unsupportedWrite: 'This browser cannot write back to the selected folder, so results are saved to browser local cache.',
-    batchComplete: 'Page batch analysis complete'
+    batchComplete: 'Page batch analysis complete',
+    analyzeRange: 'Analyze range',
+    analyzingRange: 'Analyzing range...',
+    cancelBatch: 'Cancel',
+    fromPageLabel: 'From page',
+    toPageLabel: 'to page',
+    rangeInvalid: 'Start page must not exceed end page',
+    rangeComplete: 'Range batch analysis complete',
+    rangeCancelled: 'Range batch analysis cancelled',
+    pageOf: 'Page {current} / {total}'
   }
 } satisfies Record<AnalysisLanguage, Record<string, string>>
 
