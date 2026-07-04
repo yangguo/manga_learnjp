@@ -14,7 +14,7 @@ export interface WordAnalysis {
   reading: string
   meaning: string
   partOfSpeech: string
-  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  difficulty: 'beginner' | 'intermediate' | 'advanced' | 'N5' | 'N4' | 'N3' | 'N2' | 'N1'
 }
 
 export interface GrammarPattern {
@@ -1652,7 +1652,10 @@ export class OpenAIFormatService {
   private settings: OpenAIFormatSettings
 
   constructor(settings: OpenAIFormatSettings) {
-    this.settings = settings
+    this.settings = {
+      ...settings,
+      endpoint: settings.endpoint.replace(/\/+$/, '')
+    }
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {

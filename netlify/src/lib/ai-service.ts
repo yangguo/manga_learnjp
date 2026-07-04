@@ -1,7 +1,8 @@
-import { GoogleGenerativeAI } from '@google/generative-ai'
 import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel, ReadingModeResult, SentenceLocation } from './types'
+import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
-import { createImageDataURL, getImageMimeType } from './image-utils'
+import { createImageDataURL, getImageMimeType, extractBase64FromDataURL } from './image-utils'
+import { compressImageForAPI, isImageTooLarge } from './image-compression'
 
 export interface AnalysisRequest {
   text: string
@@ -13,7 +14,7 @@ export interface WordAnalysis {
   reading: string
   meaning: string
   partOfSpeech: string
-  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  difficulty: 'beginner' | 'intermediate' | 'advanced' | 'N5' | 'N4' | 'N3' | 'N2' | 'N1'
 }
 
 export interface GrammarPattern {
@@ -357,22 +358,361 @@ function cleanJsonResponse(content: string): string {
   return cleaned
 }
 
+type NormalizedBoundingBox = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+function sanitizeCoordinate(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    const compact = trimmed.replace(/[\s,]/g, '')
+    const match = compact.match(/[+-]?\\d*\\.?\\d+(?:[eE][+-]?\\d+)?/)
+    if (!match) return null
+    const parsed = Number.parseFloat(match[0])
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  
+  return null
+}
+
+function normalizeBoundingBox(rawBoundingBox: any): NormalizedBoundingBox | null {
+  if (!rawBoundingBox) {
+    return null
+  }
+
+  const clamp = (value: number) => {
+    if (!Number.isFinite(value)) return 0
+    if (value < 0) return 0
+    return value
+  }
+
+  const ensurePositive = (value: number | null) => {
+    if (value === null) return null
+    if (!Number.isFinite(value)) return null
+    return Math.abs(value)
+  }
+
+  const computeDimension = (start: number | null, end: number | null): number | null => {
+    if (start === null || end === null) return null
+    if (!Number.isFinite(start) || !Number.isFinite(end)) return null
+    if (end === start) return null
+    return Math.abs(end - start)
+  }
+
+  const flattenArray = (value: unknown): number[] => {
+    if (!Array.isArray(value)) return []
+    return value.flatMap(item => {
+      if (Array.isArray(item)) {
+        return flattenArray(item)
+      }
+      const sanitized = sanitizeCoordinate(item)
+      return sanitized === null ? [] : [sanitized]
+    })
+  }
+
+  const buildBoundingBoxFromPoints = (points: Array<{ x: number, y: number }>): NormalizedBoundingBox | null => {
+    if (points.length === 0) return null
+
+    const xs = points.map(point => point.x)
+    const ys = points.map(point => point.y)
+
+    const minX = Math.min(...xs)
+    const minY = Math.min(...ys)
+    const maxX = Math.max(...xs)
+    const maxY = Math.max(...ys)
+
+    const width = ensurePositive(maxX - minX)
+    const height = ensurePositive(maxY - minY)
+
+    if (width === null || height === null || width === 0 || height === 0) {
+      return null
+    }
+
+    return {
+      x: clamp(minX),
+      y: clamp(minY),
+      width: clamp(width),
+      height: clamp(height)
+    }
+  }
+
+  const attemptFromPoints = (maybePoints: unknown): NormalizedBoundingBox | null => {
+    if (!Array.isArray(maybePoints)) return null
+    const parsedPoints: Array<{ x: number, y: number }> = []
+    let sawStructuredPoint = false
+
+    maybePoints.forEach(point => {
+      if (!point) return
+      if (Array.isArray(point) && point.length >= 2) {
+        sawStructuredPoint = true
+        const px = sanitizeCoordinate(point[0])
+        const py = sanitizeCoordinate(point[1])
+        if (px !== null && py !== null) {
+          parsedPoints.push({ x: px, y: py })
+        }
+        return
+      }
+      if (typeof point === 'object') {
+        sawStructuredPoint = true
+        const px = sanitizeCoordinate((point as any).x ?? (point as any)[0])
+        const py = sanitizeCoordinate((point as any).y ?? (point as any)[1])
+        if (px !== null && py !== null) {
+          parsedPoints.push({ x: px, y: py })
+        }
+        return
+      }
+    })
+
+    if (parsedPoints.length > 0) {
+      return buildBoundingBoxFromPoints(parsedPoints)
+    }
+
+    if (!sawStructuredPoint) {
+      const numericValues = maybePoints
+        .map(value => sanitizeCoordinate(value))
+        .filter((value): value is number => value !== null)
+
+      if (numericValues.length >= 6 && numericValues.length % 2 === 0) {
+        for (let i = 0; i < numericValues.length; i += 2) {
+          const px = numericValues[i]
+          const py = numericValues[i + 1]
+          if (px !== undefined && py !== undefined) {
+            parsedPoints.push({ x: px, y: py })
+          }
+        }
+        if (parsedPoints.length > 0) {
+          return buildBoundingBoxFromPoints(parsedPoints)
+        }
+      }
+    }
+
+    return null
+  }
+
+  const interpretObject = (input: Record<string, unknown>): NormalizedBoundingBox | null => {
+    let x = sanitizeCoordinate(input.x ?? input.left ?? input.l ?? input.minX)
+    let y = sanitizeCoordinate(input.y ?? input.top ?? input.t ?? input.minY)
+    let width = sanitizeCoordinate(input.width ?? input.w)
+    let height = sanitizeCoordinate(input.height ?? input.h)
+
+    let pointSource = input.points ?? input.corners ?? input.vertices ?? input.boundingPoly
+    if (pointSource && !Array.isArray(pointSource) && typeof pointSource === 'object') {
+      pointSource =
+        (pointSource as any).points ??
+        (pointSource as any).vertices ??
+        (pointSource as any).coords ??
+        (pointSource as any).coordinates ??
+        Object.values(pointSource).find(Array.isArray)
+    }
+
+    const fromPoints = attemptFromPoints(pointSource)
+    if (!Number.isFinite(x ?? NaN) || !Number.isFinite(y ?? NaN)) {
+      if (fromPoints) {
+        return fromPoints
+      }
+    }
+
+    if (width === null || height === null) {
+      const right = sanitizeCoordinate(input.right ?? input.x2 ?? input.maxX ?? input.xr ?? input.longitudeMax)
+      const bottom = sanitizeCoordinate(input.bottom ?? input.y2 ?? input.maxY ?? input.yb ?? input.latitudeMax)
+
+      if (width === null) {
+        width = computeDimension(x, right)
+      }
+      if (height === null) {
+        height = computeDimension(y, bottom)
+      }
+    }
+
+    if ((width === null || height === null) && Array.isArray(input.bbox)) {
+      const bboxValues = flattenArray(input.bbox)
+      if (bboxValues.length >= 4) {
+        const maybeX = bboxValues[0]
+        const maybeY = bboxValues[1]
+        const maybeWidth = bboxValues[2]
+        const maybeHeight = bboxValues[3]
+
+        if (x === null) x = maybeX
+        if (y === null) y = maybeY
+        if (width === null) width = maybeWidth
+        if (height === null) height = maybeHeight
+      }
+    }
+
+    if ((width === null || height === null) && Array.isArray(input.size)) {
+      const [w, h] = flattenArray(input.size)
+      if (width === null && w !== undefined) width = w
+      if (height === null && h !== undefined) height = h
+    }
+
+    if ((width === null || height === null) && fromPoints) {
+      if (x === null) x = fromPoints.x
+      if (y === null) y = fromPoints.y
+      if (width === null) width = fromPoints.width
+      if (height === null) height = fromPoints.height
+    }
+
+    if (x === null || y === null || width === null || height === null) {
+      return null
+    }
+
+    width = ensurePositive(width)
+    height = ensurePositive(height)
+
+    if (width === null || height === null || width === 0 || height === 0) {
+      return null
+    }
+
+    return {
+      x: clamp(x),
+      y: clamp(y),
+      width: clamp(width),
+      height: clamp(height)
+    }
+  }
+
+  if (Array.isArray(rawBoundingBox)) {
+    const flatValues = flattenArray(rawBoundingBox)
+    const hasStructuredPointEntries = rawBoundingBox.some(item => {
+      if (!item) return false
+      if (Array.isArray(item)) return true
+      return typeof item === 'object'
+    })
+
+    const interpretAsWidthHeight = (): NormalizedBoundingBox | null => {
+      if (flatValues.length < 4) {
+        return null
+      }
+
+      const rawX = flatValues[0]
+      const rawY = flatValues[1]
+      const rawThird = flatValues[2]
+      const rawFourth = flatValues[3]
+
+      if (rawX === undefined || rawY === undefined) {
+        return null
+      }
+
+      const x = rawX
+      const y = rawY
+      
+      let width: number | null = null
+      let height: number | null = null
+
+      if (rawThird !== undefined && rawFourth !== undefined) {
+        const directWidth = ensurePositive(rawThird)
+        const directHeight = ensurePositive(rawFourth)
+        const derivedWidth = computeDimension(x ?? null, rawThird ?? null)
+        const derivedHeight = computeDimension(y ?? null, rawFourth ?? null)
+
+        if (derivedWidth !== null && derivedHeight !== null && derivedWidth > 0 && derivedHeight > 0) {
+          if (directWidth !== null && directHeight !== null && directWidth > 0 && directHeight > 0) {
+            if (directWidth <= 1.0001 && directHeight <= 1.0001) {
+              width = directWidth
+              height = directHeight
+            } else if (directWidth <= 100.0001 && directHeight <= 100.0001) {
+              width = directWidth
+              height = directHeight
+            } else {
+              width = derivedWidth
+              height = derivedHeight
+            }
+          } else {
+            width = derivedWidth
+            height = derivedHeight
+          }
+        } else if (directWidth !== null && directHeight !== null && directWidth > 0 && directHeight > 0) {
+          width = directWidth
+          height = directHeight
+        }
+      }
+
+      if (width === null || height === null || width <= 0 || height <= 0) {
+        return null
+      }
+
+      return {
+        x: clamp(x),
+        y: clamp(y),
+        width: clamp(width),
+        height: clamp(height)
+      }
+    }
+
+    const shouldTryPointsFirst = hasStructuredPointEntries || flatValues.length > 4
+
+    if (!shouldTryPointsFirst) {
+      const directBox = interpretAsWidthHeight()
+      if (directBox) {
+        return directBox
+      }
+    }
+
+    const fromPoints = attemptFromPoints(rawBoundingBox)
+    if (fromPoints) {
+      return fromPoints
+    }
+
+    const fallbackBox = interpretAsWidthHeight()
+    if (fallbackBox) {
+      return fallbackBox
+    }
+
+    return null
+  }
+
+  if (typeof rawBoundingBox === 'object') {
+    return interpretObject(rawBoundingBox as Record<string, unknown>)
+  }
+
+  return null
+}
+
 // Helper function to validate and parse JSON with better error handling
 function parseJsonSafely(content: string, source: string = 'unknown', skipValidation: boolean = false): any {
-  try {
-    const result = JSON.parse(content)
+  const attemptParse = (input: string, validationSource: string) => {
+    const parsed = JSON.parse(input)
     if (!skipValidation) {
-      validateAnalysisResult(result, source)
+      validateAnalysisResult(parsed, validationSource)
     }
-    return result
-  } catch (error) {
-    console.error(`JSON parsing error in ${source}:`, error)
-    console.error('Content length:', content.length)
-    console.error('Content preview (first 500 chars):', content.substring(0, 500))
-    console.error('Content preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)))
+    return parsed
+  }
+  
+  try {
+    return attemptParse(content, source)
+  } catch (initialError) {
+    const errorMessage = initialError instanceof Error ? initialError.message : 'Unknown error'
+    console.warn(`Malformed JSON received from ${source}: ${errorMessage}. Applying repair heuristics.`)
     
-    // Try to reconstruct truncated JSON
+    // Try to reconstruct truncated or slightly malformed JSON
     let fixedContent = content.trim()
+    
+    // Fix common LLM mistake: unescaped quotes in example fields with arrows
+    // Pattern: "example": "Japanese text" → "English text"
+    // Should be: "example": "Japanese text → \"English text\""
+    fixedContent = fixedContent.replace(
+      /"(example|pattern)":\s*"([^"]*?)"\s*→\s*"([^"]*?)"/g,
+      '"$1": "$2 → \\"$3\\""'
+    )
+
+    // Fix parenthetical translations that appear outside the string
+    // Pattern: "example": "私は……" (I was……) -> "example": "私は…… (I was……)"
+    fixedContent = fixedContent.replace(
+      /"((?:example|translation|context|explanation|pattern))":\s*"([^"]*?)"\s*\(([^)]*?)\)/g,
+      (_, key, value, paren) => {
+        const merged = `${value.trim()} (${paren.trim()})`
+        const escaped = merged.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+        return `"${key}": "${escaped}"`
+      }
+    )
     
     // Remove trailing commas before closing brackets/braces
     fixedContent = fixedContent.replace(/,(\s*[}\]])/g, '$1')
@@ -380,19 +720,17 @@ function parseJsonSafely(content: string, source: string = 'unknown', skipValida
     // Fix incomplete array elements by removing trailing content after last complete object
     const lastValidObjectEnd = findLastCompleteJsonStructure(fixedContent)
     if (lastValidObjectEnd) {
-      console.log('Found truncated JSON, attempting to reconstruct...')
+      console.warn(`Detected truncated JSON in ${source}, attempting reconstruction.`)
       fixedContent = lastValidObjectEnd
     } else {
       // Try other common fixes for incomplete structures
       
       // Fix incomplete arrays by closing them at the last valid position
       if (fixedContent.includes('[') && !fixedContent.trim().endsWith(']')) {
-        // Find the position of incomplete array element
         const lastCompleteArrayElement = findLastCompleteArrayElement(fixedContent)
         if (lastCompleteArrayElement) {
           fixedContent = lastCompleteArrayElement + ']'
         } else {
-          // Simple case: just add closing bracket
           fixedContent += ']'
         }
       }
@@ -415,23 +753,23 @@ function parseJsonSafely(content: string, source: string = 'unknown', skipValida
     }
     
     try {
-      console.log('Attempting to parse with fixes...')
-      const result = JSON.parse(fixedContent)
-      if (!skipValidation) {
-        validateAnalysisResult(result, `${source} (fixed)`)
-      }
-      return result
+      const repairedResult = attemptParse(fixedContent, `${source} (fixed)`)
+      console.warn(`Successfully repaired malformed JSON response from ${source}.`)
+      return repairedResult
     } catch (secondError) {
-      console.error('Even with fixes, parsing failed:', secondError)
+      console.error(`JSON parsing error in ${source}:`, secondError)
+      console.error('Content length:', content.length)
+      console.error('Content preview (first 500 chars):', content.substring(0, 500))
+      console.error('Content preview (last 500 chars):', content.substring(Math.max(0, content.length - 500)))
       
       // Last resort: try to extract partial data
       const partialResult = extractPartialJsonData(content)
       if (partialResult) {
-        console.log('Using partial JSON extraction as fallback')
+        console.warn(`Using partial JSON extraction as fallback for ${source}.`)
         return partialResult
       }
       
-      throw new Error(`Failed to parse JSON from ${source}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      throw new Error(`Failed to parse JSON from ${source}: ${errorMessage}`)
     }
   }
 }
@@ -623,24 +961,57 @@ function extractPartialTextData(content: string): any | null {
     
     if (sentencesMatch) {
       const sentencesContent = sentencesMatch[1]
-      // Find complete sentence objects
-      const sentencePattern = /{[^{}]*"sentence"[^{}]*"translation"[^{}]*}/g
-      let match
-      while ((match = sentencePattern.exec(sentencesContent)) !== null) {
-        try {
-          const sentenceObj = JSON.parse(match[0])
-          if (sentenceObj.sentence && sentenceObj.translation) {
-            // Fill in missing fields with defaults
-            sentences.push({
-              sentence: sentenceObj.sentence,
-              translation: sentenceObj.translation,
-              words: sentenceObj.words || [],
-              grammar: sentenceObj.grammar || [],
-              context: sentenceObj.context || 'Analysis incomplete due to truncated response'
-            })
+      let braceCount = 0
+      let inString = false
+      let escapeNext = false
+      let sentenceStart = -1
+      
+      for (let i = 0; i < sentencesContent.length; i++) {
+        const char = sentencesContent[i]
+        
+        if (escapeNext) {
+          escapeNext = false
+          continue
+        }
+        
+        if (char === '\\') {
+          escapeNext = true
+          continue
+        }
+        
+        if (char === '"' && !escapeNext) {
+          inString = !inString
+          continue
+        }
+        
+        if (!inString) {
+          if (char === '{') {
+            if (braceCount === 0) {
+              sentenceStart = i
+            }
+            braceCount++
+          } else if (char === '}') {
+            braceCount--
+            if (braceCount === 0 && sentenceStart !== -1) {
+              const sentenceJson = sentencesContent.substring(sentenceStart, i + 1)
+              try {
+                const sentenceObj = JSON.parse(sentenceJson)
+                if (sentenceObj.sentence && sentenceObj.translation) {
+                  sentences.push({
+                    sentence: sentenceObj.sentence,
+                    translation: sentenceObj.translation,
+                    words: Array.isArray(sentenceObj.words) ? sentenceObj.words : [],
+                    grammar: Array.isArray(sentenceObj.grammar) ? sentenceObj.grammar : [],
+                    context: sentenceObj.context || 'Analysis incomplete due to truncated response',
+                    boundingBox: sentenceObj.boundingBox
+                  })
+                }
+              } catch {
+                // Ignore malformed sentence fragments
+              }
+              sentenceStart = -1
+            }
           }
-        } catch (e) {
-          // Skip malformed sentence objects
         }
       }
     }
@@ -1083,39 +1454,21 @@ export class OpenAIService {
   }
 
   async analyzeImageForReading(imageBase64: string): Promise<any> {
-    const READING_MODE_PROMPT = `
-You are a Japanese language learning assistant specialized in reading mode analysis. Analyze this manga image and identify ALL Japanese sentences with their exact locations.
+    console.log('📖 OpenAI: Starting two-step reading mode analysis')
+    
+    // Step 1: Vision model to detect text and bounding boxes
+    const TEXT_DETECTION_PROMPT = `
+Analyze this manga image and identify ALL Japanese text with their precise locations.
 
-For each sentence found, provide:
-1. The exact Japanese text
-2. English translation
-3. Vocabulary analysis
-4. Grammar patterns
-5. Precise bounding box coordinates (x, y, width, height) as percentages of image dimensions
+For each text segment found, provide:
+1. The exact Japanese text (character by character)
+2. Precise bounding box coordinates (x, y, width, height) as percentages (0-100) of image dimensions
 
-Please provide a JSON response with this structure:
+Provide a JSON response:
 {
-  "sentences": [
+  "textSegments": [
     {
-      "sentence": "Japanese sentence text",
-      "translation": "English translation",
-      "words": [
-        {
-          "word": "Japanese word",
-          "reading": "hiragana/katakana reading",
-          "meaning": "English meaning",
-          "partOfSpeech": "noun/verb/adjective/etc",
-          "difficulty": "beginner/intermediate/advanced"
-        }
-      ],
-      "grammar": [
-        {
-          "pattern": "Grammar pattern",
-          "explanation": "Explanation of the pattern",
-          "example": "Example usage"
-        }
-      ],
-      "context": "Context or usage notes",
+      "text": "Japanese text",
       "boundingBox": {
         "x": 10.5,
         "y": 20.3,
@@ -1123,18 +1476,18 @@ Please provide a JSON response with this structure:
         "height": 8.2
       }
     }
-  ],
-  "overallSummary": "Brief summary of the content"
+  ]
 }
 
 IMPORTANT:
-- Coordinates should be percentages (0-100) relative to image dimensions
-- Include ALL text: speech bubbles, sound effects, signs, etc.
-- Each sentence should have accurate bounding box coordinates
-- Separate different text areas as individual sentences
+- Include ALL text: speech bubbles, sound effects, signs, narration
+- Coordinates are percentages (0-100) relative to image dimensions
+- Each distinct text area should be a separate segment
+- Be precise with bounding boxes to cover the entire text area
 `
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    console.log('🔍 Step 1: Detecting text and locations...')
+    const detectionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -1145,14 +1498,14 @@ IMPORTANT:
         messages: [
           {
             role: 'system',
-            content: 'You are a helpful Japanese language learning assistant specialized in reading mode analysis. You can identify Japanese text locations in manga images and provide detailed linguistic analysis. Always respond with valid JSON.'
+            content: 'You are a vision model specialized in detecting Japanese text and precise locations in manga images. Always respond with valid JSON.'
           },
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: READING_MODE_PROMPT
+                text: TEXT_DETECTION_PROMPT
               },
               {
                 type: 'image_url',
@@ -1163,350 +1516,146 @@ IMPORTANT:
             ]
           }
         ],
-        temperature: 0.3,
-        max_tokens: 4000,
+        temperature: 0.1,
+        max_tokens: 2000,
       }),
     })
 
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`)
+    if (!detectionResponse.ok) {
+      throw new Error(`OpenAI API error (detection): ${detectionResponse.status}`)
     }
 
-    const data = await response.json()
-    const content = data.choices[0]?.message?.content
+    const detectionData = await detectionResponse.json()
+    const detectionContent = detectionData.choices[0]?.message?.content
 
-    if (!content) {
-      throw new Error('No content received from OpenAI')
+    if (!detectionContent) {
+      throw new Error('No content received from OpenAI detection')
     }
 
-    try {
-      const cleanedContent = cleanJsonResponse(content)
-      console.log('OpenAI analyzeImageForReading cleaned content preview:', cleanedContent.substring(0, 200) + '...')
-      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI analyzeImageForReading', true) // Skip validation for reading mode
-      
-      return {
-        ...analysisResult,
-        provider: 'openai' as AIProvider
-      }
-    } catch (error) {
-      console.error('OpenAI analyzeImageForReading JSON parsing error:', error)
-      console.error('Raw content:', content.substring(0, 500) + '...')
-      throw new Error(`Failed to parse OpenAI response: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-}
-
-export class GeminiService {
-  private genAI: GoogleGenerativeAI
-  private model: any
-
-  constructor(apiKey: string, modelName?: string) {
-    this.genAI = new GoogleGenerativeAI(apiKey)
-    const finalModelName = modelName || process.env.GEMINI_MODEL || 'gemini-pro-vision'
-    console.log(`🔧 Gemini service initializing with model: ${finalModelName}`)
-    this.model = this.genAI.getGenerativeModel({ model: finalModelName })
-  }
-
-  async analyzeText(text: string): Promise<AnalysisResult> {
-    // Split text into sentences for batching
-    const sentences = splitTextIntoSentences(text)
-    console.log(`Gemini analyzeText: Split text into ${sentences.length} sentences`)
+    const cleanedDetection = cleanJsonResponse(detectionContent)
+    const detectionResult = parseJsonSafely(cleanedDetection, 'OpenAI text detection', true)
     
-    // If we have few sentences, analyze all at once
-    if (sentences.length <= 3) {
-      return this.analyzeSingleBatch(text)
-    }
-    
-    // Create batches for longer texts
-    const batches = createTextBatches(sentences, 3) // 3 sentences per batch
-    console.log(`Gemini analyzeText: Created ${batches.length} batches`)
-    
-    const batchResults: any[] = []
-    
-    // Process each batch
-    for (let i = 0; i < batches.length; i++) {
-      const batch = batches[i]
-      const batchText = batch.join('')
-      console.log(`Gemini analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
-      
-      try {
-        const batchResult = await this.analyzeSingleBatch(batchText)
-        batchResults.push(batchResult)
-      } catch (error) {
-        console.error(`Gemini analyzeText: Error processing batch ${i + 1}:`, error)
-        // Continue with other batches rather than failing completely
-      }
-    }
-    
-    if (batchResults.length === 0) {
-      throw new Error('All batches failed to process')
-    }
-    
-    // Combine results from all batches
-    const combinedResult = combineBatchResults(batchResults)
-    console.log(`Gemini analyzeText: Combined ${batchResults.length} batch results into final result`)
-    
-    return {
-      ...combinedResult,
-      provider: 'gemini' as AIProvider
-    }
-  }
+    console.log(`✅ Step 1 complete: Found ${detectionResult.textSegments?.length || 0} text segments`)
 
-  private async analyzeSingleBatch(text: string): Promise<AnalysisResult> {
-    const prompt = ANALYSIS_PROMPT(text)
-    
-    const result = await this.model.generateContent([
-      {
-        text: prompt
-      }
-    ])
+    // Step 2: Analyze each text segment linguistically
+    console.log('📚 Step 2: Analyzing text linguistically...')
+    const sentences = await Promise.all(
+      (detectionResult.textSegments || []).map(async (segment: any, index: number) => {
+        const LINGUISTIC_ANALYSIS_PROMPT = `
+Analyze this Japanese sentence for language learning:
 
-    const response = await result.response
-    const content = response.text()
+Text: "${segment.text}"
 
-    if (!content) {
-      throw new Error('No content received from Gemini')
-    }
-
-    try {
-      const cleanedContent = cleanJsonResponse(content)
-      console.log('Gemini analyzeSingleBatch cleaned content preview:', cleanedContent.substring(0, 200) + '...')
-      const analysisResult = parseJsonSafely(cleanedContent, 'Gemini analyzeSingleBatch')
-      
-      // Validate the structure of the analysis result
-      const isValid = validateAnalysisResult(analysisResult, 'Gemini analyzeSingleBatch')
-      if (!isValid) {
-        throw new Error('Invalid analysis result structure')
-      }
-      
-      return {
-        ...analysisResult,
-        provider: 'gemini' as AIProvider
-      }
-    } catch (error) {
-      console.error('Gemini analyzeSingleBatch JSON parsing error:', error)
-      console.error('Raw content:', content.substring(0, 500) + '...')
-      throw new Error(`Failed to parse Gemini response: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
-  async analyzeImage(imageBase64: string): Promise<AnalysisResult> {
-    const prompt = ANALYSIS_PROMPT()
-    
-    // Convert base64 to format Gemini expects
-    const imagePart = {
-      inlineData: {
-        data: imageBase64,
-        mimeType: getImageMimeType(imageBase64)
-      }
-    }
-
-    const result = await this.model.generateContent([
-      prompt,
-      imagePart
-    ])
-
-    const response = await result.response
-    const content = response.text()
-
-    if (!content) {
-      throw new Error('No content received from Gemini')
-    }
-
-    try {
-      const cleanedContent = cleanJsonResponse(content)
-      console.log('Gemini analyzeImage cleaned content preview:', cleanedContent.substring(0, 200) + '...')
-      const analysisResult = parseJsonSafely(cleanedContent, 'Gemini analyzeImage')
-      
-      // Validate the structure of the analysis result
-      const isValid = validateAnalysisResult(analysisResult, 'Gemini analyzeImage')
-      if (!isValid) {
-        throw new Error('Invalid analysis result structure')
-      }
-      
-      return {
-        ...analysisResult,
-        provider: 'gemini' as AIProvider
-      }
-    } catch (error) {
-      console.error('Gemini analyzeImage JSON parsing error:', error)
-      console.error('Raw content:', content.substring(0, 500) + '...')
-      throw new Error(`Failed to parse Gemini response: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
-
-  async analyzeMangaImage(imageBase64: string): Promise<MangaAnalysisResult> {
-    const prompt = MANGA_PANEL_ANALYSIS_PROMPT()
-    
-    // Convert base64 to format Gemini expects
-    const imagePart = {
-      inlineData: {
-        data: imageBase64,
-        mimeType: getImageMimeType(imageBase64)
-      }
-    }
-
-    const result = await this.model.generateContent([
-      prompt,
-      imagePart
-    ])
-
-    const response = await result.response
-    const content = response.text()
-
-    if (!content) {
-      throw new Error('No content received from Gemini')
-    }
-
-    const analysisResult = parseJsonSafely(cleanJsonResponse(content), 'Gemini analyzeMangaImage', true)
-    
-    // Skip validation for simple analysis mode to be more lenient
-    // const isValid = validateMangaAnalysisResult(analysisResult, 'Gemini analyzeMangaImage')
-    // if (!isValid) {
-    //   throw new Error('Invalid manga analysis result structure')
-    // }
-    
-    // Ensure we have a proper readingOrder
-    const readingOrder = analysisResult.readingOrder || (analysisResult.panels ? analysisResult.panels.map((_: any, index: number) => index + 1) : [])
-    
-    return {
-      ...analysisResult,
-      readingOrder,
-      provider: 'gemini' as AIProvider
-    }
-  }
-
-  async analyzeImageForReading(imageBase64: string): Promise<any> {
-    const READING_MODE_PROMPT = `
-You are a Japanese language learning assistant specialized in reading mode analysis. Analyze this manga image and identify ALL Japanese sentences with their exact locations.
-
-For each sentence found, provide:
-1. The exact Japanese text
-2. English translation
-3. Vocabulary analysis
-4. Grammar patterns
-5. Precise bounding box coordinates (x, y, width, height) as percentages of image dimensions
-
-Please provide a JSON response with this structure:
+Provide a JSON response:
 {
-  "sentences": [
+  "translation": "English translation",
+  "words": [
     {
-      "sentence": "Japanese sentence text",
-      "translation": "English translation",
-      "words": [
-        {
-          "word": "Japanese word",
-          "reading": "hiragana/katakana reading",
-          "meaning": "English meaning",
-          "partOfSpeech": "noun/verb/adjective/etc",
-          "difficulty": "beginner/intermediate/advanced"
-        }
-      ],
-      "grammar": [
-        {
-          "pattern": "Grammar pattern",
-          "explanation": "Explanation of the pattern",
-          "example": "Example usage"
-        }
-      ],
-      "context": "Context or usage notes",
-      "boundingBox": {
-        "x": 10.5,
-        "y": 20.3,
-        "width": 25.7,
-        "height": 8.2
-      }
+      "word": "Japanese word",
+      "reading": "hiragana/katakana",
+      "meaning": "English meaning",
+      "partOfSpeech": "noun/verb/adjective/etc",
+      "difficulty": "beginner/intermediate/advanced"
     }
   ],
-  "overallSummary": "Brief summary of the content"
+  "grammar": [
+    {
+      "pattern": "Grammar pattern",
+      "explanation": "Brief explanation",
+      "example": "Example usage"
+    }
+  ],
+  "context": "Brief context or usage notes"
 }
 
 IMPORTANT:
-- Coordinates should be percentages (0-100) relative to image dimensions
-- Include ALL text: speech bubbles, sound effects, signs, etc.
-- Each sentence should have accurate bounding box coordinates
-- Separate different text areas as individual sentences
+- Include only the 3-5 most important words
+- Limit to 1-2 key grammar patterns
+- Keep explanations concise
 `
-    
-    // Convert base64 to format Gemini expects
-    const imagePart = {
-      inlineData: {
-        data: imageBase64,
-        mimeType: getImageMimeType(imageBase64)
-      }
-    }
 
-    const result = await this.model.generateContent([
-      READING_MODE_PROMPT,
-      imagePart
-    ])
+        try {
+          const analysisResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.apiKey}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: this.model,
+              messages: [
+                {
+                  role: 'system',
+                  content: 'You are a Japanese language learning assistant. Provide concise, accurate linguistic analysis in JSON format.'
+                },
+                {
+                  role: 'user',
+                  content: LINGUISTIC_ANALYSIS_PROMPT
+                }
+              ],
+              temperature: 0.3,
+              max_tokens: 800,
+            }),
+          })
 
-    const response = await result.response
-    const content = response.text()
+          if (!analysisResponse.ok) {
+            console.warn(`Analysis failed for segment ${index + 1}, using fallback`)
+            return {
+              sentence: segment.text,
+              translation: 'Translation unavailable',
+              words: [],
+              grammar: [],
+              context: 'Analysis failed',
+              boundingBox: segment.boundingBox
+            }
+          }
 
-    if (!content) {
-      throw new Error('No content received from Gemini')
-    }
+          const analysisData = await analysisResponse.json()
+          const analysisContent = analysisData.choices[0]?.message?.content
+          const cleanedAnalysis = cleanJsonResponse(analysisContent)
+          const linguisticResult = parseJsonSafely(cleanedAnalysis, `OpenAI linguistic analysis ${index + 1}`, true)
 
-    try {
-      const cleanedContent = cleanJsonResponse(content)
-      console.log('Gemini analyzeImageForReading cleaned content preview:', cleanedContent.substring(0, 200) + '...')
-      const analysisResult = parseJsonSafely(cleanedContent, 'Gemini analyzeImageForReading', true) // Skip validation for reading mode
-      
-      return {
-        ...analysisResult,
-        provider: 'gemini' as AIProvider
-      }
-    } catch (error) {
-      console.error('Gemini analyzeImageForReading JSON parsing error:', error)
-      console.error('Raw content:', content.substring(0, 500) + '...')
-      throw new Error(`Failed to parse Gemini response: ${error instanceof Error ? error.message : 'Unknown error'}`)
+          return {
+            sentence: segment.text,
+            translation: linguisticResult.translation || '',
+            words: linguisticResult.words || [],
+            grammar: linguisticResult.grammar || [],
+            context: linguisticResult.context || '',
+            boundingBox: segment.boundingBox
+          }
+        } catch (error) {
+          console.warn(`Error analyzing segment ${index + 1}:`, error)
+          return {
+            sentence: segment.text,
+            translation: 'Translation unavailable',
+            words: [],
+            grammar: [],
+            context: 'Analysis error',
+            boundingBox: segment.boundingBox
+          }
+        }
+      })
+    )
+
+    console.log(`✅ Step 2 complete: Analyzed ${sentences.length} sentences`)
+
+    return {
+      sentences,
+      overallSummary: `Found and analyzed ${sentences.length} text segments in the manga image.`,
+      provider: 'openai' as AIProvider
     }
   }
 }
 
+
 export class OpenAIFormatService {
   private settings: OpenAIFormatSettings
-  private readonly maxRetries: number = 2
 
   constructor(settings: OpenAIFormatSettings) {
-    this.settings = settings
-  }
-
-  // Helper method to execute fetch with retry logic
-  private async executeWithRetry<T>(
-    operation: () => Promise<T>,
-    operationName: string
-  ): Promise<T> {
-    let lastError: Error
-    for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
-      try {
-        const startTime = Date.now()
-        const result = await operation()
-        const duration = Date.now() - startTime
-        console.log(`OpenAI-format ${operationName}: Success after ${duration}ms`)
-        return result
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Unknown error')
-        
-        // Don't retry on certain types of errors
-        if (error instanceof Error && (
-          error.message.includes('rate_limited') ||
-          error.message.includes('timeout') ||
-          error.message.includes('API error: 4') ||
-          error.message.includes('API error: 5')
-        )) {
-          throw error
-        }
-
-        if (attempt < this.maxRetries) {
-          const delay = Math.pow(2, attempt) * 500 // Faster backoff: 1s, 2s
-          console.log(`OpenAI-format ${operationName}: Attempt ${attempt} failed (${lastError.message}), retrying in ${delay}ms...`)
-          await new Promise(resolve => setTimeout(resolve, delay))
-        }
-      }
+    this.settings = {
+      ...settings,
+      endpoint: settings.endpoint.replace(/\/+$/, '')
     }
-    throw lastError!
   }
 
   async analyzeText(text: string): Promise<AnalysisResult> {
@@ -1563,8 +1712,6 @@ export class OpenAIFormatService {
       headers['Authorization'] = `Bearer ${this.settings.apiKey}`
     }
 
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 80000) // Reduced timeout to 80 seconds for Netlify CLI compatibility
     const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
@@ -1581,18 +1728,12 @@ export class OpenAIFormatService {
           }
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
-      signal: controller.signal,
     })
-    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
-      if (response.status === 429) {
-        console.warn('OpenAI-format rate limited on analyzeSingleBatch:', errorText)
-        throw new Error('OpenAI-format rate_limited')
-      }
       console.error(`OpenAI-format API error: ${response.status}`, { 
         endpoint: `${this.settings.endpoint}/chat/completions`,
         model: this.settings.model,
@@ -1640,8 +1781,6 @@ export class OpenAIFormatService {
       headers['Authorization'] = `Bearer ${this.settings.apiKey}`
     }
 
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 80000) // Reduced timeout to 80 seconds for Netlify CLI compatibility
     const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
@@ -1669,18 +1808,12 @@ export class OpenAIFormatService {
           }
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
-      signal: controller.signal,
     })
-    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
-      if (response.status === 429) {
-        console.warn('OpenAI-format rate limited on analyzeImage:', errorText)
-        throw new Error('OpenAI-format rate_limited')
-      }
       console.error(`OpenAI-format API error: ${response.status}`, { 
         endpoint: `${this.settings.endpoint}/chat/completions`,
         model: this.settings.model,
@@ -1728,8 +1861,6 @@ export class OpenAIFormatService {
       headers['Authorization'] = `Bearer ${this.settings.apiKey}`
     }
 
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), 80000) // Reduced timeout to 80 seconds for Netlify CLI compatibility
     const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
@@ -1757,18 +1888,12 @@ export class OpenAIFormatService {
           }
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
-      signal: controller.signal,
     })
-    clearTimeout(timeoutId)
 
     if (!response.ok) {
       const errorText = await response.text()
-      if (response.status === 429) {
-        console.warn('OpenAI-format rate limited on analyzeMangaImage:', errorText)
-        throw new Error('OpenAI-format rate_limited')
-      }
       console.error(`OpenAI-format API error: ${response.status}`, { 
         endpoint: `${this.settings.endpoint}/chat/completions`,
         model: this.settings.model,
@@ -1812,40 +1937,44 @@ export class OpenAIFormatService {
   }
 
   async analyzeImageForReading(imageBase64: string): Promise<any> {
-    return this.executeWithRetry(async () => {
-      const READING_MODE_PROMPT = `
-You are a Japanese language learning assistant specialized in reading mode analysis. Analyze this manga image and identify ALL Japanese sentences with their exact locations.
+    console.log('📖 OpenAI-format: Starting two-step reading mode analysis')
+    console.log('🔧 Endpoint:', `${this.settings.endpoint}/chat/completions`)
+    console.log('🤖 Model:', this.settings.model)
+    console.log('🔑 Has API Key:', !!this.settings.apiKey)
+    
+    // Check if image is too large and compress if needed
+    const imageSizeKB = Math.round(imageBase64.length * 3 / 4 / 1024)
+    console.log(`📏 Image size: ${imageSizeKB} KB`)
+    
+    let processedImageBase64 = imageBase64
+    if (imageSizeKB > 500) {
+      console.log('⚠️ Image is large, attempting compression for faster processing...')
+      try {
+        processedImageBase64 = await compressImageForAPI(imageBase64, 500)
+        const compressedSizeKB = Math.round(processedImageBase64.length * 3 / 4 / 1024)
+        console.log(`✅ Image compressed to ${compressedSizeKB} KB`)
+      } catch (compressionError) {
+        console.warn('⚠️ Image compression failed, using original image:', compressionError)
+      }
+    }
+    
+    return this.performTwoStepReadingAnalysis(processedImageBase64)
+  }
+  
+  private async performTwoStepReadingAnalysis(imageBase64: string): Promise<any> {
+    // Step 1: Vision model to detect text and bounding boxes
+    const TEXT_DETECTION_PROMPT = `
+Analyze this manga image and identify ALL Japanese text with their precise locations.
 
-For each sentence found, provide:
-1. The exact Japanese text
-2. English translation
-3. Vocabulary analysis
-4. Grammar patterns
-5. Precise bounding box coordinates (x, y, width, height) as percentages of image dimensions
+For each text segment found, provide:
+1. The exact Japanese text (character by character)
+2. Precise bounding box coordinates (x, y, width, height) as percentages (0-100) of image dimensions
 
-Please provide a JSON response with this structure:
+Provide a JSON response:
 {
-  "sentences": [
+  "textSegments": [
     {
-      "sentence": "Japanese sentence text",
-      "translation": "English translation",
-      "words": [
-        {
-          "word": "Japanese word",
-          "reading": "hiragana/katakana reading",
-          "meaning": "English meaning",
-          "partOfSpeech": "noun/verb/adjective/etc",
-          "difficulty": "beginner/intermediate/advanced"
-        }
-      ],
-      "grammar": [
-        {
-          "pattern": "Grammar pattern",
-          "explanation": "Explanation of the pattern",
-          "example": "Example usage"
-        }
-      ],
-      "context": "Context or usage notes",
+      "text": "Japanese text",
       "boundingBox": {
         "x": 10.5,
         "y": 20.3,
@@ -1853,137 +1982,195 @@ Please provide a JSON response with this structure:
         "height": 8.2
       }
     }
-  ],
-  "overallSummary": "Brief summary of the content"
+  ]
 }
 
 IMPORTANT:
-- Coordinates should be percentages (0-100) relative to image dimensions
-- Include ALL text: speech bubbles, sound effects, signs, etc.
-- Each sentence should have accurate bounding box coordinates
-- Separate different text areas as individual sentences
+- Include ALL text: speech bubbles, sound effects, signs, narration
+- Coordinates are percentages (0-100) relative to image dimensions
+- Each distinct text area should be a separate segment
+- Be precise with bounding boxes to cover the entire text area
 `
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      }
-      
-      if (this.settings.apiKey) {
-        headers['Authorization'] = `Bearer ${this.settings.apiKey}`
-      }
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    
+    if (this.settings.apiKey) {
+      headers['Authorization'] = `Bearer ${this.settings.apiKey}`
+    }
 
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 80000) // Reduced timeout to 80 seconds for Netlify CLI compatibility
-    let response
-    try {
-      response = await fetch(`${this.settings.endpoint}/chat/completions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({
-          model: this.settings.model,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are a helpful Japanese language learning assistant specialized in reading mode analysis. You can identify Japanese text locations in manga images and provide detailed linguistic analysis. Always respond with valid JSON.'
-            },
-            {
-              role: 'user',
-              content: [
+    console.log('🔍 Step 1: Detecting text and locations...')
+    const detectionResponse = await fetch(`${this.settings.endpoint}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: this.settings.model,
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a vision model specialized in detecting Japanese text and precise locations in manga images. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: TEXT_DETECTION_PROMPT
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: createImageDataURL(imageBase64)
+                }
+              }
+            ]
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 2000,
+      }),
+    })
+
+    if (!detectionResponse.ok) {
+      const errorText = await detectionResponse.text()
+      throw new Error(`OpenAI-format API error (detection): ${detectionResponse.status} - ${errorText}`)
+    }
+
+    const detectionData = await detectionResponse.json()
+    const detectionContent = detectionData.choices[0]?.message?.content
+
+    if (!detectionContent) {
+      throw new Error('No content received from detection')
+    }
+
+    const cleanedDetection = cleanJsonResponse(detectionContent)
+    const detectionResult = parseJsonSafely(cleanedDetection, 'OpenAI-format text detection', true)
+    
+    console.log(`✅ Step 1 complete: Found ${detectionResult.textSegments?.length || 0} text segments`)
+
+    // Step 2: Analyze each text segment linguistically
+    console.log('📚 Step 2: Analyzing text linguistically...')
+    const sentences = await Promise.all(
+      (detectionResult.textSegments || []).map(async (segment: any, index: number) => {
+        const LINGUISTIC_ANALYSIS_PROMPT = `
+Analyze this Japanese sentence for language learning:
+
+Text: "${segment.text}"
+
+Provide a JSON response:
+{
+  "translation": "English translation",
+  "words": [
+    {
+      "word": "Japanese word",
+      "reading": "hiragana/katakana",
+      "meaning": "English meaning",
+      "partOfSpeech": "noun/verb/adjective/etc",
+      "difficulty": "beginner/intermediate/advanced"
+    }
+  ],
+  "grammar": [
+    {
+      "pattern": "Grammar pattern",
+      "explanation": "Brief explanation",
+      "example": "Example usage"
+    }
+  ],
+  "context": "Brief context or usage notes"
+}
+
+IMPORTANT:
+- Include only the 3-5 most important words
+- Limit to 1-2 key grammar patterns
+- Keep explanations concise
+`
+
+        try {
+          const analysisResponse = await fetch(`${this.settings.endpoint}/chat/completions`, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              model: this.settings.model,
+              messages: [
                 {
-                  type: 'text',
-                  text: READING_MODE_PROMPT
+                  role: 'system',
+                  content: 'You are a Japanese language learning assistant. Provide concise, accurate linguistic analysis in JSON format.'
                 },
                 {
-                  type: 'image_url',
-                  image_url: {
-                    url: createImageDataURL(imageBase64)
-                  }
+                  role: 'user',
+                  content: LINGUISTIC_ANALYSIS_PROMPT
                 }
-              ]
+              ],
+              temperature: 0.3,
+              max_tokens: 800,
+            }),
+          })
+
+          if (!analysisResponse.ok) {
+            console.warn(`Analysis failed for segment ${index + 1}, using fallback`)
+            return {
+              sentence: segment.text,
+              translation: 'Translation unavailable',
+              words: [],
+              grammar: [],
+              context: 'Analysis failed',
+              boundingBox: segment.boundingBox
             }
-          ],
-          temperature: 0.3,
-          max_tokens: 2000,
-        }),
-        signal: controller.signal,
+          }
+
+          const analysisData = await analysisResponse.json()
+          const analysisContent = analysisData.choices[0]?.message?.content
+          const cleanedAnalysis = cleanJsonResponse(analysisContent)
+          const linguisticResult = parseJsonSafely(cleanedAnalysis, `OpenAI-format linguistic analysis ${index + 1}`, true)
+
+          return {
+            sentence: segment.text,
+            translation: linguisticResult.translation || '',
+            words: linguisticResult.words || [],
+            grammar: linguisticResult.grammar || [],
+            context: linguisticResult.context || '',
+            boundingBox: segment.boundingBox
+          }
+        } catch (error) {
+          console.warn(`Error analyzing segment ${index + 1}:`, error)
+          return {
+            sentence: segment.text,
+            translation: 'Translation unavailable',
+            words: [],
+            grammar: [],
+            context: 'Analysis error',
+            boundingBox: segment.boundingBox
+          }
+        }
       })
-    } catch (error) {
-      clearTimeout(timeoutId)
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.error('OpenAI-format analyzeImageForReading: Request was aborted due to timeout')
-        throw new Error('OpenAI-format request timeout: The server took too long to respond. Please try again or check your endpoint configuration.')
-      }
-      console.error('OpenAI-format analyzeImageForReading: Network error:', error)
-      throw new Error(`OpenAI-format network error: ${error instanceof Error ? error.message : 'Unknown network error'}`)
-    }
-    clearTimeout(timeoutId)
+    )
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      if (response.status === 429) {
-        console.warn('OpenAI-format rate limited on analyzeImageForReading:', errorText)
-        throw new Error('OpenAI-format rate_limited')
-      }
-      console.error(`OpenAI-format API error: ${response.status}`, { 
-        endpoint: `${this.settings.endpoint}/chat/completions`,
-        model: this.settings.model,
-        hasApiKey: !!this.settings.apiKey,
-        error: errorText 
-      })
-      throw new Error(`OpenAI-format API error: ${response.status} - ${errorText}`)
-    }
+    console.log(`✅ Step 2 complete: Analyzed ${sentences.length} sentences`)
 
-    const data = await response.json()
-    const content = data.choices[0]?.message?.content
-
-    if (!content) {
-      throw new Error('No content received from OpenAI-format API')
+    return {
+      sentences,
+      overallSummary: `Found and analyzed ${sentences.length} text segments in the manga image.`,
+      provider: 'openai-format' as AIProvider
     }
-
-    try {
-      const cleanedContent = cleanJsonResponse(content)
-      console.log('OpenAI-format analyzeImageForReading cleaned content preview:', cleanedContent.substring(0, 200) + '...')
-      const analysisResult = parseJsonSafely(cleanedContent, 'OpenAI-format analyzeImageForReading', true) // Skip validation for reading mode
-      
-      return {
-        ...analysisResult,
-        provider: 'openai-format' as AIProvider
-      }
-    } catch (error) {
-      console.error('OpenAI-format analyzeImageForReading JSON parsing error:', error)
-      console.error('Raw content:', content.substring(0, 500) + '...')
-      throw new Error(`Failed to parse OpenAI-format response: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-    }, 'analyzeImageForReading')
   }
+  
+  
 }
 
 export class AIAnalysisService {
   private openaiService?: OpenAIService
-  private geminiService?: GeminiService
   private openaiFormatService?: OpenAIFormatService
-  private panelSegmentationService: any = null
+  private panelSegmentationService: ClientPanelSegmentationService
   private improvedTextDetection: ImprovedTextDetectionService
 
   constructor(
-    openaiApiKey?: string, 
-    geminiApiKey?: string, 
+    openaiApiKey?: string,
     openaiFormatSettings?: OpenAIFormatSettings,
     modelSettings?: ModelSettings
   ) {
-    // Initialize client-side panel segmentation service only in browser
-    // Use dynamic import to avoid loading browser-only code on server
-    // Check for browser environment using multiple checks
-    const isBrowser = typeof window !== 'undefined' && typeof document !== 'undefined'
-    if (isBrowser) {
-      import('./client-panel-segmentation').then(module => {
-        this.panelSegmentationService = new module.ClientPanelSegmentationService()
-      }).catch(err => {
-        console.warn('Failed to load client panel segmentation:', err)
-      })
-    } else {
-      console.log('🖥️ Running in server environment, skipping client panel segmentation')
-    }
+    // Initialize client-side panel segmentation service
+    this.panelSegmentationService = new ClientPanelSegmentationService()
     this.improvedTextDetection = new ImprovedTextDetectionService({
       enableRetry: true,
       maxRetries: 2,
@@ -1996,30 +2183,10 @@ export class AIAnalysisService {
       if (openaiModel) {
         this.openaiService = new OpenAIService(openaiApiKey, openaiModel)
       } else {
-        // Check if environment variable has a model as fallback
         const envModel = process.env.OPENAI_MODEL?.trim()
         if (envModel) {
           this.openaiService = new OpenAIService(openaiApiKey, envModel)
         }
-        // If no model available, don't initialize the service
-      }
-    }
-    
-    // Only initialize Gemini service if both API key and model are available
-    if (geminiApiKey) {
-      const geminiModel = modelSettings?.gemini?.model?.trim()
-      console.log(`🔧 Gemini initialization - modelSettings.gemini.model: "${geminiModel}"`)
-      if (geminiModel) {
-        console.log(`🔧 Using provided model: ${geminiModel}`)
-        this.geminiService = new GeminiService(geminiApiKey, geminiModel)
-      } else {
-        // Check if environment variable has a model as fallback
-        const envModel = process.env.GEMINI_MODEL?.trim()
-        console.log(`🔧 Using environment model: ${envModel}`)
-        if (envModel) {
-          this.geminiService = new GeminiService(geminiApiKey, envModel)
-        }
-        // If no model available, don't initialize the service
       }
     }
     
@@ -2032,8 +2199,6 @@ export class AIAnalysisService {
   async analyzeText(text: string, provider: AIProvider = 'openai'): Promise<AnalysisResult> {
     if (provider === 'openai' && this.openaiService) {
       return await this.openaiService.analyzeText(text)
-    } else if (provider === 'gemini' && this.geminiService) {
-      return await this.geminiService.analyzeText(text)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
       return await this.openaiFormatService.analyzeText(text)
     } else {
@@ -2044,8 +2209,6 @@ export class AIAnalysisService {
   async analyzeImage(imageBase64: string, provider: AIProvider = 'openai'): Promise<AnalysisResult> {
     if (provider === 'openai' && this.openaiService) {
       return await this.openaiService.analyzeImage(imageBase64)
-    } else if (provider === 'gemini' && this.geminiService) {
-      return await this.geminiService.analyzeImage(imageBase64)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
       return await this.openaiFormatService.analyzeImage(imageBase64)
     } else {
@@ -2058,7 +2221,7 @@ export class AIAnalysisService {
       console.log('🔍 Starting client-side panel segmentation...')
       
       // Check if client-side segmentation is available
-      if (!this.panelSegmentationService || !this.panelSegmentationService.isAvailable()) {
+      if (!this.panelSegmentationService.isAvailable()) {
         console.log('⚠️ Client-side segmentation not available, falling back to direct analysis')
         return await this.analyzeMangaImageDirect(imageBase64, provider)
       }
@@ -2072,7 +2235,7 @@ export class AIAnalysisService {
       console.log('📊 Segmentation result:', {
         panelCount: segmentationResult.panels.length,
         readingOrder: segmentationResult.readingOrder,
-        hasImageData: segmentationResult.panels.map((p: SegmentedPanel) => !!p.imageData)
+        hasImageData: segmentationResult.panels.map(p => !!p.imageData)
       })
       
       if (segmentationResult.panels.length === 0) {
@@ -2081,44 +2244,47 @@ export class AIAnalysisService {
         return await this.analyzeMangaImageDirect(imageBase64, provider)
       }
 
-      // Analyze each panel individually using improved text detection, sequentially to avoid burst calls
-      const panels: MangaPanel[] = []
-      for (let index = 0; index < segmentationResult.panels.length; index++) {
-        const segmentedPanel: SegmentedPanel = segmentationResult.panels[index]
-        try {
-          // Use reading order position as panel number (1-based)
-          const readingOrderPosition = segmentationResult.readingOrder[index]
-          console.log(`🔍 Analyzing panel ${readingOrderPosition} (position ${index + 1}) with improved text detection...`)
+      // Analyze each panel individually using improved text detection
+      const panelAnalyses = await Promise.allSettled(
+        segmentationResult.panels.map(async (segmentedPanel: SegmentedPanel, index: number) => {
+          try {
+            // Use reading order position as panel number (1-based)
+            const readingOrderPosition = segmentationResult.readingOrder[index]
+            console.log(`🔍 Analyzing panel ${readingOrderPosition} (position ${index + 1}) with improved text detection...`)
+            
+            // Use improved text detection service
+            const panelAnalysis = await this.improvedTextDetection.analyzePanel(
+              segmentedPanel.imageData,
+              this,
+              provider,
+              readingOrderPosition
+            )
+            
+            // Set the position from segmentation result
+            panelAnalysis.position = segmentedPanel.boundingBox
+            
+            return panelAnalysis
+          } catch (error) {
+            console.error(`❌ Error analyzing panel ${segmentationResult.readingOrder[index]}:`, error)
+            return {
+              panelNumber: segmentationResult.readingOrder[index],
+              position: segmentedPanel.boundingBox,
+              imageData: segmentedPanel.imageData,
+              extractedText: '',
+              sentences: [],
+              translation: 'Analysis failed for this panel',
+              words: [],
+              grammar: [],
+              context: 'Unable to analyze this panel'
+            } as MangaPanel
+          }
+        })
+      )
 
-          // Use improved text detection service
-          const panelAnalysis = await this.improvedTextDetection.analyzePanel(
-            segmentedPanel.imageData,
-            this,
-            provider,
-            readingOrderPosition
-          )
-
-          // Set the position from segmentation result
-          panelAnalysis.position = segmentedPanel.boundingBox
-
-          panels.push(panelAnalysis)
-        } catch (error) {
-          console.error(`❌ Error analyzing panel ${segmentationResult.readingOrder[index]}:`, error)
-          panels.push({
-            panelNumber: segmentationResult.readingOrder[index],
-            position: segmentedPanel.boundingBox,
-            imageData: segmentedPanel.imageData,
-            extractedText: '',
-            sentences: [],
-            translation: 'Analysis failed for this panel',
-            words: [],
-            grammar: [],
-            context: 'Unable to analyze this panel'
-          } as MangaPanel)
-        }
-        // Small delay to reduce rate-limit bursts
-        await new Promise(res => setTimeout(res, 200))
-      }
+      // Extract successful analyses
+      const panels: MangaPanel[] = panelAnalyses
+        .filter((result): result is PromiseFulfilledResult<MangaPanel> => result.status === 'fulfilled')
+        .map(result => result.value)
 
       console.log('✅ Panel analysis complete:', {
         totalPanels: panels.length,
@@ -2155,8 +2321,6 @@ export class AIAnalysisService {
     let result: MangaAnalysisResult
     if (provider === 'openai' && this.openaiService) {
       result = await this.openaiService.analyzeMangaImage(imageBase64)
-    } else if (provider === 'gemini' && this.geminiService) {
-      result = await this.geminiService.analyzeMangaImage(imageBase64)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
       result = await this.openaiFormatService.analyzeMangaImage(imageBase64)
     } else {
@@ -2186,17 +2350,29 @@ export class AIAnalysisService {
       let result: any
       if (provider === 'openai' && this.openaiService) {
         result = await this.openaiService.analyzeImageForReading(imageBase64)
-      } else if (provider === 'gemini' && this.geminiService) {
-        result = await this.geminiService.analyzeImageForReading(imageBase64)
       } else if (provider === 'openai-format' && this.openaiFormatService) {
         result = await this.openaiFormatService.analyzeImageForReading(imageBase64)
       } else {
         throw new Error(`${provider} service not available or not configured`)
       }
 
+      const sentences = Array.isArray(result.sentences)
+        ? result.sentences.map((sentence: any) => {
+            const normalizedBoundingBox = normalizeBoundingBox(sentence?.boundingBox)
+            return {
+              ...sentence,
+              words: Array.isArray(sentence?.words) ? sentence.words : [],
+              grammar: Array.isArray(sentence?.grammar) ? sentence.grammar : [],
+              boundingBox: normalizedBoundingBox ?? sentence?.boundingBox ?? null
+            }
+          })
+        : []
+
+      const imageDataUrl = createImageDataURL(imageBase64)
+
       return {
-        sentences: result.sentences || [],
-        imageData: `data:image/jpeg;base64,${imageBase64}`,
+        sentences,
+        imageData: imageDataUrl,
         overallSummary: result.overallSummary || result.summary || 'Reading mode analysis completed',
         provider
       }
@@ -2209,7 +2385,6 @@ export class AIAnalysisService {
   getAvailableProviders(): AIProvider[] {
     const providers: AIProvider[] = []
     if (this.openaiService) providers.push('openai')
-    if (this.geminiService) providers.push('gemini')
     if (this.openaiFormatService) providers.push('openai-format')
     return providers
   }

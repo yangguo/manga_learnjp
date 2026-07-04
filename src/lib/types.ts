@@ -3,7 +3,7 @@ export interface WordAnalysis {
   reading: string
   meaning: string
   partOfSpeech: string
-  difficulty: 'beginner' | 'intermediate' | 'advanced'
+  difficulty: 'beginner' | 'intermediate' | 'advanced' | 'N5' | 'N4' | 'N3' | 'N2' | 'N1'
 }
 
 export interface GrammarPattern {
@@ -122,7 +122,32 @@ export interface MangaAnalysisResult {
   provider?: string
 }
 
-export type AnalysisMode = 'panel' | 'simple' | 'reading'
+export interface MokuroBlock {
+  box: [number, number, number, number]
+  vertical: boolean
+  font_size: number
+  lines: string[]
+  lines_coords?: unknown
+}
+
+export interface MokuroPage {
+  version?: string
+  img_width: number
+  img_height: number
+  blocks: MokuroBlock[]
+  img_path: string
+}
+
+export interface MokuroFile {
+  version?: string
+  title?: string
+  title_uuid?: string
+  volume?: string
+  volume_uuid?: string
+  pages: MokuroPage[]
+}
+
+export type AnalysisMode = 'panel' | 'simple' | 'reading' | 'mokuro'
 
 export interface PanelBoundingBox {
   x: number

@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { BookOpen, Languages, Loader2, Quote, Sparkles } from 'lucide-react'
-import type { AnalysisResult, WordAnalysis } from '@/lib/types'
+import type { AnalysisResult } from '@/lib/types'
 
 interface MokuroAnalysisPanelProps {
   analysisResult: AnalysisResult | null
@@ -10,11 +10,25 @@ interface MokuroAnalysisPanelProps {
   selectedText: string | null
 }
 
-const difficultyBadgeClasses: Record<WordAnalysis['difficulty'], string> = {
-  beginner: 'bg-green-500/15 text-green-300 border-green-500/25',
-  intermediate: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
-  advanced: 'bg-red-500/15 text-red-300 border-red-500/25'
+const normalizeDifficulty = (difficulty: string): string => difficulty.toLowerCase()
+
+const isBeginnerWord = (difficulty: string): boolean => {
+  const normalized = normalizeDifficulty(difficulty)
+  return normalized === 'beginner' || /^n[45]$/.test(normalized)
 }
+
+const DIFFICULTY_BADGE_CLASSES: Record<string, string> = {
+  beginner: 'bg-green-500/15 text-green-300 border-green-500/25',
+  n5: 'bg-green-500/15 text-green-300 border-green-500/25',
+  n4: 'bg-green-500/15 text-green-300 border-green-500/25',
+  intermediate: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
+  n3: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
+  n2: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
+  advanced: 'bg-red-500/15 text-red-300 border-red-500/25',
+  n1: 'bg-red-500/15 text-red-300 border-red-500/25'
+}
+
+const FALLBACK_DIFFICULTY_CLASS = 'bg-gray-500/15 text-gray-300 border-gray-500/25'
 
 export default function MokuroAnalysisPanel({
   analysisResult,
@@ -76,7 +90,7 @@ export default function MokuroAnalysisPanel({
 
   const vocabulary = analysisResult.sentences
     .flatMap(sentence => sentence.words)
-    .filter(word => word.difficulty !== 'beginner')
+    .filter(word => !isBeginnerWord(word.difficulty))
 
   const grammar = analysisResult.sentences
     .flatMap(sentence => sentence.grammar)
@@ -123,7 +137,7 @@ export default function MokuroAnalysisPanel({
                     </p>
                     <p className="text-xs text-gray-400">{word.reading}</p>
                   </div>
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${difficultyBadgeClasses[word.difficulty]}`}>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${DIFFICULTY_BADGE_CLASSES[normalizeDifficulty(word.difficulty)] ?? FALLBACK_DIFFICULTY_CLASS}`}>
                     {word.difficulty}
                   </span>
                 </div>
