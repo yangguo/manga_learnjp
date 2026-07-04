@@ -76,3 +76,9 @@ logs/
 
 # Cache directories
 .cache/
+
+# Generated manga/Mokuro processing output
+output/
+
+# Local PDF inputs (large binaries, not part of source)
+*.pdf

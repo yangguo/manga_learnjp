@@ -29,6 +29,7 @@ export interface ModelSettings {
 }
 
 export type AIProvider = 'openai' | 'openai-format'
+export type AnalysisLanguage = 'zh' | 'en'
 
 export interface SentenceAnalysis {
   sentence: string
@@ -145,6 +146,16 @@ export interface MokuroFile {
   volume?: string
   volume_uuid?: string
   pages: MokuroPage[]
+}
+
+export interface MokuroAnalysisCacheFile {
+  version: 1
+  savedAt: string
+  source: {
+    title?: string
+    pageCount?: number
+  }
+  analyses: Record<string, AnalysisResult>
 }
 
 export type AnalysisMode = 'panel' | 'simple' | 'reading' | 'mokuro'

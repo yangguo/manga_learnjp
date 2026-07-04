@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `npm run build` — Production build (uses `next build --webpack`). Run before shipping.
 - `npm run start` — Serve the production build.
 - `npm run lint` — `next lint` (ESLint 9 flat config in `eslint.config.mjs`).
-There is **no test runner wired up**. `npm test` does not exist. Lint + a successful TypeScript build are the current guardrails.
+- `npm test` — Runs the unit tests via Vitest (`*.test.ts` under `src/lib/`). Lint + a successful TypeScript build + passing tests are the current guardrails.
 
 ## Architecture
 

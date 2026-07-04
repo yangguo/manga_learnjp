@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AIAnalysisService, type AnalysisResult } from '@/lib/ai-service'
-import { type AIProvider, type OpenAIFormatSettings, type MangaAnalysisResult, type ReadingModeResult } from '@/lib/types'
+import { type AIProvider, type AnalysisLanguage, type OpenAIFormatSettings, type MangaAnalysisResult, type ReadingModeResult } from '@/lib/types'
 
 interface AnalysisRequest {
   text?: string
@@ -9,13 +9,15 @@ interface AnalysisRequest {
   mangaMode?: boolean
   simpleAnalysisMode?: boolean
   readingMode?: boolean
+  analysisLanguage?: AnalysisLanguage
+  excludeN5?: boolean
 }
 
 export const maxDuration = 300 // 5 minutes for reading mode analysis
 
 export async function POST(request: NextRequest) {
   try {
-    const { text, imageBase64, provider = 'openai', mangaMode = false, simpleAnalysisMode = false, readingMode = false }: AnalysisRequest = await request.json()
+    const { text, imageBase64, provider = 'openai', mangaMode = false, simpleAnalysisMode = false, readingMode = false, analysisLanguage = 'en', excludeN5 = false }: AnalysisRequest = await request.json()
 
     if (!text && !imageBase64) {
       return NextResponse.json(
@@ -79,7 +81,7 @@ export async function POST(request: NextRequest) {
             result = await aiService.analyzeImage(imageBase64, currentProvider)
           }
         } else {
-          result = await aiService.analyzeText(text!, currentProvider)
+          result = await aiService.analyzeText(text!, currentProvider, analysisLanguage, excludeN5)
         }
         
         console.log(`✅ Success with provider: ${currentProvider}`)

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import ImageUploader from '@/components/ImageUploader'
 import TextAnalyzer from '@/components/TextAnalyzer'
 import MangaAnalyzer from '@/components/MangaAnalyzer'
+import MokuroReader from '@/components/MokuroReader'
 import ReadingModeViewer from '@/components/ReadingModeViewer'
 import SimpleModePanelViewer from '@/components/SimpleModePanelViewer'
 import Header from '@/components/Header'
@@ -156,7 +157,9 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.4 }}
           >
-            {readingModeResult ? (
+            {analysisMode === 'mokuro' ? (
+              <MokuroReader />
+            ) : readingModeResult ? (
               <div className="space-y-6">
                 <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-6">
                   <h2 className="text-xl font-semibold text-white mb-2 flex items-center gap-2">

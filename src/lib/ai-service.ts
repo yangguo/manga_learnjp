@@ -1,4 +1,4 @@
-import type { AIProvider, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel, ReadingModeResult, SentenceLocation } from './types'
+import type { AIProvider, AnalysisLanguage, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel, ReadingModeResult, SentenceLocation } from './types'
 import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
 import { createImageDataURL, getImageMimeType, extractBase64FromDataURL } from './image-utils'
@@ -32,10 +32,36 @@ export interface AnalysisResult {
   provider: AIProvider
 }
 
-const ANALYSIS_PROMPT = (text?: string) => `
+const getAnalysisLanguageInstruction = (language: AnalysisLanguage = 'en'): string => {
+  if (language === 'zh') {
+    return 'Return all translations, vocabulary meanings, part-of-speech labels, grammar explanations, examples, context, and summary in Simplified Chinese. Keep Japanese source text and kana readings unchanged.'
+  }
+
+  return 'Return all translations, vocabulary meanings, part-of-speech labels, grammar explanations, examples, context, and summary in English. Keep Japanese source text and kana readings unchanged.'
+}
+
+const getTranslationLabel = (language: AnalysisLanguage = 'en'): string => {
+  return language === 'zh' ? 'Chinese translation' : 'English translation'
+}
+
+const getLearningLevelInstruction = (excludeN5: boolean): string => {
+  if (!excludeN5) return ''
+
+  return `
+Learning-level filter:
+- Do NOT include JLPT N5, beginner, or very basic vocabulary in "words".
+- Do NOT include JLPT N5/basic grammar patterns in "grammar" such as は/が/を/に/で/の, です/ます, simple negation, simple past, or basic question particles.
+- Include only vocabulary and grammar that is useful beyond N5, roughly JLPT N4 or higher, manga-specific expressions, idioms, colloquialisms, or context-critical terms.
+- For word difficulty, prefer "N4", "N3", "N2", "N1", "intermediate", or "advanced"; never return "N5" or "beginner".`
+}
+
+const ANALYSIS_PROMPT = (text?: string, language: AnalysisLanguage = 'en', excludeN5 = false) => `
 You are a Japanese language learning assistant. ${text ? `Analyze the following Japanese text extracted from manga` : `Look at this manga image and extract all Japanese text, then analyze it`} and provide detailed explanations for language learners.
 
 ${text ? `Japanese Text:\n"${text}"` : ''}
+
+${getAnalysisLanguageInstruction(language)}
+${getLearningLevelInstruction(excludeN5)}
 
 Please provide a JSON response with the following structure:
 {
@@ -43,14 +69,14 @@ Please provide a JSON response with the following structure:
   "sentences": [
     {
       "sentence": "Individual Japanese sentence",
-      "translation": "English translation of this sentence",
+      "translation": "${getTranslationLabel(language)} of this sentence",
       "words": [
         {
           "word": "Japanese word",
           "reading": "hiragana/katakana reading",
-          "meaning": "English meaning",
+          "meaning": "${language === 'zh' ? 'Chinese meaning' : 'English meaning'}",
           "partOfSpeech": "noun/verb/adjective/etc",
-          "difficulty": "beginner/intermediate/advanced"
+          "difficulty": "${excludeN5 ? 'N4/N3/N2/N1/intermediate/advanced' : 'beginner/intermediate/advanced'}"
         }
       ],
       "grammar": [
@@ -63,7 +89,7 @@ Please provide a JSON response with the following structure:
       "context": "Context or usage notes for this specific sentence"
     }
   ],
-  "translation": "Overall English translation of all text",
+  "translation": "Overall ${getTranslationLabel(language)} of all text",
   "summary": "Brief context summary explaining what's happening in this manga scene"
 }
 
@@ -73,7 +99,7 @@ Focus on:
 3. Breaking down important vocabulary words, especially those that might be difficult for learners
 4. Identifying key grammar patterns and structures in each sentence
 5. Providing context for manga-specific language or expressions
-6. Assigning appropriate difficulty levels (beginner: JLPT N5-N4, intermediate: N3-N2, advanced: N1+)
+6. Assigning appropriate difficulty levels ${excludeN5 ? '(omit N5/beginner items; use N4/N3/N2/N1/intermediate/advanced only)' : '(beginner: JLPT N5-N4, intermediate: N3-N2, advanced: N1+)'}
 7. Including furigana readings for kanji
 8. Explaining any colloquialisms, slang, or casual speech patterns common in manga
 9. ${text ? 'Recognizing sentence boundaries properly (。！？ etc.)' : 'Recognizing manga sound effects (onomatopoeia) and their meanings as separate sentence items'}
@@ -144,10 +170,13 @@ Focus on:
 Make sure the response is valid JSON format.`
 
 // Shortened prompt for providers with response length limits
-const CONCISE_ANALYSIS_PROMPT = (text?: string) => `
+const CONCISE_ANALYSIS_PROMPT = (text?: string, language: AnalysisLanguage = 'en', excludeN5 = false) => `
 You are a Japanese language learning assistant. ${text ? `Analyze this Japanese text` : `Extract and analyze Japanese text from this image`}.
 
 ${text ? `Text: "${text}"` : ''}
+
+${getAnalysisLanguageInstruction(language)}
+${getLearningLevelInstruction(excludeN5)}
 
 Provide concise JSON response:
 {
@@ -155,7 +184,7 @@ Provide concise JSON response:
   "sentences": [
     {
       "sentence": "Japanese sentence",
-      "translation": "English translation",
+      "translation": "${getTranslationLabel(language)}",
       "words": [{"word": "word", "reading": "reading", "meaning": "meaning", "partOfSpeech": "pos", "difficulty": "level"}],
       "grammar": [{"pattern": "pattern", "explanation": "brief explanation", "example": "example"}],
       "context": "brief context"
@@ -1211,14 +1240,14 @@ export class OpenAIService {
     this.model = model || process.env.OPENAI_MODEL || 'gpt-4-vision-preview'
   }
 
-  async analyzeText(text: string): Promise<AnalysisResult> {
+  async analyzeText(text: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
     // Split text into sentences for batching
     const sentences = splitTextIntoSentences(text)
     console.log(`OpenAI analyzeText: Split text into ${sentences.length} sentences`)
     
     // If we have few sentences, analyze all at once
     if (sentences.length <= 3) {
-      return this.analyzeSingleBatch(text)
+      return this.analyzeSingleBatch(text, language, excludeN5)
     }
     
     // Create batches for longer texts
@@ -1234,7 +1263,7 @@ export class OpenAIService {
       console.log(`OpenAI analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
       
       try {
-        const batchResult = await this.analyzeSingleBatch(batchText)
+        const batchResult = await this.analyzeSingleBatch(batchText, language, excludeN5)
         batchResults.push(batchResult)
       } catch (error) {
         console.error(`OpenAI analyzeText: Error processing batch ${i + 1}:`, error)
@@ -1256,7 +1285,7 @@ export class OpenAIService {
     }
   }
 
-  private async analyzeSingleBatch(text: string): Promise<AnalysisResult> {
+  private async analyzeSingleBatch(text: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -1272,7 +1301,7 @@ export class OpenAIService {
           },
           {
             role: 'user',
-            content: ANALYSIS_PROMPT(text)
+            content: ANALYSIS_PROMPT(text, language, excludeN5)
           }
         ],
         temperature: 0.3,
@@ -1658,14 +1687,14 @@ export class OpenAIFormatService {
     }
   }
 
-  async analyzeText(text: string): Promise<AnalysisResult> {
+  async analyzeText(text: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
     // Split text into sentences for batching
     const sentences = splitTextIntoSentences(text)
     console.log(`OpenAI-format analyzeText: Split text into ${sentences.length} sentences`)
     
     // If we have few sentences, analyze all at once
     if (sentences.length <= 2) { // Use smaller batch size for OpenAI-format due to stricter limits
-      return this.analyzeSingleBatch(text)
+      return this.analyzeSingleBatch(text, language, excludeN5)
     }
     
     // Create batches for longer texts
@@ -1681,7 +1710,7 @@ export class OpenAIFormatService {
       console.log(`OpenAI-format analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
       
       try {
-        const batchResult = await this.analyzeSingleBatch(batchText)
+        const batchResult = await this.analyzeSingleBatch(batchText, language, excludeN5)
         batchResults.push(batchResult)
       } catch (error) {
         console.error(`OpenAI-format analyzeText: Error processing batch ${i + 1}:`, error)
@@ -1703,7 +1732,7 @@ export class OpenAIFormatService {
     }
   }
 
-  private async analyzeSingleBatch(text: string): Promise<AnalysisResult> {
+  private async analyzeSingleBatch(text: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -1724,7 +1753,7 @@ export class OpenAIFormatService {
           },
           {
             role: 'user',
-            content: CONCISE_ANALYSIS_PROMPT(text)
+            content: CONCISE_ANALYSIS_PROMPT(text, language, excludeN5)
           }
         ],
         temperature: 0.3,
@@ -2196,11 +2225,11 @@ export class AIAnalysisService {
     }
   }
 
-  async analyzeText(text: string, provider: AIProvider = 'openai'): Promise<AnalysisResult> {
+  async analyzeText(text: string, provider: AIProvider = 'openai', language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
     if (provider === 'openai' && this.openaiService) {
-      return await this.openaiService.analyzeText(text)
+      return await this.openaiService.analyzeText(text, language, excludeN5)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
-      return await this.openaiFormatService.analyzeText(text)
+      return await this.openaiFormatService.analyzeText(text, language, excludeN5)
     } else {
       throw new Error(`${provider} service not available or not configured`)
     }

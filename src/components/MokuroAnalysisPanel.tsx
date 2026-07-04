@@ -2,20 +2,17 @@
 
 import { motion } from 'framer-motion'
 import { BookOpen, Languages, Loader2, Quote, Sparkles } from 'lucide-react'
-import type { AnalysisResult } from '@/lib/types'
+import { filterLearningGrammar, filterLearningVocabulary } from '@/lib/analysis-filters'
+import type { AnalysisLanguage, AnalysisResult } from '@/lib/types'
 
 interface MokuroAnalysisPanelProps {
   analysisResult: AnalysisResult | null
   isAnalyzing: boolean
   selectedText: string | null
+  language: AnalysisLanguage
 }
 
 const normalizeDifficulty = (difficulty: string): string => difficulty.toLowerCase()
-
-const isBeginnerWord = (difficulty: string): boolean => {
-  const normalized = normalizeDifficulty(difficulty)
-  return normalized === 'beginner' || /^n[45]$/.test(normalized)
-}
 
 const DIFFICULTY_BADGE_CLASSES: Record<string, string> = {
   beginner: 'bg-green-500/15 text-green-300 border-green-500/25',
@@ -30,14 +27,53 @@ const DIFFICULTY_BADGE_CLASSES: Record<string, string> = {
 
 const FALLBACK_DIFFICULTY_CLASS = 'bg-gray-500/15 text-gray-300 border-gray-500/25'
 
+const UI_TEXT = {
+  zh: {
+    selectedText: '选中文本',
+    noTextSelected: '未选择文本',
+    noTextSelectedBody: '点击页面上的文字框查看翻译、词汇和语法解析。',
+    analyzing: '分析中...',
+    analyzingBody: '正在提取所选文本的词汇和语法结构。',
+    ready: '等待分析',
+    readyBody: '选中文本的分析结果会显示在这里。',
+    translation: '翻译',
+    vocabulary: '词汇',
+    item: '项',
+    noVocabulary: '没有需要重点学习的 N4+ 词汇。',
+    grammar: '语法',
+    pattern: '个语法点',
+    noGrammar: '没有需要重点学习的 N4+ 语法点。',
+    example: '例句'
+  },
+  en: {
+    selectedText: 'Selected text',
+    noTextSelected: 'No text selected',
+    noTextSelectedBody: 'Click a text box to see translation, vocabulary, and grammar analysis.',
+    analyzing: 'Analyzing...',
+    analyzingBody: 'Extracting vocabulary and grammar patterns from the selected text.',
+    ready: 'Ready to analyze',
+    readyBody: 'Analysis results will appear here once the selected text has been processed.',
+    translation: 'Translation',
+    vocabulary: 'Vocabulary',
+    item: 'item',
+    noVocabulary: 'No N4+ vocabulary needs special focus in this selection.',
+    grammar: 'Grammar',
+    pattern: 'pattern',
+    noGrammar: 'No N4+ grammar patterns need special focus in this selection.',
+    example: 'Example'
+  }
+} satisfies Record<AnalysisLanguage, Record<string, string>>
+
 export default function MokuroAnalysisPanel({
   analysisResult,
   isAnalyzing,
-  selectedText
+  selectedText,
+  language
 }: MokuroAnalysisPanelProps) {
+  const t = UI_TEXT[language]
   const selectedTextHeader = selectedText ? (
     <div className="rounded-2xl border border-white/10 bg-gray-950/40 p-3">
-      <p className="text-xs text-gray-500">Selected text</p>
+      <p className="text-xs text-gray-500">{t.selectedText}</p>
       <p className="font-japanese text-sm font-medium text-white">{selectedText}</p>
     </div>
   ) : null
@@ -46,9 +82,9 @@ export default function MokuroAnalysisPanel({
     return (
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
         <Quote className="mx-auto mb-3 h-8 w-8 text-gray-500" />
-        <h3 className="font-semibold text-white">No text selected</h3>
+        <h3 className="font-semibold text-white">{t.noTextSelected}</h3>
         <p className="mt-1 text-sm text-gray-400">
-          Click a highlighted OCR block to see translation, vocabulary, and grammar analysis.
+          {t.noTextSelectedBody}
         </p>
       </div>
     )
@@ -64,9 +100,9 @@ export default function MokuroAnalysisPanel({
           className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center"
         >
           <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-purple-300" />
-          <h3 className="font-semibold text-white">Analyzing...</h3>
+          <h3 className="font-semibold text-white">{t.analyzing}</h3>
           <p className="mt-1 text-sm text-gray-400">
-            Extracting vocabulary and grammar patterns from the selected text.
+            {t.analyzingBody}
           </p>
         </motion.div>
       </div>
@@ -79,9 +115,9 @@ export default function MokuroAnalysisPanel({
         {selectedTextHeader}
         <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
           <Sparkles className="mx-auto mb-3 h-8 w-8 text-gray-500" />
-          <h3 className="font-semibold text-white">Ready to analyze</h3>
+          <h3 className="font-semibold text-white">{t.ready}</h3>
           <p className="mt-1 text-sm text-gray-400">
-            Analysis results will appear here once the selected text has been processed.
+            {t.readyBody}
           </p>
         </div>
       </div>
@@ -90,10 +126,11 @@ export default function MokuroAnalysisPanel({
 
   const vocabulary = analysisResult.sentences
     .flatMap(sentence => sentence.words)
-    .filter(word => !isBeginnerWord(word.difficulty))
+  const learningVocabulary = filterLearningVocabulary(vocabulary)
 
   const grammar = analysisResult.sentences
     .flatMap(sentence => sentence.grammar)
+  const learningGrammar = filterLearningGrammar(grammar)
 
   return (
     <motion.div
@@ -107,7 +144,7 @@ export default function MokuroAnalysisPanel({
         <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
           <div className="mb-3 flex items-center gap-2">
             <Languages size={16} className="text-cyan-300" />
-            <h3 className="font-semibold text-white">Translation</h3>
+            <h3 className="font-semibold text-white">{t.translation}</h3>
           </div>
           <p className="text-sm leading-relaxed text-gray-100">
             {analysisResult.translation}
@@ -118,14 +155,14 @@ export default function MokuroAnalysisPanel({
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="mb-3 flex items-center gap-2">
           <BookOpen size={16} className="text-amber-300" />
-          <h3 className="font-semibold text-white">Vocabulary</h3>
+          <h3 className="font-semibold text-white">{t.vocabulary}</h3>
           <span className="ml-auto text-xs text-gray-500">
-            {vocabulary.length} item{vocabulary.length === 1 ? '' : 's'}
+            {learningVocabulary.length} {t.item}{language === 'en' && learningVocabulary.length !== 1 ? 's' : ''}
           </span>
         </div>
-        {vocabulary.length > 0 ? (
+        {learningVocabulary.length > 0 ? (
           <ul className="space-y-2">
-            {vocabulary.map((word, index) => (
+            {learningVocabulary.map((word, index) => (
               <li
                 key={`${word.word}-${index}`}
                 className="rounded-lg border border-white/10 bg-gray-950/40 p-3"
@@ -148,7 +185,7 @@ export default function MokuroAnalysisPanel({
           </ul>
         ) : (
           <p className="rounded-lg border border-white/10 bg-gray-950/40 p-3 text-sm text-gray-400">
-            No intermediate or advanced vocabulary in this selection.
+            {t.noVocabulary}
           </p>
         )}
       </section>
@@ -156,14 +193,14 @@ export default function MokuroAnalysisPanel({
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="mb-3 flex items-center gap-2">
           <Sparkles size={16} className="text-purple-300" />
-          <h3 className="font-semibold text-white">Grammar</h3>
+          <h3 className="font-semibold text-white">{t.grammar}</h3>
           <span className="ml-auto text-xs text-gray-500">
-            {grammar.length} pattern{grammar.length === 1 ? '' : 's'}
+            {learningGrammar.length} {t.pattern}{language === 'en' && learningGrammar.length !== 1 ? 's' : ''}
           </span>
         </div>
-        {grammar.length > 0 ? (
+        {learningGrammar.length > 0 ? (
           <ul className="space-y-2">
-            {grammar.map((pattern, index) => (
+            {learningGrammar.map((pattern, index) => (
               <li
                 key={`${pattern.pattern}-${index}`}
                 className="rounded-lg border border-white/10 bg-gray-950/40 p-3"
@@ -173,14 +210,14 @@ export default function MokuroAnalysisPanel({
                 </p>
                 <p className="mt-1 text-sm text-gray-100">{pattern.explanation}</p>
                 <p className="mt-1 text-xs italic text-gray-500">
-                  Example: <span className="font-japanese text-gray-400">{pattern.example}</span>
+                  {t.example}: <span className="font-japanese text-gray-400">{pattern.example}</span>
                 </p>
               </li>
             ))}
           </ul>
         ) : (
           <p className="rounded-lg border border-white/10 bg-gray-950/40 p-3 text-sm text-gray-400">
-            No grammar patterns identified in this selection.
+            {t.noGrammar}
           </p>
         )}
       </section>

@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, FileImage, Loader2, CheckCircle, X, BookOpen, FileText, Eye } from 'lucide-react'
+import { Upload, FileImage, Loader2, CheckCircle, X, BookOpen, FileText, Eye, FileJson } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { SUPPORTED_IMAGE_TYPES, type AnalysisResult, type MangaAnalysisResult, type ReadingModeResult, type AnalysisMode } from '@/lib/types'
 import { useAIProviderStore } from '@/lib/store'
@@ -58,6 +58,12 @@ export default function ImageUploader({
       shortLabel: 'Reading',
       icon: Eye,
       accent: 'from-emerald-500 to-lime-500'
+    },
+    mokuro: {
+      label: 'Mokuro Reader',
+      shortLabel: 'Mokuro',
+      icon: FileJson,
+      accent: 'from-amber-500 to-orange-500'
     }
   }
 
@@ -321,6 +327,10 @@ export default function ImageUploader({
   }, [onError, onOriginalImageChange])
 
   const handleAnalyzeClick = useCallback(() => {
+    if (analysisMode === 'mokuro') {
+      toast('Use the Mokuro Reader panel below.')
+      return
+    }
     if (!imageBase64) {
       toast.error('Upload an image before analyzing.')
       return
@@ -328,7 +338,7 @@ export default function ImageUploader({
     if (isAnalyzing) return
     onOriginalImageChange(imageBase64)
     analyzeImageData(imageBase64)
-  }, [analyzeImageData, imageBase64, isAnalyzing, onOriginalImageChange])
+  }, [analysisMode, analyzeImageData, imageBase64, isAnalyzing, onOriginalImageChange])
 
   const onDrop = useCallback(
     (acceptedFiles: File[]) => {
@@ -370,6 +380,9 @@ export default function ImageUploader({
   }
 
   const getStatusText = () => {
+    if (analysisMode === 'mokuro') {
+      return 'Use the Mokuro Reader below to load .mokuro files and page images'
+    }
     if (isAnalyzing) {
       if (progress < 40) return 'Reading image...'
       if (progress < 70) {
@@ -407,13 +420,36 @@ export default function ImageUploader({
       : 'Upload manga image'
   }
 
+  const analyzeDisabled = analysisMode === 'mokuro' || !imageBase64 || isAnalyzing
+
   return (
     <div className="w-full max-w-5xl mx-auto">
       <div className="rounded-2xl border border-gray-700 bg-white/5 backdrop-blur-xl p-3 md:p-4">
         <div className="flex flex-col gap-3 md:flex-row">
           <div className="flex-1">
             <AnimatePresence mode="wait">
-              {!uploadedImage ? (
+              {analysisMode === 'mokuro' ? (
+                <motion.div
+                  key="mokuro-import"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3 }}
+                  className="rounded-xl border border-amber-500/20 bg-amber-500/10 p-5"
+                >
+                  <div className="flex h-full min-h-40 flex-col items-center justify-center gap-3 text-center">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/20">
+                      <FileJson className="h-5 w-5 text-amber-300" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-white">Mokuro Import Mode</h3>
+                      <p className="mt-1 text-sm text-gray-400">
+                        Choose the Mokuro output directory in the reader panel below.
+                      </p>
+                    </div>
+                  </div>
+                </motion.div>
+              ) : !uploadedImage ? (
                 <motion.div
                   key="uploader"
                   initial={{ opacity: 0, y: 20 }}
@@ -562,14 +598,14 @@ export default function ImageUploader({
 
             <button
               onClick={handleAnalyzeClick}
-              disabled={!imageBase64 || isAnalyzing}
+              disabled={analyzeDisabled}
               className={`w-full px-4 py-2.5 rounded-lg text-sm font-semibold transition-all duration-200 ${
-                !imageBase64 || isAnalyzing
+                analyzeDisabled
                   ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
                   : 'bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:from-purple-700 hover:to-pink-700'
               }`}
             >
-              {isAnalyzing ? 'Analyzing...' : 'Analyze Image'}
+              {analysisMode === 'mokuro' ? 'Use Mokuro Reader' : isAnalyzing ? 'Analyzing...' : 'Analyze Image'}
             </button>
           </div>
         </div>

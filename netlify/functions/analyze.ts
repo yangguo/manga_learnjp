@@ -1,6 +1,6 @@
 import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { AIAnalysisService, type AnalysisResult } from '../src/lib/ai-service'
-import { type AIProvider, type OpenAIFormatSettings, type ModelSettings, type APIKeySettings, type MangaAnalysisResult, type ReadingModeResult } from '../src/lib/types'
+import { type AIProvider, type AnalysisLanguage, type OpenAIFormatSettings, type ModelSettings, type APIKeySettings, type MangaAnalysisResult, type ReadingModeResult } from '../src/lib/types'
 
 // Simple in-memory cache to track failed endpoints (resets on function restart)
 const failedEndpoints = new Map<string, number>() // endpoint -> timestamp of last failure
@@ -16,6 +16,8 @@ interface AnalysisRequest {
   mangaMode?: boolean
   simpleAnalysisMode?: boolean // New flag to distinguish simple analysis from panel analysis
   readingMode?: boolean // New flag for reading mode analysis
+  analysisLanguage?: AnalysisLanguage
+  excludeN5?: boolean
 }
 
 // Quick endpoint reachability check to avoid slow connect timeouts
@@ -97,7 +99,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
   }
 
   try {
-    const { text, imageBase64, provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings, mangaMode = false, simpleAnalysisMode = false, readingMode = false }: AnalysisRequest = JSON.parse(event.body || '{}')
+    const { text, imageBase64, provider = 'openai', openaiFormatSettings, modelSettings, apiKeySettings, mangaMode = false, simpleAnalysisMode = false, readingMode = false, analysisLanguage = 'en', excludeN5 = false }: AnalysisRequest = JSON.parse(event.body || '{}')
 
     if (!text && !imageBase64) {
       return {
@@ -256,7 +258,7 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
             result = await withTimeout(aiService.analyzeImage(imageBase64, currentProvider), timeoutMs, 'analyzeImage')
           }
         } else {
-          result = await withTimeout(aiService.analyzeText(text!, currentProvider), timeoutMs, 'analyzeText')
+          result = await withTimeout(aiService.analyzeText(text!, currentProvider, analysisLanguage, excludeN5), timeoutMs, 'analyzeText')
         }
         
         console.log(`✅ Success with provider: ${currentProvider} (took ${Date.now() - startTime}ms)`)
