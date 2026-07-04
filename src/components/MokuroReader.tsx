@@ -497,11 +497,18 @@ export default function MokuroReader() {
     let skipped = 0
     let failed = 0
 
+    cancelBatchRef.current = false
     setIsBatchAnalyzing(true)
     setBatchProgress({ total: blocksToAnalyze.length, completed, skipped, failed })
     setError(null)
 
+    let cancelled = false
     for (const block of blocksToAnalyze) {
+      if (cancelBatchRef.current) {
+        cancelled = true
+        break
+      }
+
       const selection = {
         pageIndex: currentPageIndex,
         blockIndex: block.blockIndex,
@@ -537,7 +544,12 @@ export default function MokuroReader() {
     }
 
     setIsBatchAnalyzing(false)
-    toast.success(UI_TEXT[analysisLanguage].batchComplete)
+    setBatchProgress(null)
+    if (cancelled) {
+      toast.error(UI_TEXT[analysisLanguage].rangeCancelled)
+    } else {
+      toast.success(UI_TEXT[analysisLanguage].batchComplete)
+    }
   }
 
   const analyzePageRange = async () => {
