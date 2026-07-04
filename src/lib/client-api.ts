@@ -2,6 +2,7 @@ import type { AIProvider, AnalysisLanguage, AnalysisResult, ReadingModeResult } 
 
 interface AnalyzeImageForReadingOptions {
   provider?: AIProvider
+  language?: AnalysisLanguage
 }
 
 interface AnalyzeTextOptions {
@@ -42,7 +43,7 @@ export async function analyzeImageForReading(
   imageBase64: string,
   options: AnalyzeImageForReadingOptions = {}
 ): Promise<ReadingModeResult> {
-  const { provider = 'openai' } = options
+  const { provider = 'openai', language = 'zh' } = options
 
   const response = await fetch('/api/analyze', {
     method: 'POST',
@@ -52,7 +53,8 @@ export async function analyzeImageForReading(
     body: JSON.stringify({
       imageBase64,
       provider,
-      readingMode: true
+      readingMode: true,
+      analysisLanguage: language
     }),
   })
 

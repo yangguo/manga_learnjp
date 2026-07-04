@@ -4,54 +4,130 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Commands
 
-- `npm run dev` — Next.js dev server with HMR at http://localhost:3000.
-- `npm run build` — Production build (uses `next build --webpack`). Run before shipping.
-- `npm run start` — Serve the production build.
-- `npm run lint` — `next lint` (ESLint 9 flat config in `eslint.config.mjs`).
-- `npm test` — Runs the unit tests via Vitest (`*.test.ts` under `src/lib/`). Lint + a successful TypeScript build + passing tests are the current guardrails.
+- `npm run dev` - Next.js dev server with HMR at http://localhost:3000.
+- `npm run build` - Production build using `next build --webpack`; run before shipping.
+- `npm run start` - Serve the production build.
+- `npm run lint` - ESLint 9 flat config in `eslint.config.mjs`.
+- `npm test` - Vitest unit tests, currently focused under `src/lib`.
+- `scripts/process-mokuro-colab.sh INPUT.pdf [OUTPUT.zip]` - Convert a PDF to Mokuro output remotely through Google Colab. Requires `google-colab-cli`.
 
 ## Architecture
 
-### Two deployment targets, one product
+### Current product shape
 
-This repo ships the same UI through **two parallel backends**, and that duality is the single most important thing to understand before editing:
+The app has two user-facing modes:
 
-1. **Next.js App Router** (`src/app/`) — local dev (`npm run dev`) and any direct Next.js deploy. Server logic lives in `src/app/api/*/route.ts`.
-2. **Netlify Functions** (`netlify/functions/*.ts`) — production on Netlify. `netlify/netlify.toml` rewrites every `/api/*` path to `/.netlify/functions/*`.
+1. **Image Analyzer** - upload one manga image and let the app choose the analysis strategy automatically.
+2. **Mokuro Reader** - load an existing Mokuro output directory and analyze OCR text blocks on demand or in batch.
 
-The Netlify functions import from `netlify/src/lib/`, which is a **partial mirror** of `src/lib/`. Files actively used by functions: `ai-service.ts`, `types.ts`, `client-panel-segmentation.ts`, `image-compression.ts`, `image-utils.ts`, `improved-text-detection.ts`. Only `netlify/functions/` and `netlify/src/lib/` are live; the rest of `netlify/src/` has been removed.
+Mode configuration lives in `src/lib/analysis-modes.ts`. The public `AnalysisMode` union in `src/lib/types.ts` is currently:
 
-**Practical rule:** any change to an `src/lib/` file that's mirrored in `netlify/src/lib/` must be made in **both** places, or the Netlify build will drift from local. `tsconfig.json` excludes `netlify/` from the root TS project, so type errors in the mirror won't surface during `npm run build`.
+```ts
+type AnalysisMode = 'image' | 'mokuro'
+```
+
+Do not reintroduce separate `panel`, `simple`, or `reading` UI choices. Image Analyzer is a single-page workflow, not a panel-by-panel workflow.
+
+### Image analysis pipeline
+
+`src/components/ImageUploader.tsx` owns upload and orchestration. In `Image Analyzer`, it tries the following sequence:
+
+1. Reading-location detection through `analyzeImageForReading`, which returns clickable sentence boxes for `ReadingModeViewer`.
+2. General full-page image analysis through `/api/analyze` with no special image mode flags.
+
+Both branches pass `analysisLanguage` and request simplified N4+ learner content where applicable. Chinese is the default language for Image Analyzer.
+
+`src/app/page.tsx` renders the result by returned data shape:
+
+- `ReadingModeResult` -> `ReadingModeViewer`, a Mokuro-style layout with image on the left and concise analysis on the right.
+- `AnalysisResult` -> `ImagePageAnalysisViewer`, a full-page image plus concise analysis panel.
+
+### Mokuro Reader
+
+`src/components/MokuroReader.tsx` is the directory-based reader for Mokuro output. It expects a selected folder containing a `.mokuro` file and page images.
+
+Important behavior:
+
+- The reader overlays clickable OCR boxes, not visible OCR text, on top of the page image.
+- Clicking a block analyzes it and displays details in `MokuroAnalysisPanel`.
+- Batch analysis processes every text block on the current page.
+- Cached results are keyed by provider, language, page, and block index.
+- Cache is written to `mokuro-analysis-cache.json` when File System Access write support is available.
+- localStorage is the fallback cache when directory write access is unavailable.
+- Analysis language supports Chinese and English; Chinese is the default.
+- `analyzeText` defaults to `excludeN5: true`, so basic N5 vocabulary and grammar are not shown.
+
+Core Mokuro helpers live in `src/lib/mokuro.ts`; cache and import behavior have Vitest coverage in `src/lib/mokuro.test.ts`.
 
 ### AI provider abstraction
 
-`src/lib/ai-service.ts` (and its netlify mirror) is the single entry point for all vision/text analysis. It dispatches across three providers via the `AIProvider` type (`'openai' | 'gemini' | 'openai-format'`):
+`src/lib/ai-service.ts` is the main entry point for text and image analysis. The current main-app provider contract is:
 
-- **openai** — GPT-4 Vision / GPT-4o family, via the `openai` SDK.
-- **gemini** — Google `@google/generative-ai`.
-- **openai-format** — Any OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, custom). Endpoint, model, and optional API key are user-configurable from the UI.
+```ts
+type AIProvider = 'openai' | 'openai-format'
+```
 
-Provider selection and settings persist client-side via the Zustand store in `src/lib/store.ts` (`useAIProviderStore`, `persist` middleware → localStorage). The store hydrates `openaiFormatSettings` from `process.env.OPENAI_FORMAT_API_URL` / `_MODEL` / `_API_KEY` on first load — env vars are defaults, not overrides.
+Supported configuration:
 
-### Image → text → analysis pipeline
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_FORMAT_API_URL`
+- `OPENAI_FORMAT_API_KEY`
+- `OPENAI_FORMAT_MODEL`
 
-1. **Upload** (`src/components/ImageUploader.tsx`) — drag/drop, multi-format (PNG/JPG/WebP/BMP).
-2. **Panel segmentation** — classical CV (Canny + Probabilistic Hough), not ML. Runs client-side via `client-panel-segmentation.ts` using OpenCV.js (`opencv-ts`) in the browser.
-3. **Reading-order sort** — applied to bounding boxes to produce right-to-left, top-to-bottom manga order.
-4. **Per-panel vision OCR + analysis** — each panel sent to the selected AI provider with the `ANALYSIS_PROMPT` template in `ai-service.ts`. Response is forced into a JSON schema (see `AnalysisResult` / `SentenceLocation` / `ReadingModeResult` in `src/lib/types.ts`).
-5. **Render** — `MangaAnalyzer.tsx`, `ReadingModeViewer.tsx`, `PanelImageViewer.tsx`, etc.
+`src/app/api/analyze/route.ts` builds provider settings from environment variables and falls back across available providers. `src/app/api/providers/route.ts` exposes available providers and a smart default.
 
-### Shared types
+The OpenAI-format path is used for Ollama, LM Studio, vLLM, hosted compatible APIs, and similar `/v1` endpoints.
 
-`src/lib/types.ts` is the contract between the UI, the AI service, and the API route handlers. When changing response shapes (vocabulary, grammar patterns, panel metadata, reading mode), update this file first — both `src/lib/ai-service.ts` and `netlify/src/lib/ai-service.ts` parse against these types.
+### PDF to Mokuro conversion
 
-## Project conventions
+`scripts/process-mokuro-colab.sh` automates remote conversion:
 
-These come from `AGENTS.md` and the existing code — follow them when editing:
+1. Creates or reuses a Colab session.
+2. Uploads the source PDF.
+3. Installs `poppler-utils` and `mokuro` remotely.
+4. Renders pages with `pdftoppm`.
+5. Runs `mokuro`.
+6. Downloads a zip containing `<volume>.mokuro`, page images, and `_ocr` JSON.
 
-- TypeScript, two-space indent, single quotes, no trailing semicolons.
-- Functional React components; `'use client'` on client components.
-- PascalCase for components/files (`MangaAnalyzer.tsx`), camelCase for functions/hooks, SCREAMING_SNAKE_CASE for constants.
-- Import via the `@/` alias (`@/lib/...`, `@/components/...`).
-- Conventional Commits (`type(scope): summary`), e.g. `fix(netlify): guard provider detection when no env vars`.
-- `.env.local` for secrets; refresh `.env.example` when adding env vars. Don't hard-code provider endpoints — drive them through env or the settings store.
+Useful env overrides:
+
+- `COLAB_GPU`
+- `COLAB_DPI`
+- `COLAB_SESSION_NAME`
+- `COLAB_KEEP_SESSION`
+
+### Deployment targets
+
+This repo includes both a Next.js App Router backend and a Netlify functions backend:
+
+1. **Next.js App Router** - `src/app/api/*/route.ts`, used by local dev and direct Next.js deployment.
+2. **Netlify Functions** - `netlify/functions/*.ts`, using mirrored runtime files in `netlify/src/lib/`.
+
+The Netlify mirror can drift because `tsconfig.json` excludes `netlify/` from the root TypeScript project. When editing files in `src/lib` that also exist under `netlify/src/lib`, check whether the Netlify mirror needs the same update.
+
+## Shared Types
+
+`src/lib/types.ts` is the contract between the UI, API routes, and AI service. Update it before changing response shapes such as:
+
+- `AnalysisResult`
+- `MangaAnalysisResult`
+- `ReadingModeResult`
+- `MokuroFile`
+- `MokuroAnalysisCacheFile`
+- `AnalysisMode`
+- `AIProvider`
+
+Tests that lock shared behavior should live beside the library module, for example `src/lib/analysis-modes.test.ts`, `src/lib/mokuro.test.ts`, and `src/lib/client-api.test.ts`.
+
+## Project Conventions
+
+- TypeScript, two-space indentation, single quotes, no trailing semicolons.
+- Functional React components; use `'use client'` for client components.
+- PascalCase for components/files such as `MangaAnalyzer.tsx`.
+- camelCase for functions/hooks.
+- SCREAMING_SNAKE_CASE for constants.
+- Import via the `@/` alias for app code.
+- Keep secrets in `.env.local` or deployment environment variables.
+- Refresh `.env.example` when adding env vars.
+- Run `npm test`, `npm run lint`, and `npm run build` before handing off.

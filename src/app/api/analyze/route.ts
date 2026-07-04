@@ -72,13 +72,13 @@ export async function POST(request: NextRequest) {
           console.log(`📏 Image size: ${imageSizeKB} KB`)
           
           if (readingMode) {
-            result = await aiService.analyzeImageForReading(imageBase64, currentProvider)
+            result = await aiService.analyzeImageForReading(imageBase64, currentProvider, analysisLanguage)
           } else if (mangaMode) {
             result = await aiService.analyzeMangaImage(imageBase64, currentProvider)
           } else if (simpleAnalysisMode) {
             result = await aiService.analyzeMangaImageDirect(imageBase64, currentProvider)
           } else {
-            result = await aiService.analyzeImage(imageBase64, currentProvider)
+            result = await aiService.analyzeImage(imageBase64, currentProvider, analysisLanguage, excludeN5)
           }
         } else {
           result = await aiService.analyzeText(text!, currentProvider, analysisLanguage, excludeN5)

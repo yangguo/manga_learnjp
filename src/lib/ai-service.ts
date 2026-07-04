@@ -1342,7 +1342,7 @@ export class OpenAIService {
     }
   }
 
-  async analyzeImage(imageBase64: string): Promise<AnalysisResult> {
+  async analyzeImage(imageBase64: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -1361,7 +1361,7 @@ export class OpenAIService {
             content: [
               {
                 type: 'text',
-                text: ANALYSIS_PROMPT()
+                text: ANALYSIS_PROMPT(undefined, language, excludeN5)
               },
               {
                 type: 'image_url',
@@ -1482,7 +1482,7 @@ export class OpenAIService {
     }
   }
 
-  async analyzeImageForReading(imageBase64: string): Promise<any> {
+  async analyzeImageForReading(imageBase64: string, language: AnalysisLanguage = 'en'): Promise<any> {
     console.log('📖 OpenAI: Starting two-step reading mode analysis')
     
     // Step 1: Vision model to detect text and bounding boxes
@@ -1575,16 +1575,19 @@ Analyze this Japanese sentence for language learning:
 
 Text: "${segment.text}"
 
+${getAnalysisLanguageInstruction(language)}
+${getLearningLevelInstruction(true)}
+
 Provide a JSON response:
 {
-  "translation": "English translation",
+  "translation": "${getTranslationLabel(language)}",
   "words": [
     {
       "word": "Japanese word",
       "reading": "hiragana/katakana",
-      "meaning": "English meaning",
+      "meaning": "${language === 'zh' ? 'Chinese meaning' : 'English meaning'}",
       "partOfSpeech": "noun/verb/adjective/etc",
-      "difficulty": "beginner/intermediate/advanced"
+      "difficulty": "N4/N3/N2/N1/intermediate/advanced"
     }
   ],
   "grammar": [
@@ -1598,8 +1601,8 @@ Provide a JSON response:
 }
 
 IMPORTANT:
-- Include only the 3-5 most important words
-- Limit to 1-2 key grammar patterns
+- Include only the 2-4 most important non-N5 words
+- Limit to 1-2 key non-N5 grammar patterns
 - Keep explanations concise
 `
 
@@ -1631,10 +1634,10 @@ IMPORTANT:
             console.warn(`Analysis failed for segment ${index + 1}, using fallback`)
             return {
               sentence: segment.text,
-              translation: 'Translation unavailable',
+              translation: language === 'zh' ? '暂无翻译' : 'Translation unavailable',
               words: [],
               grammar: [],
-              context: 'Analysis failed',
+              context: language === 'zh' ? '分析失败' : 'Analysis failed',
               boundingBox: segment.boundingBox
             }
           }
@@ -1653,15 +1656,15 @@ IMPORTANT:
             boundingBox: segment.boundingBox
           }
         } catch (error) {
-          console.warn(`Error analyzing segment ${index + 1}:`, error)
-          return {
-            sentence: segment.text,
-            translation: 'Translation unavailable',
-            words: [],
-            grammar: [],
-            context: 'Analysis error',
-            boundingBox: segment.boundingBox
-          }
+            console.warn(`Error analyzing segment ${index + 1}:`, error)
+            return {
+              sentence: segment.text,
+              translation: language === 'zh' ? '暂无翻译' : 'Translation unavailable',
+              words: [],
+              grammar: [],
+              context: language === 'zh' ? '分析错误' : 'Analysis error',
+              boundingBox: segment.boundingBox
+            }
         }
       })
     )
@@ -1670,7 +1673,9 @@ IMPORTANT:
 
     return {
       sentences,
-      overallSummary: `Found and analyzed ${sentences.length} text segments in the manga image.`,
+      overallSummary: language === 'zh'
+        ? `已识别并分析 ${sentences.length} 个图片文本块。`
+        : `Found and analyzed ${sentences.length} text segments in the manga image.`,
       provider: 'openai' as AIProvider
     }
   }
@@ -1801,7 +1806,7 @@ export class OpenAIFormatService {
     }
   }
 
-  async analyzeImage(imageBase64: string): Promise<AnalysisResult> {
+  async analyzeImage(imageBase64: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -1825,7 +1830,7 @@ export class OpenAIFormatService {
             content: [
               {
                 type: 'text',
-                text: CONCISE_ANALYSIS_PROMPT()
+                text: CONCISE_ANALYSIS_PROMPT(undefined, language, excludeN5)
               },
               {
                 type: 'image_url',
@@ -1965,7 +1970,7 @@ export class OpenAIFormatService {
     }
   }
 
-  async analyzeImageForReading(imageBase64: string): Promise<any> {
+  async analyzeImageForReading(imageBase64: string, language: AnalysisLanguage = 'en'): Promise<any> {
     console.log('📖 OpenAI-format: Starting two-step reading mode analysis')
     console.log('🔧 Endpoint:', `${this.settings.endpoint}/chat/completions`)
     console.log('🤖 Model:', this.settings.model)
@@ -1987,10 +1992,10 @@ export class OpenAIFormatService {
       }
     }
     
-    return this.performTwoStepReadingAnalysis(processedImageBase64)
+    return this.performTwoStepReadingAnalysis(processedImageBase64, language)
   }
   
-  private async performTwoStepReadingAnalysis(imageBase64: string): Promise<any> {
+  private async performTwoStepReadingAnalysis(imageBase64: string, language: AnalysisLanguage = 'en'): Promise<any> {
     // Step 1: Vision model to detect text and bounding boxes
     const TEXT_DETECTION_PROMPT = `
 Analyze this manga image and identify ALL Japanese text with their precise locations.
@@ -2087,16 +2092,19 @@ Analyze this Japanese sentence for language learning:
 
 Text: "${segment.text}"
 
+${getAnalysisLanguageInstruction(language)}
+${getLearningLevelInstruction(true)}
+
 Provide a JSON response:
 {
-  "translation": "English translation",
+  "translation": "${getTranslationLabel(language)}",
   "words": [
     {
       "word": "Japanese word",
       "reading": "hiragana/katakana",
-      "meaning": "English meaning",
+      "meaning": "${language === 'zh' ? 'Chinese meaning' : 'English meaning'}",
       "partOfSpeech": "noun/verb/adjective/etc",
-      "difficulty": "beginner/intermediate/advanced"
+      "difficulty": "N4/N3/N2/N1/intermediate/advanced"
     }
   ],
   "grammar": [
@@ -2110,8 +2118,8 @@ Provide a JSON response:
 }
 
 IMPORTANT:
-- Include only the 3-5 most important words
-- Limit to 1-2 key grammar patterns
+- Include only the 2-4 most important non-N5 words
+- Limit to 1-2 key non-N5 grammar patterns
 - Keep explanations concise
 `
 
@@ -2140,10 +2148,10 @@ IMPORTANT:
             console.warn(`Analysis failed for segment ${index + 1}, using fallback`)
             return {
               sentence: segment.text,
-              translation: 'Translation unavailable',
+              translation: language === 'zh' ? '暂无翻译' : 'Translation unavailable',
               words: [],
               grammar: [],
-              context: 'Analysis failed',
+              context: language === 'zh' ? '分析失败' : 'Analysis failed',
               boundingBox: segment.boundingBox
             }
           }
@@ -2162,15 +2170,15 @@ IMPORTANT:
             boundingBox: segment.boundingBox
           }
         } catch (error) {
-          console.warn(`Error analyzing segment ${index + 1}:`, error)
-          return {
-            sentence: segment.text,
-            translation: 'Translation unavailable',
-            words: [],
-            grammar: [],
-            context: 'Analysis error',
-            boundingBox: segment.boundingBox
-          }
+            console.warn(`Error analyzing segment ${index + 1}:`, error)
+            return {
+              sentence: segment.text,
+              translation: language === 'zh' ? '暂无翻译' : 'Translation unavailable',
+              words: [],
+              grammar: [],
+              context: language === 'zh' ? '分析错误' : 'Analysis error',
+              boundingBox: segment.boundingBox
+            }
         }
       })
     )
@@ -2179,7 +2187,9 @@ IMPORTANT:
 
     return {
       sentences,
-      overallSummary: `Found and analyzed ${sentences.length} text segments in the manga image.`,
+      overallSummary: language === 'zh'
+        ? `已识别并分析 ${sentences.length} 个图片文本块。`
+        : `Found and analyzed ${sentences.length} text segments in the manga image.`,
       provider: 'openai-format' as AIProvider
     }
   }
@@ -2235,11 +2245,11 @@ export class AIAnalysisService {
     }
   }
 
-  async analyzeImage(imageBase64: string, provider: AIProvider = 'openai'): Promise<AnalysisResult> {
+  async analyzeImage(imageBase64: string, provider: AIProvider = 'openai', language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
     if (provider === 'openai' && this.openaiService) {
-      return await this.openaiService.analyzeImage(imageBase64)
+      return await this.openaiService.analyzeImage(imageBase64, language, excludeN5)
     } else if (provider === 'openai-format' && this.openaiFormatService) {
-      return await this.openaiFormatService.analyzeImage(imageBase64)
+      return await this.openaiFormatService.analyzeImage(imageBase64, language, excludeN5)
     } else {
       throw new Error(`${provider} service not available or not configured`)
     }
@@ -2372,15 +2382,15 @@ export class AIAnalysisService {
     }
   }
 
-  async analyzeImageForReading(imageBase64: string, provider: AIProvider = 'openai'): Promise<ReadingModeResult> {
+  async analyzeImageForReading(imageBase64: string, provider: AIProvider = 'openai', language: AnalysisLanguage = 'en'): Promise<ReadingModeResult> {
     console.log('📖 Starting reading mode analysis with provider:', provider)
     
     try {
       let result: any
       if (provider === 'openai' && this.openaiService) {
-        result = await this.openaiService.analyzeImageForReading(imageBase64)
+        result = await this.openaiService.analyzeImageForReading(imageBase64, language)
       } else if (provider === 'openai-format' && this.openaiFormatService) {
-        result = await this.openaiFormatService.analyzeImageForReading(imageBase64)
+        result = await this.openaiFormatService.analyzeImageForReading(imageBase64, language)
       } else {
         throw new Error(`${provider} service not available or not configured`)
       }

@@ -1,134 +1,66 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
-import { ReadingModeResult, SentenceLocation } from '@/lib/types'
-import { X, Volume2 } from 'lucide-react'
+import { CSSProperties, useEffect, useMemo, useRef, useState } from 'react'
+import { CheckCircle2, Search } from 'lucide-react'
+import MokuroAnalysisPanel from '@/components/MokuroAnalysisPanel'
+import type { AIProvider, AnalysisLanguage, AnalysisResult, ReadingModeResult, SentenceLocation } from '@/lib/types'
 
 interface ReadingModeViewerProps {
   result: ReadingModeResult
+  language: AnalysisLanguage
 }
 
-interface SentenceDetailModalProps {
-  sentence: SentenceLocation
-  isOpen: boolean
-  onClose: () => void
-}
-
-function SentenceDetailModal({ sentence, isOpen, onClose }: SentenceDetailModalProps) {
-  if (!isOpen) return null
-
-  const speakText = (text: string) => {
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(text)
-      utterance.lang = 'ja-JP'
-      speechSynthesis.speak(utterance)
-    }
+const UI_TEXT = {
+  zh: {
+    title: '单页图片分析',
+    subtitle: '点击图片上的文字框，右侧会显示翻译、重点词汇和语法。',
+    sentences: '识别语句',
+    noSentences: '没有识别到可点击语句，建议重新分析或换用更清晰的图片。',
+    imageAlt: '用于分析的漫画页',
+    block: '语句',
+    chars: '字符',
+    locationUnavailable: '没有坐标',
+    analyzed: '已分析'
+  },
+  en: {
+    title: 'Single Page Image Analysis',
+    subtitle: 'Click a text box on the image to see translation, key vocabulary, and grammar.',
+    sentences: 'Detected Sentences',
+    noSentences: 'No clickable sentences were detected. Try reanalyzing or use a clearer image.',
+    imageAlt: 'Manga page for analysis',
+    block: 'Sentence',
+    chars: 'chars',
+    locationUnavailable: 'No location',
+    analyzed: 'Analyzed'
   }
+} satisfies Record<AnalysisLanguage, Record<string, string>>
 
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-900 border border-white/10 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto backdrop-blur-md">
-        <div className="p-6">
-          <div className="flex justify-between items-start mb-4">
-            <h2 className="text-xl font-bold text-white">Sentence Analysis</h2>
-            <button
-              onClick={onClose}
-              className="text-gray-400 hover:text-white transition-colors"
-            >
-              <X size={24} />
-            </button>
-          </div>
-
-          {/* Japanese Text */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-2">
-              <h3 className="text-lg font-semibold text-gray-200">Japanese Text</h3>
-              <button
-                onClick={() => speakText(sentence.sentence)}
-                className="text-blue-400 hover:text-blue-300 transition-colors"
-                title="Listen to pronunciation"
-              >
-                <Volume2 size={18} />
-              </button>
-            </div>
-            <p className="text-xl text-white bg-white/5 p-3 rounded-lg border-l-4 border-purple-500">
-              {sentence.sentence}
-            </p>
-          </div>
-
-          {/* Translation */}
-          <div className="mb-6">
-            <h3 className="text-lg font-semibold text-gray-200 mb-2">Translation</h3>
-            <p className="text-gray-100 bg-green-500/10 p-3 rounded-lg border-l-4 border-green-500">
-              {sentence.translation}
-            </p>
-          </div>
-
-          {/* Vocabulary */}
-          {sentence.words && sentence.words.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-200 mb-3">Vocabulary</h3>
-              <div className="grid gap-3">
-                {sentence.words.map((word, index) => (
-                  <div key={index} className="bg-yellow-500/10 p-3 rounded-lg border border-yellow-500/30">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-white">{word.word}</span>
-                      {word.reading && (
-                        <span className="text-sm text-gray-400">({word.reading})</span>
-                      )}
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        word.difficulty === 'beginner' ? 'bg-green-500/20 text-green-300' :
-                        word.difficulty === 'intermediate' ? 'bg-yellow-500/20 text-yellow-300' :
-                        'bg-red-500/20 text-red-300'
-                      }`}>
-                        {word.difficulty}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-300">{word.meaning}</p>
-                    {word.partOfSpeech && (
-                      <p className="text-xs text-gray-500 mt-1">Part of speech: {word.partOfSpeech}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Grammar */}
-          {sentence.grammar && sentence.grammar.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-lg font-semibold text-gray-200 mb-3">Grammar Patterns</h3>
-              <div className="grid gap-3">
-                {sentence.grammar.map((grammar, index) => (
-                  <div key={index} className="bg-purple-500/10 p-3 rounded-lg border border-purple-500/30">
-                    <h4 className="font-medium text-purple-300 mb-1">{grammar.pattern}</h4>
-                    <p className="text-sm text-gray-300 mb-2">{grammar.explanation}</p>
-                    {grammar.example && (
-                      <p className="text-sm text-purple-400 italic">Example: {grammar.example}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Context */}
-          {sentence.context && (
-            <div className="mb-4">
-              <h3 className="text-lg font-semibold text-gray-200 mb-2">Context</h3>
-              <p className="text-gray-200 bg-blue-500/10 p-3 rounded-lg border-l-4 border-blue-500">
-                {sentence.context}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
+const normalizeProvider = (provider?: string): AIProvider => {
+  return provider === 'openai-format' ? 'openai-format' : 'openai'
 }
 
-export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
-  const [selectedSentence, setSelectedSentence] = useState<SentenceLocation | null>(null)
+const createSentenceAnalysisResult = (
+  sentence: SentenceLocation,
+  provider: AIProvider
+): AnalysisResult => ({
+  extractedText: sentence.sentence,
+  sentences: [
+    {
+      sentence: sentence.sentence,
+      translation: sentence.translation,
+      words: sentence.words || [],
+      grammar: sentence.grammar || [],
+      context: sentence.context || ''
+    }
+  ],
+  translation: sentence.translation,
+  summary: sentence.context || '',
+  provider
+})
+
+export default function ReadingModeViewer({ result, language }: ReadingModeViewerProps) {
+  const t = UI_TEXT[language]
+  const [selectedIndex, setSelectedIndex] = useState(0)
   const [imageSize, setImageSize] = useState({
     width: 0,
     height: 0,
@@ -136,39 +68,35 @@ export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
     naturalHeight: 0
   })
   const imageRef = useRef<HTMLImageElement>(null)
+  const provider = normalizeProvider(result.provider)
 
   useEffect(() => {
     const updateImageSize = () => {
-      if (imageRef.current) {
-        setImageSize({
-          width: imageRef.current.clientWidth,
-          height: imageRef.current.clientHeight,
-          naturalWidth: imageRef.current.naturalWidth || imageRef.current.clientWidth,
-          naturalHeight: imageRef.current.naturalHeight || imageRef.current.clientHeight
-        })
-      }
+      if (!imageRef.current) return
+      setImageSize({
+        width: imageRef.current.clientWidth,
+        height: imageRef.current.clientHeight,
+        naturalWidth: imageRef.current.naturalWidth || imageRef.current.clientWidth,
+        naturalHeight: imageRef.current.naturalHeight || imageRef.current.clientHeight
+      })
     }
 
     const img = imageRef.current
-    if (img) {
-      if (img.complete) {
-        updateImageSize()
-      } else {
-        img.onload = updateImageSize
-      }
+    if (img?.complete) {
+      updateImageSize()
     }
 
     window.addEventListener('resize', updateImageSize)
     return () => window.removeEventListener('resize', updateImageSize)
   }, [result.imageData])
 
-  const handleSentenceClick = (sentence: SentenceLocation) => {
-    setSelectedSentence(sentence)
-  }
-
-  const closeModal = () => {
-    setSelectedSentence(null)
-  }
+  const effectiveSelectedIndex = result.sentences.length === 0
+    ? null
+    : Math.min(selectedIndex, result.sentences.length - 1)
+  const selectedSentence = effectiveSelectedIndex == null ? null : result.sentences[effectiveSelectedIndex] ?? null
+  const selectedAnalysis = useMemo(() => {
+    return selectedSentence ? createSentenceAnalysisResult(selectedSentence, provider) : null
+  }, [provider, selectedSentence])
 
   const convertToPixels = (
     value: number | undefined | null,
@@ -195,128 +123,145 @@ export default function ReadingModeViewer({ result }: ReadingModeViewerProps) {
     return ratio * renderedDimension
   }
 
+  const getSentenceBoxStyle = (sentence: SentenceLocation): CSSProperties | null => {
+    const { boundingBox } = sentence
+    if (!boundingBox || imageSize.width === 0 || imageSize.height === 0) return null
+
+    const left = convertToPixels(boundingBox.x, imageSize.width, imageSize.naturalWidth)
+    const top = convertToPixels(boundingBox.y, imageSize.height, imageSize.naturalHeight)
+    const rawWidth = convertToPixels(boundingBox.width, imageSize.width, imageSize.naturalWidth)
+    const rawHeight = convertToPixels(boundingBox.height, imageSize.height, imageSize.naturalHeight)
+
+    if (left === null || top === null || rawWidth === null || rawHeight === null) return null
+
+    const maxWidth = Math.max(imageSize.width - left, 0)
+    const maxHeight = Math.max(imageSize.height - top, 0)
+    const width = Math.min(rawWidth, maxWidth)
+    const height = Math.min(rawHeight, maxHeight)
+
+    if (width <= 0 || height <= 0) return null
+
+    return {
+      left,
+      top,
+      width,
+      height
+    }
+  }
+
   return (
-    <div className="space-y-6">
-      {/* Summary */}
-      {result.overallSummary && (
-        <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
-          <h3 className="text-lg font-semibold text-blue-900 mb-2">Summary</h3>
-          <p className="text-blue-800">{result.overallSummary}</p>
+    <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_400px]">
+      <section className="min-w-0 rounded-2xl border border-white/10 bg-white/5 p-3 md:p-4">
+        <div className="mb-3">
+          <h2 className="text-xl font-semibold text-white">{t.title}</h2>
+          <p className="text-sm text-gray-400">{t.subtitle}</p>
         </div>
-      )}
 
-      {/* Image with Sentence Overlays */}
-      <div className="relative inline-block">
-        <img
-          ref={imageRef}
-          src={result.imageData}
-          alt="Manga page for reading"
-          className="max-w-full h-auto rounded-lg shadow-lg"
-        />
-        
-        {/* Sentence Rectangles */}
-        {result.sentences.map((sentence, index) => {
-          const { boundingBox } = sentence
-          if (
-            !boundingBox ||
-            imageSize.width === 0 ||
-            imageSize.height === 0
-          ) {
-            return null
-          }
-
-          const left = convertToPixels(boundingBox.x, imageSize.width, imageSize.naturalWidth)
-          const top = convertToPixels(boundingBox.y, imageSize.height, imageSize.naturalHeight)
-          const rawWidth = convertToPixels(boundingBox.width, imageSize.width, imageSize.naturalWidth)
-          const rawHeight = convertToPixels(boundingBox.height, imageSize.height, imageSize.naturalHeight)
-
-          if (
-            left === null ||
-            top === null ||
-            rawWidth === null ||
-            rawHeight === null
-          ) {
-            return null
-          }
-
-          const maxWidth = Math.max(imageSize.width - left, 0)
-          const maxHeight = Math.max(imageSize.height - top, 0)
-          const limitedWidth = Math.min(rawWidth, maxWidth)
-          const limitedHeight = Math.min(rawHeight, maxHeight)
-
-          if (limitedWidth <= 0 || limitedHeight <= 0) {
-            return null
-          }
-
-          const width = limitedWidth * 0.7
-          const height = limitedHeight * 0.6
-
-          return (
-            <div
-              key={index}
-              className="group absolute border-2 border-red-500 bg-red-500 bg-opacity-20 cursor-pointer hover:bg-opacity-40 transition-all duration-200"
-              style={{
-                left: `${left}px`,
-                top: `${top}px`,
-                width: `${width}px`,
-                height: `${height}px`
+        <div className="overflow-auto rounded-xl bg-gray-950/70 p-2">
+          <div className="relative mx-auto overflow-hidden rounded-lg bg-black">
+            <img
+              ref={imageRef}
+              src={result.imageData}
+              alt={t.imageAlt}
+              className="block h-auto w-full select-none"
+              onLoad={() => {
+                if (!imageRef.current) return
+                setImageSize({
+                  width: imageRef.current.clientWidth,
+                  height: imageRef.current.clientHeight,
+                  naturalWidth: imageRef.current.naturalWidth || imageRef.current.clientWidth,
+                  naturalHeight: imageRef.current.naturalHeight || imageRef.current.clientHeight
+                })
               }}
-              onClick={() => handleSentenceClick(sentence)}
-              title={`Click to analyze: ${sentence.sentence}`}
-            >
-              <div className="absolute -top-6 left-0 bg-red-500 text-white text-xs px-1 py-0.5 rounded">
-                {index + 1}
-              </div>
-              <div className="pointer-events-none absolute left-0 top-full mt-1 hidden min-w-[160px] max-w-[220px] rounded border border-gray-200 bg-white/90 px-2 py-1 text-[11px] leading-snug text-gray-900 shadow-lg group-hover:block">
-                <p className="font-semibold text-xs">Translation</p>
-                <p>{sentence.translation || 'Translation unavailable'}</p>
-              </div>
+            />
+            <div className="absolute inset-0">
+              {result.sentences.map((sentence, index) => {
+                const boxStyle = getSentenceBoxStyle(sentence)
+                if (!boxStyle) return null
+                const selected = effectiveSelectedIndex === index
+
+                return (
+                  <button
+                    key={`${sentence.sentence}-${index}`}
+                    type="button"
+                    aria-label={`${t.block} ${index + 1}: ${sentence.sentence}`}
+                    title={sentence.sentence}
+                    onClick={() => setSelectedIndex(index)}
+                    style={boxStyle}
+                    className={`absolute rounded-sm border transition-colors ${
+                      selected
+                        ? 'border-amber-300 bg-amber-300/25 shadow-[0_0_0_2px_rgba(251,191,36,0.35)]'
+                        : 'border-cyan-300/70 bg-cyan-300/5 hover:bg-cyan-300/20'
+                    }`}
+                  >
+                    <span className="sr-only">{sentence.sentence}</span>
+                  </button>
+                )
+              })}
             </div>
-          )
-        })}
-      </div>
-
-      {/* Sentence List */}
-      <div className="bg-gray-50 p-4 rounded-lg">
-        <h3 className="text-lg font-semibold text-gray-800 mb-3">
-          Identified Sentences ({result.sentences.length})
-        </h3>
-        <div className="grid gap-2">
-          {result.sentences.map((sentence, index) => {
-            const hasBoundingBox = !!sentence.boundingBox &&
-              typeof sentence.boundingBox.x === 'number' &&
-              typeof sentence.boundingBox.y === 'number'
-
-            return (
-              <div
-                key={index}
-                className="bg-white p-3 rounded border border-gray-200 cursor-pointer hover:bg-blue-50 transition-colors"
-                onClick={() => handleSentenceClick(sentence)}
-              >
-                <div className="flex items-start gap-3">
-                  <span className="bg-red-500 text-white text-xs px-2 py-1 rounded font-medium">
-                    {index + 1}
-                  </span>
-                  <div className="flex-1">
-                    <p className="text-gray-900 font-medium mb-1">{sentence.sentence}</p>
-                    <p className="text-gray-600 text-sm">{sentence.translation}</p>
-                    {!hasBoundingBox && (
-                      <p className="text-amber-600 text-xs mt-1">Location unavailable in provider response.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
+          </div>
         </div>
-      </div>
+      </section>
 
-      {/* Sentence Detail Modal */}
-      <SentenceDetailModal
-        sentence={selectedSentence!}
-        isOpen={!!selectedSentence}
-        onClose={closeModal}
-      />
+      <aside className="min-w-0 space-y-4">
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <Search size={16} className="text-cyan-300" />
+            <h3 className="font-semibold text-white">{t.sentences}</h3>
+            <span className="ml-auto rounded-full border border-white/10 px-2 py-0.5 text-xs text-gray-400">
+              {result.sentences.length}
+            </span>
+          </div>
+          <div className="max-h-[360px] space-y-2 overflow-auto pr-1">
+            {result.sentences.length > 0 ? result.sentences.map((sentence, index) => {
+              const selected = effectiveSelectedIndex === index
+              const hasLocation = Boolean(sentence.boundingBox)
+
+              return (
+                <button
+                  key={`sentence-list-${index}`}
+                  type="button"
+                  onClick={() => setSelectedIndex(index)}
+                  className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                    selected
+                      ? 'border-amber-300/70 bg-amber-400/20'
+                      : 'border-white/10 bg-gray-950/40 hover:bg-white/10'
+                  }`}
+                >
+                  <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+                    <span>{t.block} {index + 1}</span>
+                    <span className="inline-flex items-center gap-1">
+                      {selected && <CheckCircle2 size={12} className="text-emerald-300" />}
+                      {hasLocation ? t.analyzed : t.locationUnavailable}
+                    </span>
+                  </div>
+                  <p className="line-clamp-3 font-japanese text-sm leading-relaxed text-gray-100">
+                    {sentence.sentence}
+                  </p>
+                  {sentence.translation && (
+                    <p className="mt-1 line-clamp-2 text-xs text-gray-400">
+                      {sentence.translation}
+                    </p>
+                  )}
+                </button>
+              )
+            }) : (
+              <p className="rounded-lg border border-white/10 bg-gray-950/40 p-3 text-sm text-gray-400">
+                {t.noSentences}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <MokuroAnalysisPanel
+            analysisResult={selectedAnalysis}
+            isAnalyzing={false}
+            selectedText={selectedSentence?.sentence ?? null}
+            language={language}
+          />
+        </div>
+      </aside>
     </div>
   )
 }

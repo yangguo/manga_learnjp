@@ -3,71 +3,61 @@
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, FileImage, Loader2, CheckCircle, X, BookOpen, FileText, Eye, FileJson } from 'lucide-react'
+import { Upload, FileImage, Loader2, CheckCircle, X, FileJson, Languages, type LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { SUPPORTED_IMAGE_TYPES, type AnalysisResult, type MangaAnalysisResult, type ReadingModeResult, type AnalysisMode } from '@/lib/types'
+import { ANALYSIS_MODE_OPTIONS, IMAGE_ANALYSIS_LANGUAGE_OPTIONS } from '@/lib/analysis-modes'
+import { SUPPORTED_IMAGE_TYPES, type AnalysisLanguage, type AnalysisResult, type ReadingModeResult, type AnalysisMode } from '@/lib/types'
 import { useAIProviderStore } from '@/lib/store'
-import { useClientPanelSegmentation } from '@/hooks/useClientPanelSegmentation'
 import { analyzeImageForReading } from '@/lib/client-api'
 import { compressImageForAPI } from '@/lib/image-compression'
 
+const MODE_VISUALS: Record<AnalysisMode, { icon: LucideIcon; accent: string }> = {
+  image: {
+    icon: FileImage,
+    accent: 'from-blue-500 to-cyan-500'
+  },
+  mokuro: {
+    icon: FileJson,
+    accent: 'from-amber-500 to-orange-500'
+  }
+}
+
+const hasReadingSentences = (result: ReadingModeResult): boolean => {
+  return Array.isArray(result.sentences) && result.sentences.length > 0
+}
+
 interface ImageUploaderProps {
   onAnalysisComplete: (result: AnalysisResult) => void
-  onMangaAnalysisComplete: (result: MangaAnalysisResult) => void
   onReadingModeComplete: (result: ReadingModeResult) => void
   onOriginalImageChange: (imageData: string | null) => void
   onError: (errorMessage: string) => void
   analysisMode: AnalysisMode
   onModeChange: (mode: AnalysisMode) => void
+  analysisLanguage: AnalysisLanguage
+  onAnalysisLanguageChange: (language: AnalysisLanguage) => void
 }
 
 export default function ImageUploader({
   onAnalysisComplete,
-  onMangaAnalysisComplete,
   onReadingModeComplete,
   onOriginalImageChange,
   onError,
   analysisMode,
-  onModeChange
+  onModeChange,
+  analysisLanguage,
+  onAnalysisLanguageChange
 }: ImageUploaderProps) {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
   const [imageBase64, setImageBase64] = useState<string | null>(null)
   const [progress, setProgress] = useState(0)
-  const [segmentationStatus, setSegmentationStatus] = useState<'idle' | 'segmenting' | 'complete' | 'error'>('idle')
   const { selectedProvider } = useAIProviderStore()
-  const { segmentPanels, isAvailable: isClientSegmentationAvailable } = useClientPanelSegmentation()
-  const modeOptions: Record<
-    AnalysisMode,
-    { label: string; shortLabel: string; icon: typeof BookOpen; accent: string }
-  > = {
-    panel: {
-      label: 'Panel Analysis',
-      shortLabel: 'Panel',
-      icon: BookOpen,
-      accent: 'from-blue-500 to-cyan-500'
-    },
-    simple: {
-      label: 'Simple Analysis',
-      shortLabel: 'Simple',
-      icon: FileText,
-      accent: 'from-purple-500 to-pink-500'
-    },
-    reading: {
-      label: 'Reading Mode',
-      shortLabel: 'Reading',
-      icon: Eye,
-      accent: 'from-emerald-500 to-lime-500'
-    },
-    mokuro: {
-      label: 'Mokuro Reader',
-      shortLabel: 'Mokuro',
-      icon: FileJson,
-      accent: 'from-amber-500 to-orange-500'
-    }
-  }
 
   const analyzeImageData = useCallback(async (imageToAnalyze: string | null) => {
+    if (analysisMode === 'mokuro') {
+      toast('Use the Mokuro Reader panel below.')
+      return
+    }
     if (!imageToAnalyze) {
       toast.error('Please upload an image before running analysis.')
       return
@@ -75,181 +65,33 @@ export default function ImageUploader({
 
     setIsAnalyzing(true)
     setProgress(20)
-    setSegmentationStatus('idle')
-
-    // Compress to stay under Vercel's 4.5 MB request payload limit.
-    // 3500 KB base64 ≈ 2.6 MB raw; total JSON body stays well under 4.5 MB.
-    const imageForAPI = await compressImageForAPI(imageToAnalyze, 3500)
 
     try {
-      console.log('🔍 Debug: analysisMode =', analysisMode)
-      console.log('🔍 Debug: isClientSegmentationAvailable =', isClientSegmentationAvailable)
-      
-      if (analysisMode === 'panel') {
-        // Panel Analysis Mode: Try client-side segmentation first
-        if (isClientSegmentationAvailable) {
-          try {
-            setSegmentationStatus('segmenting')
-            setProgress(30)
-            
-            console.log('🔍 Starting client-side panel segmentation...')
-            const segmentationResult = await segmentPanels(imageToAnalyze)
-            
-            console.log('📊 Segmentation result:', segmentationResult)
-            
-            // If we found panels, proceed with panel-by-panel analysis
-            if (segmentationResult.panels.length > 0) {
-              setSegmentationStatus('complete')
-              setProgress(50)
-              
-              // Now analyze each panel using the API
-              const panelAnalyses = await Promise.allSettled(
-                segmentationResult.panels.map(async (panel, index) => {
-                  const response = await fetch('/api/analyze', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                      imageBase64: panel.imageData,
-                      provider: selectedProvider,
-                      mangaMode: false // Analyze individual panels as regular images
-                    }),
-                  })
-                  
-                  if (!response.ok) {
-                    throw new Error(`Failed to analyze panel ${index + 1}`)
-                  }
-                  
-                  const panelResult = await response.json()
-                  return {
-                    panelNumber: index + 1,
-                    position: panel.boundingBox,
-                    imageData: panel.imageData,
-                    extractedText: panelResult.extractedText || '',
-                    sentences: panelResult.sentences || [],
-                    translation: panelResult.translation || '',
-                    words: panelResult.words || [],
-                    grammar: panelResult.grammar || [],
-                    context: panelResult.summary || panelResult.context || ''
-                  }
-                })
-              )
-              
-              setProgress(90)
-              
-              // Extract successful analyses
-              const panels = panelAnalyses
-                .filter((result): result is PromiseFulfilledResult<any> => result.status === 'fulfilled')
-                .map(result => result.value)
-              
-              const mangaResult: MangaAnalysisResult = {
-                panels,
-                overallSummary: `This manga page contains ${panels.length} panels with segmented content.`,
-                readingOrder: segmentationResult.readingOrder,
-                provider: selectedProvider
-              }
-              
-              setProgress(100)
-              setIsAnalyzing(false)
-              toast.success(`✅ Manga analyzed with client-side segmentation! Found ${panels.length} panels.`)
-              onMangaAnalysisComplete(mangaResult)
-              return // Exit early on successful panel segmentation
-            }
-          } catch (segError) {
-            console.log('⚠️ Client-side segmentation failed, falling back to LLM analysis:', segError)
-            setSegmentationStatus('error')
-            // Continue to LLM-based manga analysis below
-          }
-        }
-      }
-      
-      // Reading Mode: Use LLM to identify sentences and their locations
-      if (analysisMode === 'reading') {
-        try {
-          console.log('🔍 Starting reading mode analysis...')
-          setProgress(30)
-          
-          const readingResult = await analyzeImageForReading(imageForAPI, {
-            provider: selectedProvider,
-          })
-          
-          setProgress(90)
-          
-          if (readingResult) {
-            console.log('✅ Reading mode analysis successful:', readingResult)
-            setProgress(100)
-            setIsAnalyzing(false)
-            toast.success(`✅ Reading mode analysis complete using ${selectedProvider.toUpperCase()}!`)
-            onReadingModeComplete(readingResult)
-            return
-          }
-        } catch (readingError) {
-          console.log('⚠️ Reading mode analysis failed:', readingError)
+      // Compress to stay under Vercel's 4.5 MB request payload limit.
+      // 3500 KB base64 is about 2.6 MB raw; total JSON body stays well under 4.5 MB.
+      const imageForAPI = await compressImageForAPI(imageToAnalyze, 3500)
+
+      try {
+        setProgress(45)
+
+        const readingResult = await analyzeImageForReading(imageForAPI, {
+          provider: selectedProvider,
+          language: analysisLanguage,
+        })
+
+        if (hasReadingSentences(readingResult)) {
+          setProgress(100)
           setIsAnalyzing(false)
-          setProgress(0)
-          onError(`Reading mode analysis failed: ${readingError instanceof Error ? readingError.message : String(readingError)}`)
+          toast.success(analysisLanguage === 'zh' ? '已完成图片分析。' : 'Image analysis complete.')
+          onReadingModeComplete(readingResult)
           return
         }
+      } catch (readingError) {
+        console.log('Reading-location analysis failed, continuing to page analysis:', readingError)
       }
 
-      // Simple Analysis Mode: Try LLM-based panel analysis first, fallback to simple text analysis
-      if (analysisMode === 'simple') {
-        try {
-          setSegmentationStatus('segmenting')
-          setProgress(30)
-          
-          console.log('🔍 Starting LLM-based panel analysis for simple mode...')
-          
-          const response = await fetch('/api/analyze', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              imageBase64: imageForAPI,
-              provider: selectedProvider,
-              mangaMode: false, // Don't use regular manga mode
-              simpleAnalysisMode: true // Use simple analysis mode which triggers LLM-based panel detection
-            }),
-          })
+      setProgress(75)
 
-          setProgress(60)
-
-          if (response.ok) {
-            const result: MangaAnalysisResult = await response.json()
-            
-            // Check if we got meaningful panel results
-            if (result && 'panels' in result && result.panels.length > 0) {
-              setSegmentationStatus('complete')
-              setProgress(100)
-              setIsAnalyzing(false)
-              toast.success(`✅ Image analyzed with LLM-based panel detection! Found ${result.panels.length} panels.`)
-              onMangaAnalysisComplete(result)
-              return // Exit early on successful LLM panel analysis
-            }
-          }
-          
-          console.log('⚠️ LLM panel analysis failed or returned no panels, falling back to simple text analysis')
-          setSegmentationStatus('error')
-          // Continue to simple text analysis fallback below
-          
-        } catch (llmError) {
-          console.log('⚠️ LLM panel analysis failed, falling back to simple text analysis:', llmError)
-          setSegmentationStatus('error')
-          // Continue to simple text analysis fallback below
-        }
-      }
-      
-      // Fallback: Use server-side analysis (manga mode for panel analysis, simple for text analysis)
-      console.log('🔄 Using fallback analysis method...')
-      
-      if (analysisMode === 'panel') {
-        setSegmentationStatus('segmenting')
-        setProgress(30)
-      }
-      setProgress(40)
-      
       const response = await fetch('/api/analyze', {
         method: 'POST',
         headers: {
@@ -258,41 +100,23 @@ export default function ImageUploader({
         body: JSON.stringify({
           imageBase64: imageForAPI,
           provider: selectedProvider,
-          mangaMode: analysisMode === 'panel',
-          simpleAnalysisMode: analysisMode === 'simple'
+          mangaMode: false,
+          analysisLanguage,
+          excludeN5: true
         }),
       })
-
-      if (analysisMode === 'panel') {
-        setSegmentationStatus('complete')
-      }
-
-      setProgress(70)
 
       if (!response.ok) {
         const errorData = await response.json()
         throw new Error(errorData.error || 'Failed to analyze image')
       }
 
-      const result: AnalysisResult | MangaAnalysisResult = await response.json()
+      const result = await response.json()
       setProgress(100)
       setIsAnalyzing(false)
 
-      // Show success message
-      if (analysisMode === 'panel') {
-        toast.success(`✅ Manga analyzed using ${result.provider?.toUpperCase()}!`)
-        if ('panels' in result) {
-          onMangaAnalysisComplete(result as MangaAnalysisResult)
-        } else {
-          throw new Error('Expected manga analysis result but got simple analysis')
-        }
-      } else if (analysisMode === 'simple' && 'panels' in result) {
-        toast.success(`✅ Image analyzed using ${result.provider?.toUpperCase()}!`)
-        onMangaAnalysisComplete(result as MangaAnalysisResult)
-      } else {
-        toast.success(`✅ Image analyzed using ${result.provider?.toUpperCase()}!`)
-        onAnalysisComplete(result as AnalysisResult)
-      }
+      toast.success(analysisLanguage === 'zh' ? '已完成整页分析。' : 'Page analysis complete.')
+      onAnalysisComplete(result as AnalysisResult)
 
     } catch (error) {
       console.error('Analysis error:', error)
@@ -300,15 +124,13 @@ export default function ImageUploader({
       onError(errorMessage)
       setIsAnalyzing(false)
       setProgress(0)
-      setSegmentationStatus('error')
     }
-  }, [analysisMode, isClientSegmentationAvailable, onAnalysisComplete, onError, onMangaAnalysisComplete, onReadingModeComplete, segmentPanels, selectedProvider])
+  }, [analysisLanguage, analysisMode, onAnalysisComplete, onError, onReadingModeComplete, selectedProvider])
 
   const prepareImage = useCallback((file: File) => {
     if (!file) return
 
     setProgress(0)
-    setSegmentationStatus('idle')
     setIsAnalyzing(false)
 
     const reader = new FileReader()
@@ -318,7 +140,7 @@ export default function ImageUploader({
       setUploadedImage(dataUrl)
       setImageBase64(base64)
       onOriginalImageChange(base64)
-      toast.success('Image uploaded! Choose a mode and click Analyze.')
+      toast.success('Image uploaded. Click Analyze to start automatic analysis.')
     }
     reader.onerror = () => {
       onError('Failed to read image file')
@@ -363,7 +185,6 @@ export default function ImageUploader({
     onOriginalImageChange(null) // Clear the original image data
     setIsAnalyzing(false)
     setProgress(0)
-    setSegmentationStatus('idle')
   }
 
   const getStatusIcon = () => {
@@ -381,43 +202,19 @@ export default function ImageUploader({
 
   const getStatusText = () => {
     if (analysisMode === 'mokuro') {
-      return 'Use the Mokuro Reader below to load .mokuro files and page images'
+      return 'Use the Mokuro Reader below to load a Mokuro output directory'
     }
     if (isAnalyzing) {
-      if (progress < 40) return 'Reading image...'
-      if (progress < 70) {
-        if (analysisMode === 'panel') {
-          if (segmentationStatus === 'segmenting') return 'Segmenting manga panels...'
-          if (segmentationStatus === 'complete') return 'Analyzing panels with AI...'
-          return 'Identifying manga panels...'
-        } else {
-          if (segmentationStatus === 'segmenting') return 'Detecting panels with AI...'
-          if (segmentationStatus === 'complete') return 'Analyzing detected content...'
-          return 'Analyzing image content...'
-        }
-        return 'Extracting Japanese text...'
-      }
-      if (progress < 100) {
-        return analysisMode === 'panel' 
-          ? 'Analyzing panels with AI...' 
-          : analysisMode === 'reading'
-          ? 'Identifying sentences with AI...'
-          : 'Analyzing with AI...'
-      }
+      if (progress < 35) return 'Preparing image...'
+      if (progress < 65) return 'Finding text areas on this page...'
+      if (progress < 85) return 'Analyzing this page...'
+      if (progress < 100) return 'Finishing image analysis...'
     }
     if (progress === 100) return 'Analysis complete!'
     if (uploadedImage) {
-      return analysisMode === 'panel' 
-        ? 'Image ready. Run panel analysis when you are ready.'
-        : analysisMode === 'reading'
-        ? 'Image ready. Run reading mode when you are ready.'
-        : 'Image ready. Run simple analysis when you are ready.'
+      return 'Image ready. Run automatic analysis when you are ready.'
     }
-    return analysisMode === 'panel' 
-      ? 'Upload manga page for panel analysis' 
-      : analysisMode === 'reading'
-      ? 'Upload manga image for reading mode'
-      : 'Upload manga image'
+    return 'Upload manga image for automatic analysis'
   }
 
   const analyzeDisabled = analysisMode === 'mokuro' || !imageBase64 || isAnalyzing
@@ -442,7 +239,7 @@ export default function ImageUploader({
                       <FileJson className="h-5 w-5 text-amber-300" />
                     </div>
                     <div>
-                      <h3 className="text-lg font-semibold text-white">Mokuro Import Mode</h3>
+                      <h3 className="text-lg font-semibold text-white">Mokuro Reader</h3>
                       <p className="mt-1 text-sm text-gray-400">
                         Choose the Mokuro output directory in the reader panel below.
                       </p>
@@ -569,21 +366,21 @@ export default function ImageUploader({
             <div>
               <p className="text-xs uppercase tracking-wide text-gray-400 mb-1.5">Select Mode</p>
               <div className="space-y-1.5">
-                {(Object.keys(modeOptions) as AnalysisMode[]).map((modeKey) => {
-                  const mode = modeOptions[modeKey]
-                  const Icon = mode.icon
-                  const isActive = analysisMode === modeKey
+                {ANALYSIS_MODE_OPTIONS.map((mode) => {
+                  const visual = MODE_VISUALS[mode.mode]
+                  const Icon = visual.icon
+                  const isActive = analysisMode === mode.mode
                   return (
                     <button
-                      key={modeKey}
-                      onClick={() => onModeChange(modeKey)}
+                      key={mode.mode}
+                      onClick={() => onModeChange(mode.mode)}
                       className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-all w-full ${
                         isActive
                           ? 'border-white/60 bg-white/10 shadow-lg shadow-purple-500/20'
                           : 'border-white/10 bg-white/5 hover:border-white/30'
                       }`}
                     >
-                      <div className={`rounded-lg bg-gradient-to-br ${mode.accent} p-2 text-white flex-shrink-0`}>
+                      <div className={`rounded-lg bg-gradient-to-br ${visual.accent} p-2 text-white flex-shrink-0`}>
                         <Icon size={16} />
                       </div>
                       <div className="flex flex-col leading-tight">
@@ -595,6 +392,29 @@ export default function ImageUploader({
                 })}
               </div>
             </div>
+
+            {analysisMode === 'image' && (
+              <div>
+                <p className="mb-1.5 text-xs uppercase tracking-wide text-gray-400">Explanation Language</p>
+                <div className="inline-flex w-full items-center gap-1 rounded-lg border border-white/10 bg-gray-950/40 p-1">
+                  <Languages size={15} className="ml-1.5 text-cyan-300" />
+                  {IMAGE_ANALYSIS_LANGUAGE_OPTIONS.map(language => (
+                    <button
+                      key={language}
+                      type="button"
+                      onClick={() => onAnalysisLanguageChange(language)}
+                      className={`flex-1 rounded-md px-2 py-1.5 text-sm font-medium transition-colors ${
+                        analysisLanguage === language
+                          ? 'bg-white text-gray-950'
+                          : 'text-gray-300 hover:bg-white/10'
+                      }`}
+                    >
+                      {language === 'zh' ? '中文' : 'English'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <button
               onClick={handleAnalyzeClick}

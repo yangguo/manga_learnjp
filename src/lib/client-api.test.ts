@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { analyzeText } from './client-api'
+import { analyzeImageForReading, analyzeText } from './client-api'
 
 describe('analyzeText', () => {
   afterEach(() => {
@@ -42,5 +42,48 @@ describe('analyzeText', () => {
     )))
 
     await expect(analyzeText('こんにちは')).rejects.toThrow('No AI service configured')
+  })
+})
+
+describe('analyzeImageForReading', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('posts image, provider, and Chinese default language to reading analysis', async () => {
+    const readingResult = {
+      sentences: [],
+      imageData: 'data:image/jpeg;base64,abc',
+      overallSummary: 'Summary',
+      provider: 'openai-format'
+    }
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(readingResult), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await analyzeImageForReading('abc', { provider: 'openai-format' })
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body).toEqual({
+      imageBase64: 'abc',
+      provider: 'openai-format',
+      readingMode: true,
+      analysisLanguage: 'zh'
+    })
+    expect(result).toEqual(readingResult)
+  })
+
+  it('can request English reading analysis', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      sentences: [],
+      imageData: 'data:image/jpeg;base64,abc',
+      overallSummary: 'Summary',
+      provider: 'openai'
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await analyzeImageForReading('abc', { provider: 'openai', language: 'en' })
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body.analysisLanguage).toBe('en')
   })
 })
