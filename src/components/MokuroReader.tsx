@@ -19,18 +19,29 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import MokuroAnalysisPanel from '@/components/MokuroAnalysisPanel'
+import { runWithBatchAwake } from '@/lib/batch-awake'
 import { analyzeText } from '@/lib/client-api'
+import { runConcurrentTasks } from '@/lib/concurrency'
 import {
+  MOKURO_ANALYSIS_CACHE_DIRNAME,
   MOKURO_ANALYSIS_CACHE_FILENAME,
-  createMokuroAnalysisCacheKey,
   clampPageRange,
+  createMokuroAnalysisCacheKey,
   createMokuroImageLookup,
+  filterAnalysesByPageIndex,
   findMokuroPageImageFile,
+  getMokuroPageAnalysisConcurrency,
+  getPageCacheFilename,
   getMokuroBlockText,
+  groupAnalysesByPageIndex,
+  isMokuroPageAnalysisComplete,
   parseMokuroAnalysisCacheContent,
   parseMokuroFileContent,
+  parseMokuroPageAnalysisCacheContent,
   planMokuroDirectoryImport,
   serializeMokuroAnalysisCache,
+  serializeMokuroPageAnalysisCache,
+  shouldStopMokuroRangeAfterPageAnalysis,
   type MokuroImageCandidate
 } from '@/lib/mokuro'
 import { useAIProviderStore } from '@/lib/store'
@@ -52,10 +63,15 @@ interface BrowserFileSystemDirectoryHandle {
   kind: 'directory'
   name: string
   values: () => AsyncIterableIterator<BrowserFileSystemHandle>
+  getDirectoryHandle: (
+    name: string,
+    options?: { create?: boolean }
+  ) => Promise<BrowserFileSystemDirectoryHandle>
   getFileHandle: (
     name: string,
     options?: { create?: boolean }
   ) => Promise<BrowserFileSystemFileHandle>
+  removeEntry: (name: string, options?: { recursive?: boolean }) => Promise<void>
 }
 
 type BrowserFileSystemHandle = BrowserFileSystemFileHandle | BrowserFileSystemDirectoryHandle
@@ -96,7 +112,16 @@ interface BatchProgress {
   totalPages?: number
 }
 
+interface BatchFailure {
+  pageIndex: number
+  blockIndex: number
+  text: string
+  error: string
+}
+
 type CacheStorageMode = 'directory' | 'browser'
+
+const DIRECTORY_CACHE_DISPLAY_PATH = `${MOKURO_ANALYSIS_CACHE_DIRNAME}/page-*.json`
 
 const UI_TEXT = {
   zh: {
@@ -123,7 +148,7 @@ const UI_TEXT = {
     noImageTitle: '没有匹配到页面图片',
     noImageBody: '目录中需要包含 Mokuro 引用的图片文件：',
     loadStartTitle: '选择 Mokuro 输出目录开始',
-    loadStartBody: `目录中应包含 .mokuro 文件和页面图片。分析结果会写入 ${MOKURO_ANALYSIS_CACHE_FILENAME}。`,
+    loadStartBody: `目录中应包含 .mokuro 文件和页面图片。分析结果会写入 ${DIRECTORY_CACHE_DISPLAY_PATH}。`,
     noText: '这个文本块没有内容。',
     savedDirectory: '已保存到目录缓存文件',
     savedBrowser: '已保存到浏览器本地缓存',
@@ -140,6 +165,10 @@ const UI_TEXT = {
     rangeInvalid: '起始页不能大于结束页',
     rangeComplete: '范围批量分析完成',
     rangeCancelled: '已取消范围批量分析',
+    pageIncomplete: '第 {page} 页还有 {count} 条语句未完成。重新运行会跳过已缓存内容。',
+    rangeCompleteWithFailures: '范围批量分析完成，{count} 条语句失败。重新运行会重试失败项。',
+    failedBlocksTitle: '失败语句',
+    failedBlockMeta: '第 {page} 页 · block {block}',
     pageOf: '第 {current} / {total} 页'
   },
   en: {
@@ -166,7 +195,7 @@ const UI_TEXT = {
     noImageTitle: 'No matching page image',
     noImageBody: 'The folder needs to include the image referenced by Mokuro:',
     loadStartTitle: 'Choose a Mokuro output folder to start',
-    loadStartBody: `The folder should include the .mokuro file and page images. Results are saved to ${MOKURO_ANALYSIS_CACHE_FILENAME}.`,
+    loadStartBody: `The folder should include the .mokuro file and page images. Results are saved to ${DIRECTORY_CACHE_DISPLAY_PATH}.`,
     noText: 'This text block has no text.',
     savedDirectory: 'Saved to the folder cache file',
     savedBrowser: 'Saved to browser local cache',
@@ -183,6 +212,10 @@ const UI_TEXT = {
     rangeInvalid: 'Start page must not exceed end page',
     rangeComplete: 'Range batch analysis complete',
     rangeCancelled: 'Range batch analysis cancelled',
+    pageIncomplete: 'Page {page} still has {count} unfinished sentences. Rerun to skip cached results.',
+    rangeCompleteWithFailures: 'Range batch analysis finished with {count} failed sentences. Rerun to retry failures.',
+    failedBlocksTitle: 'Failed sentences',
+    failedBlockMeta: 'Page {page} · block {block}',
     pageOf: 'Page {current} / {total}'
   }
 } satisfies Record<AnalysisLanguage, Record<string, string>>
@@ -206,6 +239,16 @@ const getBlockStyle = (block: MokuroBlock, page: MokuroPage): CSSProperties => {
 
 const getBrowserCacheKey = (mokuroName: string | null): string => {
   return `manga-learnjp:mokuro-analysis:${mokuroName ?? 'unknown'}`
+}
+
+const getErrorMessage = (error: unknown, fallback = 'Unknown error'): string => {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  return fallback
+}
+
+const isAbortError = (error: unknown): boolean => {
+  return error instanceof DOMException && error.name === 'AbortError'
 }
 
 const createImportedFile = (file: File, relativePath?: string): MokuroImportedFile => {
@@ -261,6 +304,7 @@ export default function MokuroReader() {
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isBatchAnalyzing, setIsBatchAnalyzing] = useState(false)
   const [batchProgress, setBatchProgress] = useState<BatchProgress | null>(null)
+  const [batchFailures, setBatchFailures] = useState<BatchFailure[]>([])
   const [batchRangeFrom, setBatchRangeFrom] = useState('1')
   const [batchRangeTo, setBatchRangeTo] = useState('1')
   const [cacheStorageMode, setCacheStorageMode] = useState<CacheStorageMode>('browser')
@@ -269,6 +313,7 @@ export default function MokuroReader() {
   const directoryInputRef = useRef<HTMLInputElement | null>(null)
   const directoryHandleRef = useRef<BrowserFileSystemDirectoryHandle | null>(null)
   const cancelBatchRef = useRef(false)
+  const batchAbortControllerRef = useRef<AbortController | null>(null)
   const { selectedProvider } = useAIProviderStore()
 
   const t = UI_TEXT[analysisLanguage]
@@ -312,31 +357,49 @@ export default function MokuroReader() {
     })
   }, [analysisLanguage, selectedProvider])
 
-  const persistAnalysisCache = useCallback(async (
+  const handleWakeLockError = useCallback((wakeLockError: unknown) => {
+    console.warn(
+      'Mokuro batch wake lock unavailable:',
+      wakeLockError instanceof Error ? wakeLockError.message : wakeLockError
+    )
+  }, [])
+
+  const handleSystemAwakeError = useCallback((systemAwakeError: unknown) => {
+    console.warn(
+      'Mokuro batch system awake lock unavailable:',
+      systemAwakeError instanceof Error ? systemAwakeError.message : systemAwakeError
+    )
+  }, [])
+
+  const persistPageCache = useCallback(async (
+    pageIndex: number,
     nextCache: Record<string, AnalysisResult>,
     sourceMokuroFile = mokuroFile,
     sourceMokuroName = mokuroName
   ) => {
-    const content = serializeMokuroAnalysisCache(nextCache, {
+    const fallbackContent = () => serializeMokuroAnalysisCache(nextCache, {
       title: sourceMokuroFile?.title ?? sourceMokuroName ?? undefined,
       pageCount: sourceMokuroFile?.pages.length
     })
 
     try {
-      if (directoryHandleRef.current) {
-        const cacheHandle = await directoryHandleRef.current.getFileHandle(MOKURO_ANALYSIS_CACHE_FILENAME, { create: true })
-        const writable = await cacheHandle.createWritable()
-        await writable.write(content)
+      if (directoryHandleRef.current && sourceMokuroFile) {
+        const cacheDir = await directoryHandleRef.current.getDirectoryHandle(MOKURO_ANALYSIS_CACHE_DIRNAME, { create: true })
+        const filename = getPageCacheFilename(pageIndex, sourceMokuroFile.pages.length)
+        const fileHandle = await cacheDir.getFileHandle(filename, { create: true })
+        const pageAnalyses = filterAnalysesByPageIndex(nextCache, pageIndex)
+        const writable = await fileHandle.createWritable()
+        await writable.write(serializeMokuroPageAnalysisCache(pageIndex, pageAnalyses))
         await writable.close()
         setCacheStatus(UI_TEXT[analysisLanguage].savedDirectory)
         return
       }
 
-      window.localStorage.setItem(getBrowserCacheKey(sourceMokuroName), content)
+      window.localStorage.setItem(getBrowserCacheKey(sourceMokuroName), fallbackContent())
       setCacheStatus(UI_TEXT[analysisLanguage].savedBrowser)
     } catch (saveError) {
-      console.error('Failed to persist Mokuro analysis cache:', saveError)
-      window.localStorage.setItem(getBrowserCacheKey(sourceMokuroName), content)
+      console.error('Failed to persist Mokuro page analysis cache:', saveError)
+      window.localStorage.setItem(getBrowserCacheKey(sourceMokuroName), fallbackContent())
       setCacheStatus(UI_TEXT[analysisLanguage].savedBrowser)
     }
   }, [analysisLanguage, mokuroFile, mokuroName])
@@ -362,20 +425,48 @@ export default function MokuroReader() {
       .map(createImageWithUrl)
     let loadedCache: Record<string, AnalysisResult> = {}
 
-    if (plan.cacheFile) {
+    for (const cachePageFile of plan.cachePageFiles) {
       try {
-        loadedCache = parseMokuroAnalysisCacheContent(await plan.cacheFile.file.text()).analyses
+        const parsed = parseMokuroPageAnalysisCacheContent(await cachePageFile.file.text())
+        loadedCache = { ...loadedCache, ...parsed.analyses }
       } catch (cacheError) {
-        console.warn('Failed to parse Mokuro analysis cache:', cacheError)
+        console.warn('Failed to parse Mokuro page analysis cache:', cacheError)
+      }
+    }
+
+    if (plan.legacyCacheFile) {
+      try {
+        const legacy = parseMokuroAnalysisCacheContent(await plan.legacyCacheFile.file.text())
+        loadedCache = { ...legacy.analyses, ...loadedCache }
+      } catch (cacheError) {
+        console.warn('Failed to parse legacy Mokuro analysis cache:', cacheError)
       }
     } else if (storageMode === 'browser') {
       const browserCache = window.localStorage.getItem(getBrowserCacheKey(plan.mokuroFile.name))
       if (browserCache) {
         try {
-          loadedCache = parseMokuroAnalysisCacheContent(browserCache).analyses
+          loadedCache = { ...parseMokuroAnalysisCacheContent(browserCache).analyses, ...loadedCache }
         } catch (cacheError) {
           console.warn('Failed to parse browser Mokuro analysis cache:', cacheError)
         }
+      }
+    }
+
+    // Migrate the legacy single file into per-page files (directory mode only).
+    if (directoryHandleRef.current && parsedMokuro && plan.legacyCacheFile) {
+      try {
+        const cacheDir = await directoryHandleRef.current.getDirectoryHandle(MOKURO_ANALYSIS_CACHE_DIRNAME, { create: true })
+        const groups = groupAnalysesByPageIndex(loadedCache)
+        for (const [pageIndex, pageAnalyses] of Array.from(groups.entries())) {
+          const filename = getPageCacheFilename(pageIndex, parsedMokuro.pages.length)
+          const fileHandle = await cacheDir.getFileHandle(filename, { create: true })
+          const writable = await fileHandle.createWritable()
+          await writable.write(serializeMokuroPageAnalysisCache(pageIndex, pageAnalyses))
+          await writable.close()
+        }
+        await directoryHandleRef.current.removeEntry(MOKURO_ANALYSIS_CACHE_FILENAME)
+      } catch (migrationError) {
+        console.warn('Failed to migrate legacy Mokuro analysis cache:', migrationError)
       }
     }
 
@@ -389,6 +480,7 @@ export default function MokuroReader() {
     setAnalysisCache(loadedCache)
     setActiveAnalysis(null)
     setBatchProgress(null)
+    setBatchFailures([])
     setBatchRangeFrom('1')
     setBatchRangeTo(String(parsedMokuro.pages.length))
     setCacheStorageMode(storageMode)
@@ -447,7 +539,9 @@ export default function MokuroReader() {
     const nextPage = Math.min(Math.max(pageIndex, 0), mokuroFile.pages.length - 1)
     setCurrentPageIndex(nextPage)
     setSelectedBlock(null)
-    setBatchProgress(null)
+    if (!isBatchAnalyzing) {
+      setBatchProgress(null)
+    }
     setError(null)
   }
 
@@ -478,7 +572,7 @@ export default function MokuroReader() {
       analysisCacheRef.current = nextCache
       setAnalysisCache(nextCache)
       setActiveAnalysis(result)
-      await persistAnalysisCache(nextCache)
+      await persistPageCache(selection.pageIndex, nextCache)
       toast.success(analysisLanguage === 'zh' ? '已完成分析' : 'Analysis complete')
     } catch (analysisError) {
       const message = analysisError instanceof Error ? analysisError.message : 'Failed to analyze selected text'
@@ -489,66 +583,182 @@ export default function MokuroReader() {
     }
   }
 
+  const analyzePageBlocks = async ({
+    pageIndex,
+    blocks,
+    progressPageNumber,
+    progressTotalPages,
+    signal
+  }: {
+    pageIndex: number
+    blocks: PageBlock[]
+    progressPageNumber?: number
+    progressTotalPages?: number
+    signal?: AbortSignal
+  }) => {
+    let completed = 0
+    let skipped = 0
+    let failed = 0
+    let dirty = false
+    const pendingBlocks: PageBlock[] = []
+    const failures: BatchFailure[] = []
+    let nextPageCache = analysisCacheRef.current
+
+    const createPageResult = (cancelled: boolean) => ({
+      cancelled,
+      dirty,
+      total: blocks.length,
+      completed,
+      skipped,
+      failed,
+      failures,
+      complete: isMokuroPageAnalysisComplete({
+        total: blocks.length,
+        completed,
+        skipped,
+        failed,
+        cancelled
+      })
+    })
+
+    const publishProgress = () => {
+      setBatchProgress({
+        total: blocks.length,
+        completed,
+        skipped,
+        failed,
+        ...(progressPageNumber && progressTotalPages
+          ? {
+              currentPage: progressPageNumber,
+              totalPages: progressTotalPages
+            }
+          : {})
+      })
+    }
+
+    for (const block of blocks) {
+      if (cancelBatchRef.current || signal?.aborted) {
+        publishProgress()
+        return createPageResult(true)
+      }
+
+      const cacheKey = getCacheKey({
+        pageIndex,
+        blockIndex: block.blockIndex,
+        text: block.text
+      })
+
+      if (analysisCacheRef.current[cacheKey]) {
+        skipped += 1
+      } else {
+        pendingBlocks.push(block)
+      }
+    }
+
+    publishProgress()
+
+    await runConcurrentTasks({
+      items: pendingBlocks,
+      concurrency: getMokuroPageAnalysisConcurrency(pendingBlocks.length),
+      shouldContinue: () => !cancelBatchRef.current && !signal?.aborted,
+      task: async block => {
+        const cacheKey = getCacheKey({
+          pageIndex,
+          blockIndex: block.blockIndex,
+          text: block.text
+        })
+        const result = await analyzeText(block.text, {
+          provider: selectedProvider,
+          language: analysisLanguage,
+          signal
+        })
+
+        return { cacheKey, result }
+      },
+      onSettled: taskResult => {
+        if (taskResult.status === 'fulfilled') {
+          nextPageCache = {
+            ...analysisCacheRef.current,
+            ...nextPageCache,
+            [taskResult.value.cacheKey]: taskResult.value.result
+          }
+          analysisCacheRef.current = nextPageCache
+          setAnalysisCache(nextPageCache)
+          completed += 1
+          dirty = true
+        } else {
+          if (cancelBatchRef.current || signal?.aborted || isAbortError(taskResult.reason)) {
+            return
+          }
+          failed += 1
+          const failure = {
+            pageIndex,
+            blockIndex: taskResult.item.blockIndex,
+            text: taskResult.item.text,
+            error: getErrorMessage(taskResult.reason)
+          }
+          failures.push(failure)
+          setBatchFailures(prev => [...prev, failure])
+          console.warn('Failed to analyze Mokuro page block:', taskResult.reason)
+        }
+
+        publishProgress()
+      }
+    })
+
+    if (dirty) {
+      analysisCacheRef.current = nextPageCache
+      setAnalysisCache(nextPageCache)
+    }
+
+    return createPageResult(cancelBatchRef.current || signal?.aborted || false)
+  }
+
   const analyzeCurrentPage = async () => {
     if (!currentPage || currentBlocks.length === 0 || isBatchAnalyzing) return
 
     const blocksToAnalyze = currentBlocks.filter(block => block.text.length > 0)
-    let completed = 0
-    let skipped = 0
-    let failed = 0
 
     cancelBatchRef.current = false
+    const batchAbortController = new AbortController()
+    batchAbortControllerRef.current = batchAbortController
     setIsBatchAnalyzing(true)
-    setBatchProgress({ total: blocksToAnalyze.length, completed, skipped, failed })
+    setBatchProgress({ total: blocksToAnalyze.length, completed: 0, skipped: 0, failed: 0 })
+    setBatchFailures([])
     setError(null)
 
-    let cancelled = false
-    for (const block of blocksToAnalyze) {
-      if (cancelBatchRef.current) {
-        cancelled = true
-        break
-      }
-
-      const selection = {
-        pageIndex: currentPageIndex,
-        blockIndex: block.blockIndex,
-        text: block.text
-      }
-      const cacheKey = getCacheKey(selection)
-
-      if (analysisCacheRef.current[cacheKey]) {
-        skipped += 1
-        setBatchProgress({ total: blocksToAnalyze.length, completed, skipped, failed })
-        continue
-      }
-
-      try {
-        const result = await analyzeText(block.text, {
-          provider: selectedProvider,
-          language: analysisLanguage
+    try {
+      await runWithBatchAwake(async () => {
+        const result = await analyzePageBlocks({
+          pageIndex: currentPageIndex,
+          blocks: blocksToAnalyze,
+          signal: batchAbortController.signal
         })
-        const nextCache = {
-          ...analysisCacheRef.current,
-          [cacheKey]: result
+        if (result.dirty) {
+          await persistPageCache(currentPageIndex, analysisCacheRef.current)
         }
-        analysisCacheRef.current = nextCache
-        setAnalysisCache(nextCache)
-        completed += 1
-        await persistAnalysisCache(nextCache)
-      } catch (batchError) {
-        failed += 1
-        console.error('Failed to analyze Mokuro page block:', batchError)
+        if (result.cancelled) {
+          toast.error(UI_TEXT[analysisLanguage].rangeCancelled)
+        } else if (!result.complete) {
+          const unfinishedCount = Math.max(0, result.total - result.completed - result.skipped)
+          const message = UI_TEXT[analysisLanguage].pageIncomplete
+            .replace('{page}', String(currentPageIndex + 1))
+            .replace('{count}', String(unfinishedCount))
+          setError(message)
+          toast.error(message)
+        } else {
+          toast.success(UI_TEXT[analysisLanguage].batchComplete)
+        }
+      }, {
+        onSystemAwakeError: handleSystemAwakeError,
+        onWakeLockError: handleWakeLockError
+      })
+    } finally {
+      if (batchAbortControllerRef.current === batchAbortController) {
+        batchAbortControllerRef.current = null
       }
-
-      setBatchProgress({ total: blocksToAnalyze.length, completed, skipped, failed })
-    }
-
-    setIsBatchAnalyzing(false)
-    setBatchProgress(null)
-    if (cancelled) {
-      toast.error(UI_TEXT[analysisLanguage].rangeCancelled)
-    } else {
-      toast.success(UI_TEXT[analysisLanguage].batchComplete)
+      setIsBatchAnalyzing(false)
+      setBatchProgress(null)
     }
   }
 
@@ -564,6 +774,8 @@ export default function MokuroReader() {
 
     const t = UI_TEXT[analysisLanguage]
     cancelBatchRef.current = false
+    const batchAbortController = new AbortController()
+    batchAbortControllerRef.current = batchAbortController
     setIsBatchAnalyzing(true)
     setBatchProgress({
       total: 0,
@@ -573,80 +785,79 @@ export default function MokuroReader() {
       currentPage: range.from,
       totalPages: range.to - range.from + 1
     })
+    setBatchFailures([])
     setError(null)
 
-    for (let pageIdx = range.from - 1; pageIdx <= range.to - 1; pageIdx += 1) {
-      if (cancelBatchRef.current) break
-
-      const page = mokuroFile.pages[pageIdx]
-      const blocks = (page?.blocks ?? [])
-        .map((block, blockIndex) => ({ block, blockIndex, text: getMokuroBlockText(block) }))
-        .filter(block => block.text.length > 0)
-
-      setBatchProgress(prev => ({
-        ...(prev ?? { completed: 0, skipped: 0, failed: 0, total: blocks.length }),
-        total: blocks.length,
-        completed: 0,
-        skipped: 0,
-        failed: 0,
-        currentPage: pageIdx + 1
-      }))
-
-      for (const block of blocks) {
-        if (cancelBatchRef.current) break
-
-        const cacheKey = getCacheKey({
-          pageIndex: pageIdx,
-          blockIndex: block.blockIndex,
-          text: block.text
-        })
-
-        if (analysisCacheRef.current[cacheKey]) {
-          setBatchProgress(prev => ({
-            ...(prev ?? { total: blocks.length, completed: 0, skipped: 0, failed: 0 }),
-            skipped: (prev?.skipped ?? 0) + 1
-          }))
-          continue
-        }
-
-        try {
-          const result = await analyzeText(block.text, {
-            provider: selectedProvider,
-            language: analysisLanguage
-          })
-          const nextCache = {
-            ...analysisCacheRef.current,
-            [cacheKey]: result
+    let cancelled = false
+    let failedSentenceCount = 0
+    try {
+      await runWithBatchAwake(async () => {
+        for (let pageIdx = range.from - 1; pageIdx <= range.to - 1; pageIdx += 1) {
+          if (cancelBatchRef.current) {
+            cancelled = true
+            break
           }
-          analysisCacheRef.current = nextCache
-          setAnalysisCache(nextCache)
-          setBatchProgress(prev => ({
-            ...(prev ?? { total: blocks.length, completed: 0, skipped: 0, failed: 0 }),
-            completed: (prev?.completed ?? 0) + 1
-          }))
-          await persistAnalysisCache(nextCache)
-        } catch (batchError) {
-          setBatchProgress(prev => ({
-            ...(prev ?? { total: blocks.length, completed: 0, skipped: 0, failed: 0 }),
-            failed: (prev?.failed ?? 0) + 1
-          }))
-          console.error('Failed to analyze Mokuro page block:', batchError)
-        }
-      }
-    }
 
-    const cancelled = cancelBatchRef.current
-    setIsBatchAnalyzing(false)
-    setBatchProgress(null)
-    if (cancelled) {
-      toast.error(t.rangeCancelled)
-    } else {
-      toast.success(t.rangeComplete)
+          const page = mokuroFile.pages[pageIdx]
+          const blocks = (page?.blocks ?? [])
+            .map((block, blockIndex) => ({ block, blockIndex, text: getMokuroBlockText(block) }))
+            .filter(block => block.text.length > 0)
+
+          setBatchProgress(prev => ({
+            ...(prev ?? { completed: 0, skipped: 0, failed: 0, total: blocks.length }),
+            total: blocks.length,
+            completed: 0,
+            skipped: 0,
+            failed: 0,
+            currentPage: pageIdx + 1
+          }))
+
+          const result = await analyzePageBlocks({
+            pageIndex: pageIdx,
+            blocks,
+            progressPageNumber: pageIdx + 1,
+            progressTotalPages: range.to - range.from + 1,
+            signal: batchAbortController.signal
+          })
+          if (result.dirty) {
+            await persistPageCache(pageIdx, analysisCacheRef.current)
+          }
+          failedSentenceCount += result.failures.length
+          if (shouldStopMokuroRangeAfterPageAnalysis(result)) {
+            cancelled = true
+            break
+          }
+        }
+      }, {
+        onSystemAwakeError: handleSystemAwakeError,
+        onWakeLockError: handleWakeLockError
+      })
+
+      if (cancelled) {
+        toast.error(t.rangeCancelled)
+      } else if (failedSentenceCount > 0) {
+        const message = t.rangeCompleteWithFailures.replace('{count}', String(failedSentenceCount))
+        setError(message)
+        toast.error(message)
+      } else {
+        toast.success(t.rangeComplete)
+      }
+    } catch (rangeError) {
+      const message = rangeError instanceof Error ? rangeError.message : 'Failed to analyze page range'
+      setError(message)
+      toast.error(message)
+    } finally {
+      if (batchAbortControllerRef.current === batchAbortController) {
+        batchAbortControllerRef.current = null
+      }
+      setIsBatchAnalyzing(false)
+      setBatchProgress(null)
     }
   }
 
   const cancelBatch = () => {
     cancelBatchRef.current = true
+    batchAbortControllerRef.current?.abort()
   }
 
   const handleBlockSelect = (blockIndex: number, text: string) => {
@@ -663,6 +874,9 @@ export default function MokuroReader() {
   }
 
   const resetReader = () => {
+    cancelBatchRef.current = true
+    batchAbortControllerRef.current?.abort()
+    batchAbortControllerRef.current = null
     directoryHandleRef.current = null
     setMokuroFile(null)
     setMokuroName(null)
@@ -842,7 +1056,7 @@ export default function MokuroReader() {
                 {cacheStatus}
               </p>
               <p className="mt-0.5 text-[11px] text-gray-500">
-                {cacheStorageMode === 'directory' ? MOKURO_ANALYSIS_CACHE_FILENAME : 'localStorage'}
+                {cacheStorageMode === 'directory' ? DIRECTORY_CACHE_DISPLAY_PATH : 'localStorage'}
               </p>
             </div>
           </div>
@@ -882,6 +1096,36 @@ export default function MokuroReader() {
           <div className="flex items-start gap-2">
             <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-300" />
             <p>{error}</p>
+          </div>
+        </div>
+      )}
+
+      {batchFailures.length > 0 && (
+        <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100">
+          <div className="mb-3 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 flex-shrink-0 text-amber-200" />
+            <h3 className="font-semibold">{t.failedBlocksTitle}</h3>
+          </div>
+          <div className="space-y-2">
+            {batchFailures.slice(-12).map(failure => (
+              <div
+                key={`${failure.pageIndex}:${failure.blockIndex}:${failure.error}`}
+                className="rounded-lg border border-amber-300/20 bg-black/20 p-3"
+              >
+                <div className="mb-1 flex flex-wrap items-center gap-2 text-xs text-amber-200">
+                  <span>
+                    {t.failedBlockMeta
+                      .replace('{page}', String(failure.pageIndex + 1))
+                      .replace('{block}', String(failure.blockIndex))}
+                  </span>
+                  <span className="text-amber-300/60">·</span>
+                  <span className="break-all text-amber-100/80">{failure.error}</span>
+                </div>
+                <p className="whitespace-pre-wrap break-words text-xs text-amber-50/90">
+                  {failure.text}
+                </p>
+              </div>
+            ))}
           </div>
         </div>
       )}
@@ -953,7 +1197,6 @@ export default function MokuroReader() {
                           aria-label={`OCR block ${blockIndex + 1}: ${text}`}
                           title={text || 'Empty OCR block'}
                           onClick={() => handleBlockSelect(blockIndex, text)}
-                          disabled={isBatchAnalyzing}
                           style={getBlockStyle(block, currentPage)}
                           className={`absolute rounded-sm border transition-colors ${
                             selected
@@ -1006,7 +1249,7 @@ export default function MokuroReader() {
                       key={`block-list-${blockIndex}`}
                       type="button"
                       onClick={() => handleBlockSelect(blockIndex, text)}
-                      disabled={!text || isBatchAnalyzing}
+                      disabled={!text}
                       className={`w-full rounded-lg border p-3 text-left transition-colors ${
                         selected
                           ? 'border-amber-300/70 bg-amber-400/20'

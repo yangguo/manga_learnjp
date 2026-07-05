@@ -1,4 +1,5 @@
 import type { AIProvider, AnalysisLanguage, AnalysisResult, ReadingModeResult } from './types'
+import { CLIENT_ANALYSIS_FETCH_TIMEOUT_MS, fetchWithTimeout } from './fetch-timeout'
 
 interface AnalyzeImageForReadingOptions {
   provider?: AIProvider
@@ -9,15 +10,20 @@ interface AnalyzeTextOptions {
   provider?: AIProvider
   language?: AnalysisLanguage
   excludeN5?: boolean
+  signal?: AbortSignal
 }
 
 export async function analyzeText(
   text: string,
   options: AnalyzeTextOptions = {}
 ): Promise<AnalysisResult> {
-  const { provider = 'openai', language = 'zh', excludeN5 = true } = options
+  const { provider = 'openai', language = 'zh', excludeN5 = true, signal } = options
 
-  const response = await fetch('/api/analyze', {
+  // Retry lives on the server (route.ts), where the real upstream error is
+  // visible and the provider fallback also runs. Retrying here stacked the two
+  // layers (up to 9-18 upstream calls per block). The signal lets a batch
+  // Cancel abort this in-flight request via fetchWithTimeout's abort forwarding.
+  const response = await fetchWithTimeout('/api/analyze', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -28,11 +34,14 @@ export async function analyzeText(
       analysisLanguage: language,
       excludeN5
     }),
-  })
+    signal,
+  }, { timeoutMs: CLIENT_ANALYSIS_FETCH_TIMEOUT_MS })
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
-    throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+    const message = errorData.error || `HTTP ${response.status}: ${response.statusText}`
+    const error = new Error(message)
+    throw Object.assign(error, { status: response.status })
   }
 
   const result = await response.json()
@@ -45,7 +54,7 @@ export async function analyzeImageForReading(
 ): Promise<ReadingModeResult> {
   const { provider = 'openai', language = 'zh' } = options
 
-  const response = await fetch('/api/analyze', {
+  const response = await fetchWithTimeout('/api/analyze', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -56,7 +65,7 @@ export async function analyzeImageForReading(
       readingMode: true,
       analysisLanguage: language
     }),
-  })
+  }, { timeoutMs: CLIENT_ANALYSIS_FETCH_TIMEOUT_MS })
 
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))

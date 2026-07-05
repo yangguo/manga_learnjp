@@ -43,6 +43,49 @@ describe('analyzeText', () => {
 
     await expect(analyzeText('こんにちは')).rejects.toThrow('No AI service configured')
   })
+
+  it('does not retry transient API errors (server owns retry)', async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ error: 'fetch failed' }),
+      { status: 500, statusText: 'Internal Server Error' }
+    ))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(analyzeText('こんにちは', { provider: 'openai-format' })).rejects.toThrow('fetch failed')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry non-transient API errors', async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ error: 'No AI service configured' }),
+      { status: 500, statusText: 'Internal Server Error' }
+    ))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(analyzeText('こんにちは')).rejects.toThrow('No AI service configured')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('aborts an in-flight text analysis request when the caller aborts', async () => {
+    const controller = new AbortController()
+    let capturedSignal: AbortSignal | undefined
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      capturedSignal = init?.signal ?? undefined
+      return new Promise<Response>((_resolve, reject) => {
+        capturedSignal?.addEventListener('abort', () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'))
+        })
+      })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const request = analyzeText('こんにちは', { signal: controller.signal })
+    controller.abort()
+
+    await expect(request).rejects.toThrow()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(capturedSignal?.aborted).toBe(true)
+  })
 })
 
 describe('analyzeImageForReading', () => {

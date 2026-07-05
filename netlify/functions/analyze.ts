@@ -1,6 +1,7 @@
 import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
 import { AIAnalysisService, type AnalysisResult } from '../src/lib/ai-service'
 import { type AIProvider, type AnalysisLanguage, type OpenAIFormatSettings, type ModelSettings, type APIKeySettings, type MangaAnalysisResult, type ReadingModeResult } from '../src/lib/types'
+import { runWithTransientAnalysisRetry } from '../src/lib/transient-analysis'
 
 // Simple in-memory cache to track failed endpoints (resets on function restart)
 const failedEndpoints = new Map<string, number>() // endpoint -> timestamp of last failure
@@ -241,22 +242,39 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
       try {
         console.log(`🔄 Trying provider: ${currentProvider}`)
         
+        // Wrap each provider call in transient retry (mirrors route.ts) so a
+        // single 429/503/network blip is retried on the same provider before we
+        // fall back to the next one. withTimeout caps runtime under the Netlify
+        // CLI 30s limit; in production it passes through and fetchWithTimeout
+        // (90s, in ai-service.ts) bounds each attempt.
+        const runProvider = <T>(label: string, operation: () => Promise<T>): Promise<T> =>
+          withTimeout(
+            runWithTransientAnalysisRetry(operation, {
+              onRetry: (retryError, nextAttempt) => console.warn(
+                `Transient analysis error from provider ${currentProvider}; retrying attempt ${nextAttempt}:`,
+                retryError instanceof Error ? retryError.message : 'Unknown error'
+              )
+            }),
+            timeoutMs,
+            label
+          )
+
         let result: AnalysisResult | MangaAnalysisResult | ReadingModeResult
         if (imageBase64) {
           if (readingMode) {
-            result = await withTimeout(aiService.analyzeImageForReading(imageBase64, currentProvider, analysisLanguage), timeoutMs, 'analyzeImageForReading')
+            result = await runProvider('analyzeImageForReading', () => aiService.analyzeImageForReading(imageBase64, currentProvider, analysisLanguage))
           } else if (mangaMode) {
-            result = await withTimeout(aiService.analyzeMangaImage(imageBase64, currentProvider), timeoutMs, 'analyzeMangaImage')
+            result = await runProvider('analyzeMangaImage', () => aiService.analyzeMangaImage(imageBase64, currentProvider))
           } else if (simpleAnalysisMode) {
             // In simple mode, use manga analysis but skip client-side segmentation
             // This will fall back to LLM-based analysis and display using panel UI
-            result = await withTimeout(aiService.analyzeMangaImageDirect(imageBase64, currentProvider), timeoutMs, 'analyzeMangaImageDirect')
+            result = await runProvider('analyzeMangaImageDirect', () => aiService.analyzeMangaImageDirect(imageBase64, currentProvider))
           } else {
             // Regular individual panel analysis or simple image analysis
-            result = await withTimeout(aiService.analyzeImage(imageBase64, currentProvider, analysisLanguage, excludeN5), timeoutMs, 'analyzeImage')
+            result = await runProvider('analyzeImage', () => aiService.analyzeImage(imageBase64, currentProvider, analysisLanguage, excludeN5))
           }
         } else {
-          result = await withTimeout(aiService.analyzeText(text!, currentProvider, analysisLanguage, excludeN5), timeoutMs, 'analyzeText')
+          result = await runProvider('analyzeText', () => aiService.analyzeText(text!, currentProvider, analysisLanguage, excludeN5))
         }
         
         console.log(`✅ Success with provider: ${currentProvider} (took ${Date.now() - startTime}ms)`)

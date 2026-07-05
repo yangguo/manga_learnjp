@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { AIAnalysisService, type AnalysisResult } from '@/lib/ai-service'
+import { runWithTransientAnalysisRetry } from '@/lib/transient-analysis'
 import { type AIProvider, type AnalysisLanguage, type OpenAIFormatSettings, type MangaAnalysisResult, type ReadingModeResult } from '@/lib/types'
 
 interface AnalysisRequest {
@@ -65,24 +66,35 @@ export async function POST(request: NextRequest) {
     for (const currentProvider of providersToTry) {
       try {
         console.log(`🔄 Trying provider: ${currentProvider}`)
-        
-        let result: AnalysisResult | MangaAnalysisResult | ReadingModeResult
-        if (imageBase64) {
-          const imageSizeKB = Math.round(imageBase64.length * 3 / 4 / 1024)
-          console.log(`📏 Image size: ${imageSizeKB} KB`)
-          
-          if (readingMode) {
-            result = await aiService.analyzeImageForReading(imageBase64, currentProvider, analysisLanguage)
-          } else if (mangaMode) {
-            result = await aiService.analyzeMangaImage(imageBase64, currentProvider)
-          } else if (simpleAnalysisMode) {
-            result = await aiService.analyzeMangaImageDirect(imageBase64, currentProvider)
-          } else {
-            result = await aiService.analyzeImage(imageBase64, currentProvider, analysisLanguage, excludeN5)
+
+        const result = await runWithTransientAnalysisRetry<AnalysisResult | MangaAnalysisResult | ReadingModeResult>(
+          async () => {
+            if (imageBase64) {
+              const imageSizeKB = Math.round(imageBase64.length * 3 / 4 / 1024)
+              console.log(`📏 Image size: ${imageSizeKB} KB`)
+
+              if (readingMode) {
+                return await aiService.analyzeImageForReading(imageBase64, currentProvider, analysisLanguage)
+              } else if (mangaMode) {
+                return await aiService.analyzeMangaImage(imageBase64, currentProvider)
+              } else if (simpleAnalysisMode) {
+                return await aiService.analyzeMangaImageDirect(imageBase64, currentProvider)
+              } else {
+                return await aiService.analyzeImage(imageBase64, currentProvider, analysisLanguage, excludeN5)
+              }
+            } else {
+              return await aiService.analyzeText(text!, currentProvider, analysisLanguage, excludeN5)
+            }
+          },
+          {
+            onRetry: (retryError, nextAttempt) => {
+              console.warn(
+                `Transient analysis error from provider ${currentProvider}; retrying attempt ${nextAttempt}:`,
+                retryError instanceof Error ? retryError.message : 'Unknown error'
+              )
+            }
           }
-        } else {
-          result = await aiService.analyzeText(text!, currentProvider, analysisLanguage, excludeN5)
-        }
+        )
         
         console.log(`✅ Success with provider: ${currentProvider}`)
         return NextResponse.json(result)

@@ -3,6 +3,7 @@ import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
 import { createImageDataURL, getImageMimeType, extractBase64FromDataURL } from './image-utils'
 import { compressImageForAPI, isImageTooLarge } from './image-compression'
+import { fetchWithTimeout } from './fetch-timeout'
 
 export interface AnalysisRequest {
   text: string
@@ -1286,7 +1287,7 @@ export class OpenAIService {
   }
 
   private async analyzeSingleBatch(text: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -1343,7 +1344,7 @@ export class OpenAIService {
   }
 
   async analyzeImage(imageBase64: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -1411,7 +1412,7 @@ export class OpenAIService {
   }
 
   async analyzeMangaImage(imageBase64: string): Promise<MangaAnalysisResult> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -1516,7 +1517,7 @@ IMPORTANT:
 `
 
     console.log('🔍 Step 1: Detecting text and locations...')
-    const detectionResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const detectionResponse = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -1607,7 +1608,7 @@ IMPORTANT:
 `
 
         try {
-          const analysisResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          const analysisResponse = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${this.apiKey}`,
@@ -1746,7 +1747,7 @@ export class OpenAIFormatService {
       headers['Authorization'] = `Bearer ${this.settings.apiKey}`
     }
 
-    const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
+    const response = await fetchWithTimeout(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -1815,7 +1816,7 @@ export class OpenAIFormatService {
       headers['Authorization'] = `Bearer ${this.settings.apiKey}`
     }
 
-    const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
+    const response = await fetchWithTimeout(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -1895,7 +1896,7 @@ export class OpenAIFormatService {
       headers['Authorization'] = `Bearer ${this.settings.apiKey}`
     }
 
-    const response = await fetch(`${this.settings.endpoint}/chat/completions`, {
+    const response = await fetchWithTimeout(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -2035,7 +2036,7 @@ IMPORTANT:
     }
 
     console.log('🔍 Step 1: Detecting text and locations...')
-    const detectionResponse = await fetch(`${this.settings.endpoint}/chat/completions`, {
+    const detectionResponse = await fetchWithTimeout(`${this.settings.endpoint}/chat/completions`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
@@ -2124,7 +2125,7 @@ IMPORTANT:
 `
 
         try {
-          const analysisResponse = await fetch(`${this.settings.endpoint}/chat/completions`, {
+          const analysisResponse = await fetchWithTimeout(`${this.settings.endpoint}/chat/completions`, {
             method: 'POST',
             headers,
             body: JSON.stringify({

@@ -358,3 +358,47 @@ export const filterAnalysesByPageIndex = (
   }
   return result
 }
+
+// Cap concurrent per-page block analyses so a page with many blocks does not
+// fire dozens of simultaneous requests at the AI provider (rate limits, local
+// Ollama overload, retry thundering-herd). Sequential was the original spec; 4
+// is a deliberate, bounded relaxation.
+export const MAX_MOKURO_PAGE_ANALYSIS_CONCURRENCY = 4
+
+export const getMokuroPageAnalysisConcurrency = (pendingSentenceCount: number): number => {
+  const count = Math.max(0, Math.floor(Number.isFinite(pendingSentenceCount) ? pendingSentenceCount : 0))
+  return Math.min(count, MAX_MOKURO_PAGE_ANALYSIS_CONCURRENCY)
+}
+
+interface MokuroPageAnalysisCompletionState {
+  total: number
+  completed: number
+  skipped: number
+  failed: number
+  cancelled: boolean
+}
+
+export const isMokuroPageAnalysisComplete = ({
+  total,
+  completed,
+  skipped,
+  failed,
+  cancelled
+}: MokuroPageAnalysisCompletionState): boolean => {
+  if (cancelled || failed > 0) {
+    return false
+  }
+
+  return completed + skipped >= total
+}
+
+interface MokuroRangeContinuationState {
+  cancelled: boolean
+  complete: boolean
+}
+
+export const shouldStopMokuroRangeAfterPageAnalysis = ({
+  cancelled
+}: MokuroRangeContinuationState): boolean => {
+  return cancelled
+}

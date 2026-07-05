@@ -6,6 +6,9 @@ import {
   createMokuroImageLookup,
   filterAnalysesByPageIndex,
   findMokuroPageImageFile,
+  getMokuroPageAnalysisConcurrency,
+  isMokuroPageAnalysisComplete,
+  shouldStopMokuroRangeAfterPageAnalysis,
   getPageCacheFilename,
   getMokuroBlockText,
   groupAnalysesByPageIndex,
@@ -221,5 +224,74 @@ describe('groupAnalysesByPageIndex / filterAnalysesByPageIndex', () => {
   it('filters to a single page', () => {
     const filtered = filterAnalysesByPageIndex(analyses, 1)
     expect(Object.keys(filtered)).toEqual([page1])
+  })
+})
+
+describe('getMokuroPageAnalysisConcurrency', () => {
+  it('uses the pending sentence count up to the cap', () => {
+    expect(getMokuroPageAnalysisConcurrency(1)).toBe(1)
+    expect(getMokuroPageAnalysisConcurrency(4)).toBe(4)
+  })
+
+  it('caps concurrency to avoid overwhelming the provider', () => {
+    expect(getMokuroPageAnalysisConcurrency(8)).toBe(4)
+    expect(getMokuroPageAnalysisConcurrency(30)).toBe(4)
+  })
+
+  it('returns zero when the page has no pending sentences', () => {
+    expect(getMokuroPageAnalysisConcurrency(0)).toBe(0)
+  })
+
+  it('treats non-finite or negative input as zero', () => {
+    expect(getMokuroPageAnalysisConcurrency(Number.NaN)).toBe(0)
+    expect(getMokuroPageAnalysisConcurrency(-3)).toBe(0)
+  })
+})
+
+describe('isMokuroPageAnalysisComplete', () => {
+  it('treats cached and newly completed blocks as a complete page', () => {
+    expect(isMokuroPageAnalysisComplete({
+      total: 5,
+      completed: 3,
+      skipped: 2,
+      failed: 0,
+      cancelled: false
+    })).toBe(true)
+  })
+
+  it('treats any failed block as an incomplete page', () => {
+    expect(isMokuroPageAnalysisComplete({
+      total: 5,
+      completed: 3,
+      skipped: 1,
+      failed: 1,
+      cancelled: false
+    })).toBe(false)
+  })
+
+  it('treats cancelled pages as incomplete even if counts add up', () => {
+    expect(isMokuroPageAnalysisComplete({
+      total: 5,
+      completed: 3,
+      skipped: 2,
+      failed: 0,
+      cancelled: true
+    })).toBe(false)
+  })
+})
+
+describe('shouldStopMokuroRangeAfterPageAnalysis', () => {
+  it('continues after a page with failed blocks', () => {
+    expect(shouldStopMokuroRangeAfterPageAnalysis({
+      cancelled: false,
+      complete: false
+    })).toBe(false)
+  })
+
+  it('stops only when the user cancelled the batch', () => {
+    expect(shouldStopMokuroRangeAfterPageAnalysis({
+      cancelled: true,
+      complete: false
+    })).toBe(true)
   })
 })
