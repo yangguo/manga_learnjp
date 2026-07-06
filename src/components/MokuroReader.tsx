@@ -11,15 +11,16 @@ import {
   Languages,
   Layers,
   Loader2,
-  RotateCw,
   Search,
   Trash2,
+  Volume2,
   X,
   Zap
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import MokuroAnalysisPanel from '@/components/MokuroAnalysisPanel'
 import { useMokuroKeyboardNav } from '@/components/useMokuroKeyboardNav'
+import { useSpeech } from '@/components/useSpeech'
 import { runWithBatchAwake } from '@/lib/batch-awake'
 import { analyzeText } from '@/lib/client-api'
 import { runConcurrentTasks } from '@/lib/concurrency'
@@ -157,6 +158,9 @@ const UI_TEXT = {
     loadedCache: '已加载历史分析缓存',
     noCache: '暂无缓存',
     unsupportedWrite: '当前浏览器不能直接写回目录，分析结果会保存到浏览器本地缓存。',
+    noJapaneseVoice: '未检测到日语语音，请在系统设置中安装日语语音包后再朗读。',
+    voiceLabel: '音色',
+    voiceAuto: '自动',
     batchComplete: '本页批量分析完成',
     analyzeRange: '批量分析范围',
     analyzingRange: '正在分析范围...',
@@ -204,6 +208,9 @@ const UI_TEXT = {
     loadedCache: 'Loaded saved analysis cache',
     noCache: 'No saved cache yet',
     unsupportedWrite: 'This browser cannot write back to the selected folder, so results are saved to browser local cache.',
+    noJapaneseVoice: 'No Japanese voice found. Install a Japanese voice package in your system settings to hear sentences.',
+    voiceLabel: 'Voice',
+    voiceAuto: 'Auto',
     batchComplete: 'Page batch analysis complete',
     analyzeRange: 'Analyze range',
     analyzingRange: 'Analyzing range...',
@@ -314,8 +321,30 @@ export default function MokuroReader() {
   const directoryInputRef = useRef<HTMLInputElement | null>(null)
   const directoryHandleRef = useRef<BrowserFileSystemDirectoryHandle | null>(null)
   const cancelBatchRef = useRef(false)
+  const speechHintShownRef = useRef(false)
   const batchAbortControllerRef = useRef<AbortController | null>(null)
   const { selectedProvider } = useAIProviderStore()
+  const [voiceURI, setVoiceURI] = useState<string | null>(null)
+  const {
+    speak,
+    cancel: cancelSpeech,
+    supported: speechSupported,
+    ready: speechReady,
+    voices: speechVoices
+  } = useSpeech({ voiceURI })
+  const japaneseVoices = useMemo(
+    () => speechVoices.filter(voice => voice.lang.toLowerCase().startsWith('ja')),
+    [speechVoices]
+  )
+  const speakSelection = (text: string) => {
+    if (!speechSupported || !text.trim()) return
+    // Only hint at a missing voice once voices have loaded, so the async
+    // voice list doesn't trigger a false "no Japanese voice" toast.
+    if (!speak(text) && speechReady && !speechHintShownRef.current) {
+      speechHintShownRef.current = true
+      toast(UI_TEXT[analysisLanguage].noJapaneseVoice)
+    }
+  }
 
   const t = UI_TEXT[analysisLanguage]
 
@@ -544,6 +573,7 @@ export default function MokuroReader() {
 
   const goToPage = (pageIndex: number) => {
     if (!mokuroFile) return
+    cancelSpeech()
     const nextPage = Math.min(Math.max(pageIndex, 0), mokuroFile.pages.length - 1)
     setCurrentPageIndex(nextPage)
     setSelectedBlock(null)
@@ -559,6 +589,11 @@ export default function MokuroReader() {
 
     setSelectedBlock(selection)
     setError(null)
+
+    // Read the selected sentence aloud. Cached results re-read too, so the
+    // user always hears the block they clicked. When the browser supports
+    // speech but has no Japanese voice, hint once that a voice pack is needed.
+    speakSelection(selection.text)
 
     if (cached && !force) {
       setActiveAnalysis(cached)
@@ -872,6 +907,9 @@ export default function MokuroReader() {
     const block = currentBlocks.find(b => b.blockIndex === blockIndex)
     if (!block || !block.text) return
     setSelectedBlock({ pageIndex: currentPageIndex, blockIndex, text: block.text })
+    // Keyboard navigation highlights a block without analyzing it; read it
+    // aloud anyway so moving the highlight speaks the block under it.
+    speakSelection(block.text)
   }
 
   const handleBlockSelect = (blockIndex: number, text: string) => {
@@ -918,6 +956,7 @@ export default function MokuroReader() {
   })
 
   const resetReader = () => {
+    cancelSpeech()
     cancelBatchRef.current = true
     batchAbortControllerRef.current?.abort()
     batchAbortControllerRef.current = null
@@ -996,69 +1035,100 @@ export default function MokuroReader() {
           {...{ webkitdirectory: '', directory: '' }}
         />
 
-        <div className="mt-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-gray-950/40 p-1">
-            <Languages size={16} className="ml-2 text-cyan-300" />
-            <span className="px-1 text-xs text-gray-400">{t.language}</span>
-            {(['zh', 'en'] as AnalysisLanguage[]).map(language => (
-              <button
-                key={language}
-                type="button"
-                onClick={() => setAnalysisLanguage(language)}
-                className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  analysisLanguage === language
-                    ? 'bg-white text-gray-950'
-                    : 'text-gray-300 hover:bg-white/10'
-                }`}
-              >
-                {language === 'zh' ? t.chinese : t.english}
-              </button>
-            ))}
+        <div className="mt-5 flex flex-col gap-3">
+          {/* Settings: explanation language + TTS voice */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-gray-950/40 p-1">
+              <Languages size={16} className="ml-2 text-cyan-300" />
+              <span className="px-1 text-xs text-gray-400">{t.language}</span>
+              {(['zh', 'en'] as AnalysisLanguage[]).map(language => (
+                <button
+                  key={language}
+                  type="button"
+                  onClick={() => setAnalysisLanguage(language)}
+                  className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                    analysisLanguage === language
+                      ? 'bg-white text-gray-950'
+                      : 'text-gray-300 hover:bg-white/10'
+                  }`}
+                >
+                  {language === 'zh' ? t.chinese : t.english}
+                </button>
+              ))}
+            </div>
+
+            {speechSupported && japaneseVoices.length > 0 && (
+              <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-gray-950/40 py-1 pl-2 pr-1">
+                <Volume2 size={16} className="text-cyan-300" />
+                <span className="text-xs text-gray-400">{t.voiceLabel}</span>
+                <select
+                  value={voiceURI ?? ''}
+                  onChange={event => setVoiceURI(event.target.value || null)}
+                  aria-label={t.voiceLabel}
+                  title={t.voiceLabel}
+                  className="h-7 rounded-md border border-white/10 bg-gray-950 px-2 text-sm text-white"
+                >
+                  <option value="">{t.voiceAuto}</option>
+                  {japaneseVoices.map(voice => (
+                    <option key={voice.voiceURI} value={voice.voiceURI}>
+                      {voice.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
           </div>
 
-          {mokuroFile && (
-            <button
-              type="button"
-              onClick={() => void analyzeCurrentPage()}
-              disabled={isBatchAnalyzing || currentBlocks.length === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-500/20 px-3 py-2 text-sm font-medium text-purple-100 transition-colors hover:bg-purple-500/30 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {isBatchAnalyzing ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
-              {isBatchAnalyzing ? t.analyzingPage : t.analyzePage}
-            </button>
-          )}
-
+          {/* Analysis actions: current page + page range */}
           {mokuroFile && (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs text-gray-400">{t.fromPageLabel}</span>
-              <input
-                type="number"
-                min={1}
-                max={mokuroFile.pages.length}
-                value={batchRangeFrom}
-                onChange={event => setBatchRangeFrom(event.target.value)}
-                disabled={isBatchAnalyzing}
-                className="h-9 w-20 rounded-lg border border-white/10 bg-gray-950 px-2 text-center text-sm text-white disabled:opacity-50"
-              />
-              <span className="text-xs text-gray-400">{t.toPageLabel}</span>
-              <input
-                type="number"
-                min={1}
-                max={mokuroFile.pages.length}
-                value={batchRangeTo}
-                onChange={event => setBatchRangeTo(event.target.value)}
-                disabled={isBatchAnalyzing}
-                className="h-9 w-20 rounded-lg border border-white/10 bg-gray-950 px-2 text-center text-sm text-white disabled:opacity-50"
-              />
               <button
                 type="button"
-                onClick={() => void analyzePageRange()}
-                disabled={isBatchAnalyzing || Number(batchRangeFrom) > Number(batchRangeTo)}
+                onClick={() => void analyzeCurrentPage()}
+                disabled={isBatchAnalyzing || currentBlocks.length === 0}
                 className="inline-flex items-center justify-center gap-2 rounded-lg bg-purple-500/20 px-3 py-2 text-sm font-medium text-purple-100 transition-colors hover:bg-purple-500/30 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isBatchAnalyzing ? <Loader2 size={16} className="animate-spin" /> : <Layers size={16} />}
-                {isBatchAnalyzing ? t.analyzingRange : t.analyzeRange}
+                {isBatchAnalyzing ? <Loader2 size={16} className="animate-spin" /> : <Zap size={16} />}
+                {isBatchAnalyzing ? t.analyzingPage : t.analyzePage}
               </button>
+
+              <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-gray-950/40 px-2 py-1.5">
+                <Layers size={14} className="text-purple-300" />
+                <input
+                  type="number"
+                  min={1}
+                  max={mokuroFile.pages.length}
+                  value={batchRangeFrom}
+                  onChange={event => setBatchRangeFrom(event.target.value)}
+                  disabled={isBatchAnalyzing}
+                  aria-label={t.fromPageLabel}
+                  className="h-7 w-14 rounded-md border border-white/10 bg-gray-950 px-1.5 text-center text-sm text-white disabled:opacity-50"
+                />
+                <span className="text-xs text-gray-500">–</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={mokuroFile.pages.length}
+                  value={batchRangeTo}
+                  onChange={event => setBatchRangeTo(event.target.value)}
+                  disabled={isBatchAnalyzing}
+                  aria-label={t.toPageLabel}
+                  className="h-7 w-14 rounded-md border border-white/10 bg-gray-950 px-1.5 text-center text-sm text-white disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={() => void analyzePageRange()}
+                  disabled={isBatchAnalyzing || Number(batchRangeFrom) > Number(batchRangeTo)}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-md bg-purple-500/20 px-2.5 py-1.5 text-sm font-medium text-purple-100 transition-colors hover:bg-purple-500/30 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isBatchAnalyzing ? <Loader2 size={14} className="animate-spin" /> : null}
+                  {t.analyzeRange}
+                </button>
+                {Number(batchRangeFrom) > Number(batchRangeTo) && !isBatchAnalyzing && (
+                  <span className="text-xs text-red-300">{t.rangeInvalid}</span>
+                )}
+              </div>
+
               {isBatchAnalyzing && (
                 <button
                   type="button"
@@ -1068,9 +1138,6 @@ export default function MokuroReader() {
                   <X size={16} />
                   {t.cancelBatch}
                 </button>
-              )}
-              {Number(batchRangeFrom) > Number(batchRangeTo) && !isBatchAnalyzing && (
-                <span className="text-xs text-red-300">{t.rangeInvalid}</span>
               )}
             </div>
           )}
@@ -1282,7 +1349,7 @@ export default function MokuroReader() {
                   {analyzedCountForCurrentPage} / {currentBlocks.length}
                 </span>
               </div>
-              <div ref={listContainerRef} className="max-h-[360px] space-y-2 overflow-auto pr-1">
+              <div ref={listContainerRef} className="max-h-[240px] space-y-2 overflow-auto pr-1">
                 {currentBlocks.length > 0 ? currentBlocks.map(({ blockIndex, text }) => {
                   const selection = { pageIndex: currentPageIndex, blockIndex, text }
                   const selected = selectedBlock?.pageIndex === currentPageIndex && selectedBlock.blockIndex === blockIndex
@@ -1310,7 +1377,7 @@ export default function MokuroReader() {
                           {text.length} chars
                         </span>
                       </div>
-                      <p className="line-clamp-3 font-japanese text-sm leading-relaxed text-gray-100">
+                      <p className="line-clamp-2 font-japanese text-sm leading-relaxed text-gray-100">
                         {text || 'Empty block'}
                       </p>
                     </button>
@@ -1324,22 +1391,13 @@ export default function MokuroReader() {
             </div>
 
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => selectedBlock && void analyzeSelection(selectedBlock, true)}
-                  disabled={!selectedBlock || isAnalyzing || isBatchAnalyzing}
-                  className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  {isAnalyzing ? <Loader2 size={14} className="animate-spin" /> : <RotateCw size={14} />}
-                  {analysisLanguage === 'zh' ? '重新分析' : 'Reanalyze'}
-                </button>
-              </div>
               <MokuroAnalysisPanel
                 analysisResult={activeAnalysis}
                 isAnalyzing={isAnalyzing}
                 selectedText={selectedBlock?.text ?? null}
                 language={analysisLanguage}
+                onReanalyze={selectedBlock ? () => void analyzeSelection(selectedBlock, true) : undefined}
+                canReanalyze={Boolean(selectedBlock) && !isAnalyzing && !isBatchAnalyzing}
               />
             </div>
           </aside>

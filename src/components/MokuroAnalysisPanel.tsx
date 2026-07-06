@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { BookOpen, Languages, Loader2, Quote, Sparkles } from 'lucide-react'
+import { BookOpen, Loader2, Quote, RotateCw, Sparkles } from 'lucide-react'
 import { filterLearningGrammar, filterLearningVocabulary } from '@/lib/analysis-filters'
 import type { AnalysisLanguage, AnalysisResult } from '@/lib/types'
 
@@ -10,6 +10,8 @@ interface MokuroAnalysisPanelProps {
   isAnalyzing: boolean
   selectedText: string | null
   language: AnalysisLanguage
+  onReanalyze?: () => void
+  canReanalyze?: boolean
 }
 
 const normalizeDifficulty = (difficulty: string): string => difficulty.toLowerCase()
@@ -43,7 +45,8 @@ const UI_TEXT = {
     grammar: '语法',
     pattern: '个语法点',
     noGrammar: '没有需要重点学习的 N4+ 语法点。',
-    example: '例句'
+    example: '例句',
+    reanalyze: '重新分析'
   },
   en: {
     selectedText: 'Selected text',
@@ -60,7 +63,8 @@ const UI_TEXT = {
     grammar: 'Grammar',
     pattern: 'pattern',
     noGrammar: 'No N4+ grammar patterns need special focus in this selection.',
-    example: 'Example'
+    example: 'Example',
+    reanalyze: 'Reanalyze'
   }
 } satisfies Record<AnalysisLanguage, Record<string, string>>
 
@@ -68,7 +72,9 @@ export default function MokuroAnalysisPanel({
   analysisResult,
   isAnalyzing,
   selectedText,
-  language
+  language,
+  onReanalyze,
+  canReanalyze
 }: MokuroAnalysisPanelProps) {
   const t = UI_TEXT[language]
   const selectedTextHeader = selectedText ? (
@@ -138,19 +144,31 @@ export default function MokuroAnalysisPanel({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4"
     >
-      {selectedTextHeader}
-
-      {analysisResult.translation && (
-        <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
-          <div className="mb-3 flex items-center gap-2">
-            <Languages size={16} className="text-cyan-300" />
-            <h3 className="font-semibold text-white">{t.translation}</h3>
+      <section className="rounded-2xl border border-white/10 bg-gray-950/40 p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <p className="text-xs text-gray-500">{t.selectedText}</p>
+          {onReanalyze && (
+            <button
+              type="button"
+              onClick={onReanalyze}
+              disabled={!canReanalyze}
+              className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+              {t.reanalyze}
+            </button>
+          )}
+        </div>
+        <p className="font-japanese text-sm font-medium text-white">{selectedText}</p>
+        {analysisResult.translation && (
+          <div className="mt-2 border-t border-white/10 pt-2">
+            <p className="mb-1 text-xs text-gray-500">{t.translation}</p>
+            <p className="text-sm leading-relaxed text-gray-100">
+              {analysisResult.translation}
+            </p>
           </div>
-          <p className="text-sm leading-relaxed text-gray-100">
-            {analysisResult.translation}
-          </p>
-        </section>
-      )}
+        )}
+      </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="mb-3 flex items-center gap-2">
