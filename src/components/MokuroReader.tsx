@@ -19,6 +19,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import MokuroAnalysisPanel from '@/components/MokuroAnalysisPanel'
+import { useMokuroKeyboardNav } from '@/components/useMokuroKeyboardNav'
 import { runWithBatchAwake } from '@/lib/batch-awake'
 import { analyzeText } from '@/lib/client-api'
 import { runConcurrentTasks } from '@/lib/concurrency'
@@ -347,6 +348,13 @@ export default function MokuroReader() {
       text: getMokuroBlockText(block)
     }))
   }, [currentPage])
+
+  // Indices of blocks with text on the current page; empty blocks are skipped
+  // so keyboard navigation never lands on an unanalyzable target.
+  const keyboardBlockIndices = useMemo(
+    () => currentBlocks.filter(b => b.text.length > 0).map(b => b.blockIndex),
+    [currentBlocks]
+  )
 
   const getCacheKey = useCallback((selection: SelectedMokuroBlock) => {
     return createMokuroAnalysisCacheKey({
@@ -860,6 +868,12 @@ export default function MokuroReader() {
     batchAbortControllerRef.current?.abort()
   }
 
+  const selectBlock = (blockIndex: number) => {
+    const block = currentBlocks.find(b => b.blockIndex === blockIndex)
+    if (!block || !block.text) return
+    setSelectedBlock({ pageIndex: currentPageIndex, blockIndex, text: block.text })
+  }
+
   const handleBlockSelect = (blockIndex: number, text: string) => {
     if (!text) {
       toast.error(UI_TEXT[analysisLanguage].noText)
@@ -872,6 +886,36 @@ export default function MokuroReader() {
       text
     })
   }
+
+  const listContainerRef = useMokuroKeyboardNav({
+    handlers: {
+      selectBlock,
+      analyzeSelected: () => {
+        const targetIndex =
+          selectedBlock && selectedBlock.pageIndex === currentPageIndex
+            ? selectedBlock.blockIndex
+            : keyboardBlockIndices[0] ?? null
+        if (targetIndex === null) return
+        const block = currentBlocks.find(b => b.blockIndex === targetIndex)
+        if (!block || !block.text) return
+        void analyzeSelection({
+          pageIndex: currentPageIndex,
+          blockIndex: targetIndex,
+          text: block.text
+        })
+      },
+      goToNextPage: () => goToPage(currentPageIndex + 1),
+      goToPreviousPage: () => goToPage(currentPageIndex - 1),
+      clearSelection: () => setSelectedBlock(null)
+    },
+    state: {
+      enabled: Boolean(mokuroFile) && !isBatchAnalyzing,
+      isAnalyzing,
+      blockIndices: keyboardBlockIndices,
+      selectedIndex:
+        selectedBlock && selectedBlock.pageIndex === currentPageIndex ? selectedBlock.blockIndex : null
+    }
+  })
 
   const resetReader = () => {
     cancelBatchRef.current = true
@@ -1238,7 +1282,7 @@ export default function MokuroReader() {
                   {analyzedCountForCurrentPage} / {currentBlocks.length}
                 </span>
               </div>
-              <div className="max-h-[360px] space-y-2 overflow-auto pr-1">
+              <div ref={listContainerRef} className="max-h-[360px] space-y-2 overflow-auto pr-1">
                 {currentBlocks.length > 0 ? currentBlocks.map(({ blockIndex, text }) => {
                   const selection = { pageIndex: currentPageIndex, blockIndex, text }
                   const selected = selectedBlock?.pageIndex === currentPageIndex && selectedBlock.blockIndex === blockIndex
@@ -1248,6 +1292,7 @@ export default function MokuroReader() {
                     <button
                       key={`block-list-${blockIndex}`}
                       type="button"
+                      data-block-index={blockIndex}
                       onClick={() => handleBlockSelect(blockIndex, text)}
                       disabled={!text}
                       className={`w-full rounded-lg border p-3 text-left transition-colors ${
