@@ -1,0 +1,33 @@
+version: 2
+updates:
+  # npm dependencies — security updates only via grouped PRs to avoid noise.
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Group all security updates into a single PR so we get one review per
+      # week instead of dozens. Non-security updates are left to manual bumps.
+    groups:
+      security:
+        update-types:
+          - patch
+          - minor
+          - major
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    # Only open PRs for security advisories, not routine version bumps.
+    # This keeps the queue short for a solo-maintained project.
+    allow:
+      - dependency-type: direct
+      - dependency-type: indirect
+  # GitHub Actions — keep workflow action versions current.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    commit-message:
+      prefix: chore(ci)
+      include: scope
