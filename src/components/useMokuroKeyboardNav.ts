@@ -33,7 +33,7 @@ const getTargetContext = (target: EventTarget | null) => {
 // mirrored into refs so the window listener subscribes once and always reads
 // the latest values without re-binding on every render.
 export const useMokuroKeyboardNav = ({ handlers, state }: UseMokuroKeyboardNavArgs) => {
-  const listContainerRef = useRef<HTMLDivElement | null>(null)
+  const pageContainerRef = useRef<HTMLDivElement | null>(null)
   const handlersRef = useRef(handlers)
   const stateRef = useRef(state)
 
@@ -92,14 +92,17 @@ export const useMokuroKeyboardNav = ({ handlers, state }: UseMokuroKeyboardNavAr
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [])
 
+  // Keep the highlighted text box on the manga page in view as keyboard
+  // navigation moves the selection. Scrolling follows the page image, not the
+  // OCR list, so the reader's eyes stay on the manga.
   useEffect(() => {
     const selectedIndex = state.selectedIndex
     if (selectedIndex === null) return
-    const container = listContainerRef.current
+    const container = pageContainerRef.current
     if (!container) return
     const el = container.querySelector(`[data-block-index="${selectedIndex}"]`)
     el?.scrollIntoView({ block: 'nearest' })
   }, [state.selectedIndex])
 
-  return listContainerRef
+  return pageContainerRef
 }

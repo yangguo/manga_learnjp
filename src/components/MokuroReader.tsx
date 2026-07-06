@@ -322,6 +322,12 @@ export default function MokuroReader() {
   const directoryHandleRef = useRef<BrowserFileSystemDirectoryHandle | null>(null)
   const cancelBatchRef = useRef(false)
   const speechHintShownRef = useRef(false)
+  const analysisScrollRef = useRef<HTMLDivElement | null>(null)
+  const asideRef = useRef<HTMLDivElement | null>(null)
+  const ocrListRef = useRef<HTMLDivElement | null>(null)
+  const [panelTop, setPanelTop] = useState<number | null>(null)
+  const [panelAnchor, setPanelAnchor] = useState<{ left: number; width: number } | null>(null)
+  const [panelMaxHeight, setPanelMaxHeight] = useState<number | null>(null)
   const batchAbortControllerRef = useRef<AbortController | null>(null)
   const { selectedProvider } = useAIProviderStore()
   const [voiceURI, setVoiceURI] = useState<string | null>(null)
@@ -449,6 +455,80 @@ export default function MokuroReader() {
 
     setActiveAnalysis(analysisCache[getCacheKey(selectedBlock)] ?? null)
   }, [analysisCache, getCacheKey, selectedBlock])
+
+  // Reset the analysis panel scroll when the selected block or its analysis
+  // state changes, so the translation at the top stays visible instead of
+  // remaining scrolled down where the reader left it while browsing vocab.
+  useEffect(() => {
+    analysisScrollRef.current?.scrollTo({ top: 0 })
+  }, [selectedBlock, activeAnalysis, isAnalyzing])
+
+  // Keep the analysis panel vertically aligned with the highlighted text box
+  // on the manga page, and horizontally pinned to the aside column. The panel
+  // uses position: fixed so its top can track the box without being clamped by
+  // the aside's height (sticky clamped it to the image bottom, leaving a long
+  // panel stranded above a box near the page bottom). Fixed only applies at the
+  // xl breakpoint where the grid is two-column; below that the panel stays in
+  // normal flow. rAF-throttled to avoid layout thrash.
+  useEffect(() => {
+    if (!mokuroFile) return
+    const panel = analysisScrollRef.current
+    const aside = asideRef.current
+    if (!panel || !aside) return
+
+    let frame = 0
+    const update = () => {
+      frame = 0
+      const isXl = window.matchMedia('(min-width: 1280px)').matches
+
+      // Measure the aside column so the fixed panel can mirror its width and
+      // left offset at any viewport size.
+      const asideRect = aside.getBoundingClientRect()
+      setPanelAnchor(isXl ? { left: asideRect.left, width: asideRect.width } : null)
+
+      if (!isXl) {
+        setPanelTop(null)
+        setPanelMaxHeight(null)
+        return
+      }
+
+      const selectedIndex = selectedBlock?.pageIndex === currentPageIndex ? selectedBlock.blockIndex : null
+      const target = selectedIndex !== null
+        ? panel.ownerDocument.querySelector(`[data-block-index="${selectedIndex}"]`)
+        : null
+
+      if (!target) {
+        setPanelTop(null)
+        setPanelMaxHeight(null)
+        return
+      }
+
+      const boxRect = target.getBoundingClientRect()
+      // Don't let the panel overlap the OCR list card above it — clamp the top
+      // to the OCR list's bottom edge.
+      const ocrListBottom = ocrListRef.current?.getBoundingClientRect().bottom ?? 8
+      const minTop = Math.max(8, ocrListBottom + 8)
+      const top = Math.max(boxRect.top, minTop)
+      setPanelTop(top)
+      // Cap the panel at the viewport bottom so its contents stay reachable
+      // via the panel's own scroll, instead of extending off-screen.
+      setPanelMaxHeight(Math.max(120, window.innerHeight - top - 8))
+    }
+
+    const schedule = () => {
+      if (frame) return
+      frame = window.requestAnimationFrame(update)
+    }
+
+    schedule()
+    window.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame)
+      window.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+    }
+  }, [mokuroFile, selectedBlock, currentPageIndex])
 
   const importDirectoryFiles = async (
     files: MokuroImportedFile[],
@@ -925,7 +1005,7 @@ export default function MokuroReader() {
     })
   }
 
-  const listContainerRef = useMokuroKeyboardNav({
+  const pageContainerRef = useMokuroKeyboardNav({
     handlers: {
       selectBlock,
       analyzeSelected: () => {
@@ -1284,7 +1364,7 @@ export default function MokuroReader() {
               </div>
             </div>
 
-            <div className="overflow-auto rounded-xl bg-gray-950/70 p-2">
+            <div ref={pageContainerRef} className="overflow-auto rounded-xl bg-gray-950/70 p-2">
               {currentImage ? (
                 <div
                   className="relative mx-auto overflow-hidden rounded-lg bg-black"
@@ -1305,6 +1385,7 @@ export default function MokuroReader() {
                         <button
                           key={`${currentPageIndex}-${blockIndex}`}
                           type="button"
+                          data-block-index={blockIndex}
                           aria-label={`OCR block ${blockIndex + 1}: ${text}`}
                           title={text || 'Empty OCR block'}
                           onClick={() => handleBlockSelect(blockIndex, text)}
@@ -1340,8 +1421,8 @@ export default function MokuroReader() {
             </div>
           </section>
 
-          <aside className="min-w-0 space-y-4">
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+          <aside ref={asideRef} className="min-w-0 space-y-4">
+            <div ref={ocrListRef} className="rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="mb-3 flex items-center gap-2">
                 <Search size={16} className="text-cyan-300" />
                 <h3 className="font-semibold text-white">{t.ocrBlocks}</h3>
@@ -1349,7 +1430,7 @@ export default function MokuroReader() {
                   {analyzedCountForCurrentPage} / {currentBlocks.length}
                 </span>
               </div>
-              <div ref={listContainerRef} className="max-h-[240px] space-y-2 overflow-auto pr-1">
+              <div className="max-h-[240px] space-y-2 overflow-auto pr-1">
                 {currentBlocks.length > 0 ? currentBlocks.map(({ blockIndex, text }) => {
                   const selection = { pageIndex: currentPageIndex, blockIndex, text }
                   const selected = selectedBlock?.pageIndex === currentPageIndex && selectedBlock.blockIndex === blockIndex
@@ -1390,7 +1471,22 @@ export default function MokuroReader() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div
+              ref={analysisScrollRef}
+              style={
+                panelAnchor && panelTop !== null
+                  ? {
+                      position: 'fixed',
+                      left: `${panelAnchor.left}px`,
+                      top: `${panelTop}px`,
+                      width: `${panelAnchor.width}px`,
+                      maxHeight: panelMaxHeight !== null ? `${panelMaxHeight}px` : undefined,
+                      overflowY: 'auto'
+                    }
+                  : undefined
+              }
+              className="rounded-2xl border border-white/10 bg-white/5 p-4"
+            >
               <MokuroAnalysisPanel
                 analysisResult={activeAnalysis}
                 isAnalyzing={isAnalyzing}

@@ -159,7 +159,7 @@ export default function MokuroAnalysisPanel({
             </button>
           )}
         </div>
-        <p className="font-japanese text-sm font-medium text-white">{selectedText}</p>
+        <p className="font-japanese text-base font-medium leading-relaxed text-white">{selectedText}</p>
         {analysisResult.translation && (
           <div className="mt-2 border-t border-white/10 pt-2">
             <p className="mb-1 text-xs text-gray-500">{t.translation}</p>

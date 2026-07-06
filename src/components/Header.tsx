@@ -9,7 +9,7 @@ export default function Header() {
       initial={{ opacity: 0, y: -20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.6 }}
-      className="glass border-b border-white/20 sticky top-0 z-50"
+      className="glass border-b border-white/20"
     >
       <div className="container mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
