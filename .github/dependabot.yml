@@ -23,6 +23,26 @@ updates:
     allow:
       - dependency-type: direct
       - dependency-type: indirect
+  # Netlify functions backend has its own lockfile — track it separately so its
+  # security advisories get PRs too.
+  - package-ecosystem: npm
+    directory: /netlify
+    schedule:
+      interval: weekly
+      day: monday
+    groups:
+      security:
+        update-types:
+          - patch
+          - minor
+          - major
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore(deps)
+      include: scope
+    allow:
+      - dependency-type: direct
+      - dependency-type: indirect
   # GitHub Actions — keep workflow action versions current.
   - package-ecosystem: github-actions
     directory: /
