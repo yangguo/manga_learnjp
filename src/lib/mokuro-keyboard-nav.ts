@@ -7,6 +7,8 @@ export type KeyboardNavAction =
   | 'clear'
   | 'home'
   | 'end'
+  | 'scroll-analysis-up'
+  | 'scroll-analysis-down'
 
 export interface KeyTargetContext {
   tagName: string | null
@@ -63,6 +65,12 @@ export const resolveAction = (
   if (key === 'Escape') return 'clear'
   if (key === 'Home') return 'home'
   if (key === 'End') return 'end'
+
+  // Scroll the analysis panel with left-hand keys; available even while a
+  // single block is analyzing so the reader can review its content.
+  const lowerKey = key.toLowerCase()
+  if (lowerKey === 'w') return 'scroll-analysis-up'
+  if (lowerKey === 's') return 'scroll-analysis-down'
 
   if (state.isAnalyzing) return null
 

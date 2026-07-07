@@ -93,7 +93,14 @@ describe('resolveAction', () => {
     expect(resolveAction('End', state())).toBe('end')
   })
 
-  it('disables block navigation and Enter while analyzing, but keeps paging and clear/home/end', () => {
+  it('maps left-hand w/s to scroll the analysis panel', () => {
+    expect(resolveAction('w', state())).toBe('scroll-analysis-up')
+    expect(resolveAction('W', state())).toBe('scroll-analysis-up')
+    expect(resolveAction('s', state())).toBe('scroll-analysis-down')
+    expect(resolveAction('S', state())).toBe('scroll-analysis-down')
+  })
+
+  it('disables block navigation and Enter while analyzing, but keeps paging, clear/home/end, and panel scrolling', () => {
     const analyzing = state({ isAnalyzing: true })
     expect(resolveAction('ArrowUp', analyzing)).toBeNull()
     expect(resolveAction('ArrowDown', analyzing)).toBeNull()
@@ -103,6 +110,8 @@ describe('resolveAction', () => {
     expect(resolveAction('Escape', analyzing)).toBe('clear')
     expect(resolveAction('Home', analyzing)).toBe('home')
     expect(resolveAction('End', analyzing)).toBe('end')
+    expect(resolveAction('w', analyzing)).toBe('scroll-analysis-up')
+    expect(resolveAction('s', analyzing)).toBe('scroll-analysis-down')
   })
 
   it('returns null for unknown keys', () => {

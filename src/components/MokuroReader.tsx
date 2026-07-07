@@ -125,6 +125,14 @@ type CacheStorageMode = 'directory' | 'browser'
 
 const DIRECTORY_CACHE_DISPLAY_PATH = `${MOKURO_ANALYSIS_CACHE_DIRNAME}/page-*.json`
 
+// Lift the analysis panel a bit above the focused OCR box's top edge instead
+// of flush-aligning with it, so the panel reads as floating slightly above the
+// sentence it explains.
+const PANEL_TOP_LIFT_PX = 96
+
+// Distance the analysis panel scrolls on each W/S keyboard shortcut.
+const ANALYSIS_PANEL_SCROLL_STEP_PX = 160
+
 const UI_TEXT = {
   zh: {
     title: 'Mokuro Reader',
@@ -504,11 +512,11 @@ export default function MokuroReader() {
       }
 
       const boxRect = target.getBoundingClientRect()
-      // Don't let the panel overlap the OCR list card above it — clamp the top
-      // to the OCR list's bottom edge.
+      // Lift the panel slightly above the focused box, but don't let it overlap
+      // the OCR list card above it — clamp the top to the OCR list's bottom edge.
       const ocrListBottom = ocrListRef.current?.getBoundingClientRect().bottom ?? 8
       const minTop = Math.max(8, ocrListBottom + 8)
-      const top = Math.max(boxRect.top, minTop)
+      const top = Math.max(boxRect.top - PANEL_TOP_LIFT_PX, minTop)
       setPanelTop(top)
       // Cap the panel at the viewport bottom so its contents stay reachable
       // via the panel's own scroll, instead of extending off-screen.
@@ -1024,7 +1032,13 @@ export default function MokuroReader() {
       },
       goToNextPage: () => goToPage(currentPageIndex + 1),
       goToPreviousPage: () => goToPage(currentPageIndex - 1),
-      clearSelection: () => setSelectedBlock(null)
+      clearSelection: () => setSelectedBlock(null),
+      scrollAnalysisUp: () => {
+        analysisScrollRef.current?.scrollBy({ top: -ANALYSIS_PANEL_SCROLL_STEP_PX, behavior: 'smooth' })
+      },
+      scrollAnalysisDown: () => {
+        analysisScrollRef.current?.scrollBy({ top: ANALYSIS_PANEL_SCROLL_STEP_PX, behavior: 'smooth' })
+      }
     },
     state: {
       enabled: Boolean(mokuroFile) && !isBatchAnalyzing,
@@ -1485,7 +1499,8 @@ export default function MokuroReader() {
                     }
                   : undefined
               }
-              className="rounded-2xl border border-white/10 bg-white/5 p-4"
+              className="rounded-2xl border border-white/10 bg-white/5 p-4 data-[fixed=true]:!mt-0"
+              data-fixed={panelAnchor && panelTop !== null ? 'true' : undefined}
             >
               <MokuroAnalysisPanel
                 analysisResult={activeAnalysis}
