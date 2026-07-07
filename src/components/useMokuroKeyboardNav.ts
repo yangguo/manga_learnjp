@@ -14,6 +14,8 @@ export interface MokuroKeyboardNavHandlers {
   goToNextPage: () => void
   goToPreviousPage: () => void
   clearSelection: () => void
+  scrollAnalysisUp: () => void
+  scrollAnalysisDown: () => void
 }
 
 export interface UseMokuroKeyboardNavArgs {
@@ -84,6 +86,12 @@ export const useMokuroKeyboardNav = ({ handlers, state }: UseMokuroKeyboardNavAr
           if (current.blockIndices.length > 0) {
             h.selectBlock(current.blockIndices[current.blockIndices.length - 1])
           }
+          break
+        case 'scroll-analysis-up':
+          h.scrollAnalysisUp()
+          break
+        case 'scroll-analysis-down':
+          h.scrollAnalysisDown()
           break
       }
     }
