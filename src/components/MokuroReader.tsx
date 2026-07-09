@@ -1460,7 +1460,7 @@ export default function MokuroReader() {
             {selectedBlock && (
               <div
                 ref={analysisScrollRef}
-                className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 xl:overflow-y-auto"
+                className="flex-1 min-h-0 rounded-2xl border border-white/10 bg-white/5 p-4 xl:overflow-y-auto"
               >
                 <MokuroAnalysisPanel
                   analysisResult={activeAnalysis}
