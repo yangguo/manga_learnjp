@@ -1364,11 +1364,65 @@ export default function MokuroReader() {
                   </div>
                 </div>
               )}
+
+              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="mb-3 flex items-center gap-2">
+                  <Search size={16} className="text-cyan-300" />
+                  <h3 className="font-semibold text-white">{t.ocrBlocks}</h3>
+                  <span className="ml-auto rounded-full border border-white/10 px-2 py-0.5 text-xs text-gray-400">
+                    {analyzedCountForCurrentPage} / {currentBlocks.length}
+                  </span>
+                </div>
+                {currentBlocks.length > 0 ? (
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-2">
+                    {currentBlocks.map(({ blockIndex, text }) => {
+                      const selection = { pageIndex: currentPageIndex, blockIndex, text }
+                      const selected = selectedBlock?.pageIndex === currentPageIndex && selectedBlock.blockIndex === blockIndex
+                      const analyzed = Boolean(analysisCache[getCacheKey(selection)])
+
+                      return (
+                        <button
+                          key={`block-grid-${blockIndex}`}
+                          type="button"
+                          data-block-index={blockIndex}
+                          onClick={() => handleBlockSelect(blockIndex, text)}
+                          disabled={!text}
+                          className={`flex h-full flex-col rounded-lg border p-3 text-left transition-colors ${
+                            selected
+                              ? 'border-amber-300/70 bg-amber-400/20'
+                              : analyzed
+                                ? 'border-emerald-300/40 bg-emerald-400/10 hover:bg-emerald-400/15'
+                                : 'border-white/10 bg-gray-950/40 hover:bg-white/10'
+                          } disabled:cursor-not-allowed disabled:opacity-40`}
+                        >
+                          <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
+                            <span>Block {blockIndex + 1}</span>
+                            <span className="inline-flex items-center gap-1">
+                              {analyzed && <CheckCircle2 size={12} className="text-emerald-300" />}
+                              {text.length} chars
+                            </span>
+                          </div>
+                          <p
+                            lang="ja"
+                            className="font-japanese text-sm leading-relaxed text-gray-100 whitespace-pre-wrap break-words select-text"
+                          >
+                            {text || 'Empty block'}
+                          </p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="rounded-lg border border-white/10 bg-gray-950/40 p-3 text-sm text-gray-400">
+                    {t.emptyBlocks}
+                  </p>
+                )}
+              </div>
             </div>
           </section>
 
           <aside className="min-w-0 flex flex-col gap-4 self-start xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-hidden">
-            <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 xl:max-h-[30vh] xl:overflow-y-auto">
+            <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-xs text-gray-500">{t.selectedText}</p>
                 <div className="flex items-center gap-2">
@@ -1406,7 +1460,7 @@ export default function MokuroReader() {
             {selectedBlock && (
               <div
                 ref={analysisScrollRef}
-                className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 xl:max-h-[45vh] xl:overflow-y-auto"
+                className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 xl:overflow-y-auto"
               >
                 <MokuroAnalysisPanel
                   analysisResult={activeAnalysis}
@@ -1417,58 +1471,6 @@ export default function MokuroReader() {
                 />
               </div>
             )}
-
-            <div className="flex-1 min-h-0 flex flex-col rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-3 flex shrink-0 items-center gap-2">
-                <Search size={16} className="text-cyan-300" />
-                <h3 className="font-semibold text-white">{t.ocrBlocks}</h3>
-                <span className="ml-auto rounded-full border border-white/10 px-2 py-0.5 text-xs text-gray-400">
-                  {analyzedCountForCurrentPage} / {currentBlocks.length}
-                </span>
-              </div>
-              <div className="flex-1 min-h-0 space-y-2 overflow-auto pr-1">
-                {currentBlocks.length > 0 ? currentBlocks.map(({ blockIndex, text }) => {
-                  const selection = { pageIndex: currentPageIndex, blockIndex, text }
-                  const selected = selectedBlock?.pageIndex === currentPageIndex && selectedBlock.blockIndex === blockIndex
-                  const analyzed = Boolean(analysisCache[getCacheKey(selection)])
-
-                  return (
-                    <button
-                      key={`block-list-${blockIndex}`}
-                      type="button"
-                      data-block-index={blockIndex}
-                      onClick={() => handleBlockSelect(blockIndex, text)}
-                      disabled={!text}
-                      className={`w-full rounded-lg border p-3 text-left transition-colors ${
-                        selected
-                          ? 'border-amber-300/70 bg-amber-400/20'
-                          : analyzed
-                            ? 'border-emerald-300/40 bg-emerald-400/10 hover:bg-emerald-400/15'
-                            : 'border-white/10 bg-gray-950/40 hover:bg-white/10'
-                      } disabled:cursor-not-allowed disabled:opacity-40`}
-                    >
-                      <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
-                        <span>Block {blockIndex + 1}</span>
-                        <span className="inline-flex items-center gap-1">
-                          {analyzed && <CheckCircle2 size={12} className="text-emerald-300" />}
-                          {text.length} chars
-                        </span>
-                      </div>
-                      <p
-                        lang="ja"
-                        className="font-japanese text-sm leading-relaxed text-gray-100 whitespace-pre-wrap break-words select-text"
-                      >
-                        {text || 'Empty block'}
-                      </p>
-                    </button>
-                  )
-                }) : (
-                  <p className="rounded-lg border border-white/10 bg-gray-950/40 p-3 text-sm text-gray-400">
-                    {t.emptyBlocks}
-                  </p>
-                )}
-              </div>
-            </div>
           </aside>
         </div>
       ) : (
