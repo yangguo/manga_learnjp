@@ -140,22 +140,24 @@ export default function MokuroAnalysisPanel({
       animate={{ opacity: 1, y: 0 }}
       className="space-y-4"
     >
-      <section className="rounded-2xl border border-white/10 bg-gray-950/40 p-3">
-        {!hideSelectedText && selectedText && (
-          <>
-            <p className="mb-1 text-xs text-gray-500">{t.selectedText}</p>
-            <p className="font-japanese text-base font-medium leading-relaxed text-white">{selectedText}</p>
-          </>
-        )}
-        {analysisResult.translation && (
-          <div className={!hideSelectedText && selectedText ? 'mt-2 border-t border-white/10 pt-2' : ''}>
-            <p className="mb-1 text-xs text-gray-500">{t.translation}</p>
-            <p className="text-sm leading-relaxed text-gray-100">
-              {analysisResult.translation}
-            </p>
-          </div>
-        )}
-      </section>
+      {(!hideSelectedText && selectedText) || analysisResult.translation ? (
+        <section className="rounded-2xl border border-white/10 bg-gray-950/40 p-3">
+          {!hideSelectedText && selectedText && (
+            <>
+              <p className="mb-1 text-xs text-gray-500">{t.selectedText}</p>
+              <p className="font-japanese text-base font-medium leading-relaxed text-white">{selectedText}</p>
+            </>
+          )}
+          {analysisResult.translation && (
+            <div className={!hideSelectedText && selectedText ? 'mt-2 border-t border-white/10 pt-2' : ''}>
+              <p className="mb-1 text-xs text-gray-500">{t.translation}</p>
+              <p className="text-sm leading-relaxed text-gray-100">
+                {analysisResult.translation}
+              </p>
+            </div>
+          )}
+        </section>
+      ) : null}
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="mb-3 flex items-center gap-2">

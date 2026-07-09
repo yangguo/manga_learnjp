@@ -1368,7 +1368,7 @@ export default function MokuroReader() {
           </section>
 
           <aside className="min-w-0 flex flex-col gap-4 self-start xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-hidden">
-            <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4">
+            <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 xl:max-h-[30vh] xl:overflow-y-auto">
               <div className="mb-2 flex items-center justify-between gap-2">
                 <p className="text-xs text-gray-500">{t.selectedText}</p>
                 <div className="flex items-center gap-2">
