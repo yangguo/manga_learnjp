@@ -1413,8 +1413,7 @@ export default function MokuroReader() {
                   isAnalyzing={isAnalyzing}
                   selectedText={selectedBlock.text}
                   language={analysisLanguage}
-                  onReanalyze={() => void analyzeSelection(selectedBlock, true)}
-                  canReanalyze={!isAnalyzing && !isBatchAnalyzing}
+                  hideSelectedText
                 />
               </div>
             )}

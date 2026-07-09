@@ -1,7 +1,7 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { BookOpen, Loader2, Quote, RotateCw, Sparkles } from 'lucide-react'
+import { BookOpen, Loader2, Quote, Sparkles } from 'lucide-react'
 import { filterLearningGrammar, filterLearningVocabulary } from '@/lib/analysis-filters'
 import type { AnalysisLanguage, AnalysisResult } from '@/lib/types'
 
@@ -10,8 +10,7 @@ interface MokuroAnalysisPanelProps {
   isAnalyzing: boolean
   selectedText: string | null
   language: AnalysisLanguage
-  onReanalyze?: () => void
-  canReanalyze?: boolean
+  hideSelectedText?: boolean
 }
 
 const normalizeDifficulty = (difficulty: string): string => difficulty.toLowerCase()
@@ -45,8 +44,7 @@ const UI_TEXT = {
     grammar: '语法',
     pattern: '个语法点',
     noGrammar: '没有需要重点学习的 N4+ 语法点。',
-    example: '例句',
-    reanalyze: '重新分析'
+    example: '例句'
   },
   en: {
     selectedText: 'Selected text',
@@ -63,8 +61,7 @@ const UI_TEXT = {
     grammar: 'Grammar',
     pattern: 'pattern',
     noGrammar: 'No N4+ grammar patterns need special focus in this selection.',
-    example: 'Example',
-    reanalyze: 'Reanalyze'
+    example: 'Example'
   }
 } satisfies Record<AnalysisLanguage, Record<string, string>>
 
@@ -73,11 +70,10 @@ export default function MokuroAnalysisPanel({
   isAnalyzing,
   selectedText,
   language,
-  onReanalyze,
-  canReanalyze
+  hideSelectedText = false
 }: MokuroAnalysisPanelProps) {
   const t = UI_TEXT[language]
-  const selectedTextHeader = selectedText ? (
+  const selectedTextHeader = !hideSelectedText && selectedText ? (
     <div className="rounded-2xl border border-white/10 bg-gray-950/40 p-3">
       <p className="text-xs text-gray-500">{t.selectedText}</p>
       <p className="font-japanese text-sm font-medium text-white">{selectedText}</p>
@@ -145,23 +141,14 @@ export default function MokuroAnalysisPanel({
       className="space-y-4"
     >
       <section className="rounded-2xl border border-white/10 bg-gray-950/40 p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
-          <p className="text-xs text-gray-500">{t.selectedText}</p>
-          {onReanalyze && (
-            <button
-              type="button"
-              onClick={onReanalyze}
-              disabled={!canReanalyze}
-              className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
-              {t.reanalyze}
-            </button>
-          )}
-        </div>
-        <p className="font-japanese text-base font-medium leading-relaxed text-white">{selectedText}</p>
+        {!hideSelectedText && selectedText && (
+          <>
+            <p className="mb-1 text-xs text-gray-500">{t.selectedText}</p>
+            <p className="font-japanese text-base font-medium leading-relaxed text-white">{selectedText}</p>
+          </>
+        )}
         {analysisResult.translation && (
-          <div className="mt-2 border-t border-white/10 pt-2">
+          <div className={!hideSelectedText && selectedText ? 'mt-2 border-t border-white/10 pt-2' : ''}>
             <p className="mb-1 text-xs text-gray-500">{t.translation}</p>
             <p className="text-sm leading-relaxed text-gray-100">
               {analysisResult.translation}
