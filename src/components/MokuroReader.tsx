@@ -11,6 +11,7 @@ import {
   Languages,
   Layers,
   Loader2,
+  RotateCw,
   Search,
   Trash2,
   Volume2,
@@ -132,6 +133,10 @@ const UI_TEXT = {
   zh: {
     title: 'Mokuro Reader',
     subtitle: '选择 Mokuro 输出目录，点击文字框查看语法和词汇解析。',
+    selectedText: '选中文本',
+    reanalyze: '重新分析',
+    analyzing: '分析中...',
+    focusHint: '点击页面文字框，在此处取词或查看解析。',
     chooseDirectory: '选择 Mokuro 目录',
     reset: '重置',
     pages: '页数',
@@ -182,6 +187,10 @@ const UI_TEXT = {
   en: {
     title: 'Mokuro Reader',
     subtitle: 'Choose a Mokuro output directory, then click a text box for grammar and vocabulary analysis.',
+    selectedText: 'Selected text',
+    reanalyze: 'Reanalyze',
+    analyzing: 'Analyzing...',
+    focusHint: 'Click a text box on the page to look up words or view analysis here.',
     chooseDirectory: 'Choose Mokuro Folder',
     reset: 'Reset',
     pages: 'Pages',
@@ -1359,19 +1368,56 @@ export default function MokuroReader() {
           </section>
 
           <aside className="min-w-0 flex flex-col gap-4 self-start xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-hidden">
-            <div
-              ref={analysisScrollRef}
-              className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 xl:max-h-[45vh] xl:overflow-y-auto"
-            >
-              <MokuroAnalysisPanel
-                analysisResult={activeAnalysis}
-                isAnalyzing={isAnalyzing}
-                selectedText={selectedBlock?.text ?? null}
-                language={analysisLanguage}
-                onReanalyze={selectedBlock ? () => void analyzeSelection(selectedBlock, true) : undefined}
-                canReanalyze={Boolean(selectedBlock) && !isAnalyzing && !isBatchAnalyzing}
-              />
+            <div className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <p className="text-xs text-gray-500">{t.selectedText}</p>
+                <div className="flex items-center gap-2">
+                  {isAnalyzing && (
+                    <span className="inline-flex items-center gap-1 text-xs text-purple-300">
+                      <Loader2 size={12} className="animate-spin" />
+                      {t.analyzing}
+                    </span>
+                  )}
+                  {selectedBlock && (
+                    <button
+                      type="button"
+                      onClick={() => void analyzeSelection(selectedBlock, true)}
+                      disabled={isAnalyzing || isBatchAnalyzing}
+                      className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs font-medium text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {isAnalyzing ? <Loader2 size={12} className="animate-spin" /> : <RotateCw size={12} />}
+                      {t.reanalyze}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {selectedBlock ? (
+                <p
+                  lang="ja"
+                  className="font-japanese text-xl font-medium leading-relaxed text-white whitespace-pre-wrap break-words select-text"
+                >
+                  {selectedBlock.text}
+                </p>
+              ) : (
+                <p className="text-sm text-gray-400">{t.focusHint}</p>
+              )}
             </div>
+
+            {selectedBlock && (
+              <div
+                ref={analysisScrollRef}
+                className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 xl:max-h-[45vh] xl:overflow-y-auto"
+              >
+                <MokuroAnalysisPanel
+                  analysisResult={activeAnalysis}
+                  isAnalyzing={isAnalyzing}
+                  selectedText={selectedBlock.text}
+                  language={analysisLanguage}
+                  onReanalyze={() => void analyzeSelection(selectedBlock, true)}
+                  canReanalyze={!isAnalyzing && !isBatchAnalyzing}
+                />
+              </div>
+            )}
 
             <div className="flex-1 min-h-0 flex flex-col rounded-2xl border border-white/10 bg-white/5 p-4">
               <div className="mb-3 flex shrink-0 items-center gap-2">
