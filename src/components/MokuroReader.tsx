@@ -125,11 +125,6 @@ type CacheStorageMode = 'directory' | 'browser'
 
 const DIRECTORY_CACHE_DISPLAY_PATH = `${MOKURO_ANALYSIS_CACHE_DIRNAME}/page-*.json`
 
-// Lift the analysis panel a bit above the focused OCR box's top edge instead
-// of flush-aligning with it, so the panel reads as floating slightly above the
-// sentence it explains.
-const PANEL_TOP_LIFT_PX = 96
-
 // Distance the analysis panel scrolls on each W/S keyboard shortcut.
 const ANALYSIS_PANEL_SCROLL_STEP_PX = 160
 
@@ -331,11 +326,6 @@ export default function MokuroReader() {
   const cancelBatchRef = useRef(false)
   const speechHintShownRef = useRef(false)
   const analysisScrollRef = useRef<HTMLDivElement | null>(null)
-  const asideRef = useRef<HTMLDivElement | null>(null)
-  const ocrListRef = useRef<HTMLDivElement | null>(null)
-  const [panelTop, setPanelTop] = useState<number | null>(null)
-  const [panelAnchor, setPanelAnchor] = useState<{ left: number; width: number } | null>(null)
-  const [panelMaxHeight, setPanelMaxHeight] = useState<number | null>(null)
   const batchAbortControllerRef = useRef<AbortController | null>(null)
   const { selectedProvider } = useAIProviderStore()
   const [voiceURI, setVoiceURI] = useState<string | null>(null)
@@ -470,73 +460,6 @@ export default function MokuroReader() {
   useEffect(() => {
     analysisScrollRef.current?.scrollTo({ top: 0 })
   }, [selectedBlock, activeAnalysis, isAnalyzing])
-
-  // Keep the analysis panel vertically aligned with the highlighted text box
-  // on the manga page, and horizontally pinned to the aside column. The panel
-  // uses position: fixed so its top can track the box without being clamped by
-  // the aside's height (sticky clamped it to the image bottom, leaving a long
-  // panel stranded above a box near the page bottom). Fixed only applies at the
-  // xl breakpoint where the grid is two-column; below that the panel stays in
-  // normal flow. rAF-throttled to avoid layout thrash.
-  useEffect(() => {
-    if (!mokuroFile) return
-    const panel = analysisScrollRef.current
-    const aside = asideRef.current
-    if (!panel || !aside) return
-
-    let frame = 0
-    const update = () => {
-      frame = 0
-      const isXl = window.matchMedia('(min-width: 1280px)').matches
-
-      // Measure the aside column so the fixed panel can mirror its width and
-      // left offset at any viewport size.
-      const asideRect = aside.getBoundingClientRect()
-      setPanelAnchor(isXl ? { left: asideRect.left, width: asideRect.width } : null)
-
-      if (!isXl) {
-        setPanelTop(null)
-        setPanelMaxHeight(null)
-        return
-      }
-
-      const selectedIndex = selectedBlock?.pageIndex === currentPageIndex ? selectedBlock.blockIndex : null
-      const target = selectedIndex !== null
-        ? panel.ownerDocument.querySelector(`[data-block-index="${selectedIndex}"]`)
-        : null
-
-      if (!target) {
-        setPanelTop(null)
-        setPanelMaxHeight(null)
-        return
-      }
-
-      const boxRect = target.getBoundingClientRect()
-      // Lift the panel slightly above the focused box, but don't let it overlap
-      // the OCR list card above it — clamp the top to the OCR list's bottom edge.
-      const ocrListBottom = ocrListRef.current?.getBoundingClientRect().bottom ?? 8
-      const minTop = Math.max(8, ocrListBottom + 8)
-      const top = Math.max(boxRect.top - PANEL_TOP_LIFT_PX, minTop)
-      setPanelTop(top)
-      // Cap the panel at the viewport bottom so its contents stay reachable
-      // via the panel's own scroll, instead of extending off-screen.
-      setPanelMaxHeight(Math.max(120, window.innerHeight - top - 8))
-    }
-
-    const schedule = () => {
-      if (frame) return
-      frame = window.requestAnimationFrame(update)
-    }
-
-    schedule()
-    window.addEventListener('scroll', schedule, { passive: true })
-    window.addEventListener('resize', schedule)
-    return () => {
-      if (frame) window.cancelAnimationFrame(frame)
-      window.removeEventListener('scroll', schedule)
-      window.removeEventListener('resize', schedule)
-    }
-  }, [mokuroFile, selectedBlock, currentPageIndex])
 
   const importDirectoryFiles = async (
     files: MokuroImportedFile[],
@@ -1435,16 +1358,30 @@ export default function MokuroReader() {
             </div>
           </section>
 
-          <aside ref={asideRef} className="min-w-0 space-y-4">
-            <div ref={ocrListRef} className="rounded-2xl border border-white/10 bg-white/5 p-4">
-              <div className="mb-3 flex items-center gap-2">
+          <aside className="min-w-0 flex flex-col gap-4 self-start xl:sticky xl:top-4 xl:max-h-[calc(100vh-2rem)] xl:overflow-hidden">
+            <div
+              ref={analysisScrollRef}
+              className="shrink-0 rounded-2xl border border-white/10 bg-white/5 p-4 xl:max-h-[45vh] xl:overflow-y-auto"
+            >
+              <MokuroAnalysisPanel
+                analysisResult={activeAnalysis}
+                isAnalyzing={isAnalyzing}
+                selectedText={selectedBlock?.text ?? null}
+                language={analysisLanguage}
+                onReanalyze={selectedBlock ? () => void analyzeSelection(selectedBlock, true) : undefined}
+                canReanalyze={Boolean(selectedBlock) && !isAnalyzing && !isBatchAnalyzing}
+              />
+            </div>
+
+            <div className="flex-1 min-h-0 flex flex-col rounded-2xl border border-white/10 bg-white/5 p-4">
+              <div className="mb-3 flex shrink-0 items-center gap-2">
                 <Search size={16} className="text-cyan-300" />
                 <h3 className="font-semibold text-white">{t.ocrBlocks}</h3>
                 <span className="ml-auto rounded-full border border-white/10 px-2 py-0.5 text-xs text-gray-400">
                   {analyzedCountForCurrentPage} / {currentBlocks.length}
                 </span>
               </div>
-              <div className="max-h-[240px] space-y-2 overflow-auto pr-1">
+              <div className="flex-1 min-h-0 space-y-2 overflow-auto pr-1">
                 {currentBlocks.length > 0 ? currentBlocks.map(({ blockIndex, text }) => {
                   const selection = { pageIndex: currentPageIndex, blockIndex, text }
                   const selected = selectedBlock?.pageIndex === currentPageIndex && selectedBlock.blockIndex === blockIndex
@@ -1472,7 +1409,10 @@ export default function MokuroReader() {
                           {text.length} chars
                         </span>
                       </div>
-                      <p className="line-clamp-2 font-japanese text-sm leading-relaxed text-gray-100">
+                      <p
+                        lang="ja"
+                        className="font-japanese text-sm leading-relaxed text-gray-100 whitespace-pre-wrap break-words select-text"
+                      >
                         {text || 'Empty block'}
                       </p>
                     </button>
@@ -1483,33 +1423,6 @@ export default function MokuroReader() {
                   </p>
                 )}
               </div>
-            </div>
-
-            <div
-              ref={analysisScrollRef}
-              style={
-                panelAnchor && panelTop !== null
-                  ? {
-                      position: 'fixed',
-                      left: `${panelAnchor.left}px`,
-                      top: `${panelTop}px`,
-                      width: `${panelAnchor.width}px`,
-                      maxHeight: panelMaxHeight !== null ? `${panelMaxHeight}px` : undefined,
-                      overflowY: 'auto'
-                    }
-                  : undefined
-              }
-              className="rounded-2xl border border-white/10 bg-white/5 p-4 data-[fixed=true]:!mt-0"
-              data-fixed={panelAnchor && panelTop !== null ? 'true' : undefined}
-            >
-              <MokuroAnalysisPanel
-                analysisResult={activeAnalysis}
-                isAnalyzing={isAnalyzing}
-                selectedText={selectedBlock?.text ?? null}
-                language={analysisLanguage}
-                onReanalyze={selectedBlock ? () => void analyzeSelection(selectedBlock, true) : undefined}
-                canReanalyze={Boolean(selectedBlock) && !isAnalyzing && !isBatchAnalyzing}
-              />
             </div>
           </aside>
         </div>
