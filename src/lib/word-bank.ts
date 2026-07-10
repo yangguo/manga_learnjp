@@ -12,7 +12,7 @@ export const toSavedWord = (
   reading: word.reading,
   meaning: word.meaning,
   partOfSpeech: word.partOfSpeech,
-  difficulty: word.difficulty,
+  difficulty: word.difficulty ?? '',
   sourceSentence,
   savedAt
 })

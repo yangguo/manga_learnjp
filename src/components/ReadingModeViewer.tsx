@@ -41,7 +41,8 @@ const normalizeProvider = (provider?: string): AIProvider => {
 
 const createSentenceAnalysisResult = (
   sentence: SentenceLocation,
-  provider: AIProvider
+  provider: AIProvider,
+  jlptCalibration: ReadingModeResult['jlptCalibration']
 ): AnalysisResult => ({
   extractedText: sentence.sentence,
   sentences: [
@@ -55,7 +56,8 @@ const createSentenceAnalysisResult = (
   ],
   translation: sentence.translation,
   summary: sentence.context || '',
-  provider
+  provider,
+  jlptCalibration
 })
 
 export default function ReadingModeViewer({ result, language }: ReadingModeViewerProps) {
@@ -95,8 +97,8 @@ export default function ReadingModeViewer({ result, language }: ReadingModeViewe
     : Math.min(selectedIndex, result.sentences.length - 1)
   const selectedSentence = effectiveSelectedIndex == null ? null : result.sentences[effectiveSelectedIndex] ?? null
   const selectedAnalysis = useMemo(() => {
-    return selectedSentence ? createSentenceAnalysisResult(selectedSentence, provider) : null
-  }, [provider, selectedSentence])
+    return selectedSentence ? createSentenceAnalysisResult(selectedSentence, provider, result.jlptCalibration) : null
+  }, [provider, result.jlptCalibration, selectedSentence])
 
   const convertToPixels = (
     value: number | undefined | null,

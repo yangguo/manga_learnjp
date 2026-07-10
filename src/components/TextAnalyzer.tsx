@@ -24,7 +24,7 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
     }
   }
 
-  const getDifficultyColor = (difficulty: string) => {
+  const getDifficultyColor = (difficulty?: string) => {
     switch (difficulty) {
       case 'beginner': return 'text-green-600 bg-green-100'
       case 'intermediate': return 'text-yellow-600 bg-yellow-100'
@@ -33,7 +33,7 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
     }
   }
 
-  const getDifficultyIcon = (difficulty: string) => {
+  const getDifficultyIcon = (difficulty?: string) => {
     switch (difficulty) {
       case 'beginner': return '🟢'
       case 'intermediate': return '🟡'

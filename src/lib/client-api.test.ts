@@ -1,5 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { analyzeImageForReading, analyzeText } from './client-api'
+import { analyzeImage, analyzeImageForReading, analyzeText } from './client-api'
+
+vi.mock('./jlpt-dictionary', () => ({
+  getJLPTDictionary: vi.fn(async () => ({
+    status: 'ready',
+    dictionary: {
+      datasetVersion: 'test-v1',
+      classify: () => ({
+        level: 'N5',
+        source: 'open-anki-jlpt-decks',
+        datasetVersion: 'test-v1',
+        match: 'exact'
+      })
+    }
+  }))
+}))
 
 describe('analyzeText', () => {
   afterEach(() => {
@@ -30,9 +45,8 @@ describe('analyzeText', () => {
       text: 'こんにちは',
       provider: 'openai-format',
       analysisLanguage: 'zh',
-      excludeN5: true
     })
-    expect(result).toEqual(analysisResult)
+    expect(result.jlptCalibration).toMatchObject({ status: 'ready', persistable: true })
   })
 
   it('surfaces API error messages', async () => {
@@ -112,7 +126,7 @@ describe('analyzeImageForReading', () => {
       readingMode: true,
       analysisLanguage: 'zh'
     })
-    expect(result).toEqual(readingResult)
+    expect(result.jlptCalibration).toMatchObject({ status: 'ready', persistable: true })
   })
 
   it('can request English reading analysis', async () => {
@@ -128,5 +142,39 @@ describe('analyzeImageForReading', () => {
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
     expect(body.analysisLanguage).toBe('en')
+  })
+})
+
+describe('analyzeImage', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('posts a full-page image request without excludeN5', async () => {
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      extractedText: '猫',
+      sentences: [{
+        sentence: '猫',
+        translation: 'cat',
+        words: [{ word: '猫', reading: 'ねこ', meaning: 'cat', partOfSpeech: 'noun' }],
+        grammar: [],
+        context: ''
+      }],
+      translation: 'cat',
+      summary: '',
+      provider: 'openai'
+    }), { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await analyzeImage('abc', { provider: 'openai-format' })
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)
+    expect(body).toEqual({
+      imageBase64: 'abc',
+      provider: 'openai-format',
+      mangaMode: false,
+      analysisLanguage: 'zh'
+    })
+    expect(result.sentences[0].words[0].jlpt.level).toBe('N5')
   })
 })

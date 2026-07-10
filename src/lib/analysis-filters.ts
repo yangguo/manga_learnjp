@@ -40,7 +40,7 @@ const normalize = (value: string): string => {
 }
 
 export const isN5OrBasicVocabulary = (word: Pick<WordAnalysis, 'difficulty'>): boolean => {
-  return BASIC_VOCABULARY_DIFFICULTIES.has(normalize(word.difficulty))
+  return BASIC_VOCABULARY_DIFFICULTIES.has(normalize(word.difficulty ?? ''))
 }
 
 export const filterLearningVocabulary = (words: WordAnalysis[]): WordAnalysis[] => {

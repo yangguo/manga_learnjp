@@ -14,7 +14,7 @@ interface MokuroAnalysisPanelProps {
   hideSelectedText?: boolean
 }
 
-const normalizeDifficulty = (difficulty: string): string => difficulty.toLowerCase()
+const normalizeDifficulty = (difficulty?: string): string => difficulty?.toLowerCase() ?? ''
 
 const DIFFICULTY_BADGE_CLASSES: Record<string, string> = {
   beginner: 'bg-green-500/15 text-green-300 border-green-500/25',

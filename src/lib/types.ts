@@ -1,9 +1,21 @@
+import type { JLPTClassification } from './jlpt-levels'
+
 export interface WordAnalysis {
   word: string
   reading: string
   meaning: string
   partOfSpeech: string
-  difficulty: 'beginner' | 'intermediate' | 'advanced' | 'N5' | 'N4' | 'N3' | 'N2' | 'N1'
+  /** @deprecated Provider/legacy metadata; never use for JLPT behavior. */
+  difficulty?: string
+  jlpt?: JLPTClassification
+}
+
+export type CalibratedWordAnalysis = WordAnalysis & { jlpt: JLPTClassification }
+
+export interface JLPTCalibrationMeta {
+  status: 'ready' | 'error'
+  datasetVersion: string
+  persistable: boolean
 }
 
 export interface SavedWord {
@@ -68,6 +80,7 @@ export interface ReadingModeResult {
   imageData: string
   overallSummary: string
   provider?: string
+  jlptCalibration?: JLPTCalibrationMeta
 }
 
 export interface AnalysisResult {
@@ -76,6 +89,25 @@ export interface AnalysisResult {
   translation: string
   summary: string
   provider: AIProvider
+  jlptCalibration?: JLPTCalibrationMeta
+}
+
+export type CalibratedSentenceAnalysis = Omit<SentenceAnalysis, 'words'> & {
+  words: CalibratedWordAnalysis[]
+}
+
+export type CalibratedAnalysisResult = Omit<AnalysisResult, 'sentences' | 'jlptCalibration'> & {
+  sentences: CalibratedSentenceAnalysis[]
+  jlptCalibration: JLPTCalibrationMeta
+}
+
+export type CalibratedSentenceLocation = Omit<SentenceLocation, 'words'> & {
+  words: CalibratedWordAnalysis[]
+}
+
+export type CalibratedReadingModeResult = Omit<ReadingModeResult, 'sentences' | 'jlptCalibration'> & {
+  sentences: CalibratedSentenceLocation[]
+  jlptCalibration: JLPTCalibrationMeta
 }
 
 export interface OCRProgress {
@@ -131,6 +163,16 @@ export interface MangaAnalysisResult {
   overallSummary: string
   readingOrder?: number[]
   provider?: string
+  jlptCalibration?: JLPTCalibrationMeta
+}
+
+export type CalibratedMangaPanel = Omit<MangaPanel, 'sentences'> & {
+  sentences: CalibratedSentenceAnalysis[]
+}
+
+export type CalibratedMangaAnalysisResult = Omit<MangaAnalysisResult, 'panels' | 'jlptCalibration'> & {
+  panels: CalibratedMangaPanel[]
+  jlptCalibration: JLPTCalibrationMeta
 }
 
 export interface MokuroBlock {

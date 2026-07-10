@@ -52,7 +52,7 @@ const DIFFICULTY_BADGE_CLASSES: Record<string, string> = {
   n1: 'bg-red-500/15 text-red-300 border-red-500/25'
 }
 const FALLBACK_DIFFICULTY_CLASS = 'bg-gray-500/15 text-gray-300 border-gray-500/25'
-const normalizeDifficulty = (difficulty: string): string => difficulty.toLowerCase()
+const normalizeDifficulty = (difficulty?: string): string => difficulty?.toLowerCase() ?? ''
 
 const relativeTime = (iso: string): string => {
   const then = new Date(iso).getTime()

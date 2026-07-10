@@ -1,4 +1,12 @@
-import type { AIProvider, AnalysisLanguage, AnalysisResult, ReadingModeResult } from './types'
+import { getJLPTDictionary } from './jlpt-dictionary'
+import { calibrateAnalysisResult, calibrateReadingModeResult } from './jlpt-calibration'
+import type {
+  AIProvider,
+  AnalysisLanguage,
+  CalibratedAnalysisResult,
+  CalibratedReadingModeResult,
+  ReadingModeResult
+} from './types'
 import { CLIENT_ANALYSIS_FETCH_TIMEOUT_MS, fetchWithTimeout } from './fetch-timeout'
 
 interface AnalyzeImageForReadingOptions {
@@ -6,18 +14,23 @@ interface AnalyzeImageForReadingOptions {
   language?: AnalysisLanguage
 }
 
+interface AnalyzeImageOptions {
+  provider?: AIProvider
+  language?: AnalysisLanguage
+  signal?: AbortSignal
+}
+
 interface AnalyzeTextOptions {
   provider?: AIProvider
   language?: AnalysisLanguage
-  excludeN5?: boolean
   signal?: AbortSignal
 }
 
 export async function analyzeText(
   text: string,
   options: AnalyzeTextOptions = {}
-): Promise<AnalysisResult> {
-  const { provider = 'openai', language = 'zh', excludeN5 = true, signal } = options
+): Promise<CalibratedAnalysisResult> {
+  const { provider = 'openai', language = 'zh', signal } = options
 
   // Retry lives on the server (route.ts), where the real upstream error is
   // visible and the provider fallback also runs. Retrying here stacked the two
@@ -31,8 +44,7 @@ export async function analyzeText(
     body: JSON.stringify({
       text,
       provider,
-      analysisLanguage: language,
-      excludeN5
+      analysisLanguage: language
     }),
     signal,
   }, { timeoutMs: CLIENT_ANALYSIS_FETCH_TIMEOUT_MS })
@@ -45,13 +57,40 @@ export async function analyzeText(
   }
 
   const result = await response.json()
-  return result as AnalysisResult
+  return calibrateAnalysisResult(result, await getJLPTDictionary())
+}
+
+export async function analyzeImage(
+  imageBase64: string,
+  options: AnalyzeImageOptions = {}
+): Promise<CalibratedAnalysisResult> {
+  const { provider = 'openai', language = 'zh', signal } = options
+  const response = await fetchWithTimeout('/api/analyze', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      imageBase64,
+      provider,
+      mangaMode: false,
+      analysisLanguage: language
+    }),
+    signal
+  }, { timeoutMs: CLIENT_ANALYSIS_FETCH_TIMEOUT_MS })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ error: 'Unknown error' }))
+    const error = new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+    throw Object.assign(error, { status: response.status })
+  }
+
+  const result = await response.json()
+  return calibrateAnalysisResult(result, await getJLPTDictionary())
 }
 
 export async function analyzeImageForReading(
   imageBase64: string,
   options: AnalyzeImageForReadingOptions = {}
-): Promise<ReadingModeResult> {
+): Promise<CalibratedReadingModeResult> {
   const { provider = 'openai', language = 'zh' } = options
 
   const response = await fetchWithTimeout('/api/analyze', {
@@ -72,6 +111,6 @@ export async function analyzeImageForReading(
     throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
   }
 
-  const result = await response.json()
-  return result as ReadingModeResult
+  const result = await response.json() as ReadingModeResult
+  return calibrateReadingModeResult(result, await getJLPTDictionary())
 }

@@ -66,7 +66,7 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, selecti
     navigator.clipboard.writeText(text)
   }
 
-  const getDifficultyColor = (difficulty: string) => {
+  const getDifficultyColor = (difficulty?: string) => {
     switch (difficulty) {
       case 'beginner': return 'text-green-300 bg-green-500/10 border-green-500/30'
       case 'intermediate': return 'text-orange-300 bg-orange-500/10 border-orange-500/30'

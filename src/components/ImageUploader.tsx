@@ -8,7 +8,7 @@ import toast from 'react-hot-toast'
 import { ANALYSIS_MODE_OPTIONS, IMAGE_ANALYSIS_LANGUAGE_OPTIONS } from '@/lib/analysis-modes'
 import { SUPPORTED_IMAGE_TYPES, type AnalysisLanguage, type AnalysisResult, type ReadingModeResult, type AnalysisMode } from '@/lib/types'
 import { useAIProviderStore } from '@/lib/store'
-import { analyzeImageForReading } from '@/lib/client-api'
+import { analyzeImage, analyzeImageForReading } from '@/lib/client-api'
 import { compressImageForAPI } from '@/lib/image-compression'
 
 const MODE_VISUALS: Record<AnalysisMode, { icon: LucideIcon; accent: string }> = {
@@ -92,31 +92,15 @@ export default function ImageUploader({
 
       setProgress(75)
 
-      const response = await fetch('/api/analyze', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          imageBase64: imageForAPI,
-          provider: selectedProvider,
-          mangaMode: false,
-          analysisLanguage,
-          excludeN5: true
-        }),
+      const result = await analyzeImage(imageForAPI, {
+        provider: selectedProvider,
+        language: analysisLanguage
       })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || 'Failed to analyze image')
-      }
-
-      const result = await response.json()
       setProgress(100)
       setIsAnalyzing(false)
 
       toast.success(analysisLanguage === 'zh' ? '已完成整页分析。' : 'Page analysis complete.')
-      onAnalysisComplete(result as AnalysisResult)
+      onAnalysisComplete(result)
 
     } catch (error) {
       console.error('Analysis error:', error)

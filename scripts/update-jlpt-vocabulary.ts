@@ -18,7 +18,7 @@ import {
 const MAX_DATA_BYTES = 350 * 1024
 const SOURCE_REPOSITORY = 'https://github.com/jamsinclair/open-anki-jlpt-decks'
 const RAW_BASE = `https://raw.githubusercontent.com/jamsinclair/open-anki-jlpt-decks/${JLPT_DATASET_COMMIT}`
-const KANA_ONLY = /^[\p{Script=Hiragana}\p{Script=Katakana}\p{M}\sー]+$/u
+const KANA_ONLY = new RegExp('^[\\p{Script=Hiragana}\\p{Script=Katakana}\\p{M}\\sー]+$', 'u')
 
 type SourceMap = Record<JLPTLevel, string>
 
@@ -48,7 +48,7 @@ export async function buildJLPTVocabularyArtifacts(
       relax_column_count: false
     }) as SourceRow[]
 
-    for (const [index, row] of rows.entries()) {
+    for (const [index, row] of Array.from(rows.entries())) {
       const expression = row.expression?.trim() ?? ''
       let reading = row.reading?.trim() ?? ''
       if (!expression) throw new Error(`${level} row ${index + 2}: empty expression`)
@@ -71,7 +71,7 @@ export async function buildJLPTVocabularyArtifacts(
     }
   }
 
-  const entries = Object.fromEntries([...levelsByExactKey.entries()]
+  const entries = Object.fromEntries(Array.from(levelsByExactKey.entries())
     .map(([key, levels]) => [key, pickEarliestJLPTLevel(levels)] as const)
     .sort(([left], [right]) => left.localeCompare(right, 'ja')))
 
@@ -84,9 +84,9 @@ export async function buildJLPTVocabularyArtifacts(
     throw new Error(`JLPT data exceeds ${MAX_DATA_BYTES} bytes`)
   }
 
-  const conflictingKeys = [...levelsByExactKey.values()]
+  const conflictingKeys = Array.from(levelsByExactKey.values())
     .filter(levels => new Set(levels).size > 1).length
-  const normalizedConflictingKeys = [...levelsByNormalizedKey.values()]
+  const normalizedConflictingKeys = Array.from(levelsByNormalizedKey.values())
     .filter(levels => new Set(levels).size > 1).length
 
   const manifestText = `${JSON.stringify({
