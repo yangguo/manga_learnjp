@@ -11,6 +11,7 @@ import {
   Languages,
   Layers,
   Loader2,
+  RefreshCw,
   RotateCw,
   Search,
   Trash2,
@@ -27,6 +28,11 @@ import { analyzeText } from '@/lib/client-api'
 import { calibrateAnalysisRecord, isPersistableAnalysis } from '@/lib/jlpt-calibration'
 import { getJLPTDictionary } from '@/lib/jlpt-dictionary'
 import { JLPT_DATASET_VERSION } from '@/lib/jlpt-levels'
+import {
+  createMokuroProgressKey,
+  restoreMokuroProgress,
+  serializeMokuroProgress
+} from '@/lib/mokuro-progress'
 import { runConcurrentTasks } from '@/lib/concurrency'
 import {
   MOKURO_ANALYSIS_CACHE_DIRNAME,
@@ -172,6 +178,7 @@ const UI_TEXT = {
     noJapaneseVoice: '未检测到日语语音，请在系统设置中安装日语语音包后再朗读。',
     voiceLabel: '音色',
     voiceAuto: '自动',
+    verifyVoices: '验证音色',
     batchComplete: '本页批量分析完成',
     analyzeRange: '批量分析范围',
     analyzingRange: '正在分析范围...',
@@ -226,6 +233,7 @@ const UI_TEXT = {
     noJapaneseVoice: 'No Japanese voice found. Install a Japanese voice package in your system settings to hear sentences.',
     voiceLabel: 'Voice',
     voiceAuto: 'Auto',
+    verifyVoices: 'Verify voices',
     batchComplete: 'Page batch analysis complete',
     analyzeRange: 'Analyze range',
     analyzingRange: 'Analyzing range...',
@@ -346,20 +354,20 @@ export default function MokuroReader() {
     cancel: cancelSpeech,
     supported: speechSupported,
     ready: speechReady,
-    voices: speechVoices
+    verifiedVoices,
+    isVerifying,
+    verifyVoices
   } = useSpeech({ voiceURI })
-  const japaneseVoices = useMemo(
-    () => speechVoices.filter(voice => voice.lang.toLowerCase().startsWith('ja')),
-    [speechVoices]
-  )
   const speakSelection = (text: string) => {
     if (!speechSupported || !text.trim()) return
-    // Only hint at a missing voice once voices have loaded, so the async
-    // voice list doesn't trigger a false "no Japanese voice" toast.
-    if (!speak(text) && speechReady && !speechHintShownRef.current) {
-      speechHintShownRef.current = true
-      toast(UI_TEXT[analysisLanguage].noJapaneseVoice)
-    }
+    void speak(text).then(result => {
+      // Only hint at a missing voice once the browser has populated its list,
+      // so asynchronous loading never creates a false warning.
+      if (!result.started && speechReady && !isVerifying && !speechHintShownRef.current) {
+        speechHintShownRef.current = true
+        toast(UI_TEXT[analysisLanguage].noJapaneseVoice)
+      }
+    })
   }
 
   const t = UI_TEXT[analysisLanguage]
@@ -393,6 +401,35 @@ export default function MokuroReader() {
       text: getMokuroBlockText(block)
     }))
   }, [currentPage])
+
+  const mokuroProgressKey = useMemo(() => {
+    if (!mokuroFile) return null
+    return createMokuroProgressKey({ mokuro: mokuroFile, mokuroName, directoryName })
+  }, [directoryName, mokuroFile, mokuroName])
+
+  useEffect(() => {
+    if (!mokuroFile || !mokuroProgressKey) return
+
+    const selectedBlockIndex = selectedBlock?.pageIndex === currentPageIndex
+      ? selectedBlock.blockIndex
+      : null
+
+    try {
+      window.localStorage.setItem(mokuroProgressKey, serializeMokuroProgress({
+        pageIndex: currentPageIndex,
+        selectedBlockIndex
+      }))
+    } catch (progressError) {
+      console.warn('Failed to persist Mokuro reading progress:', progressError)
+    }
+  }, [currentPageIndex, mokuroFile, mokuroProgressKey, selectedBlock])
+
+  useEffect(() => {
+    if (!voiceURI) return
+    if (!verifiedVoices.some(voice => voice.voiceURI === voiceURI)) {
+      setVoiceURI(verifiedVoices[0]?.voiceURI ?? null)
+    }
+  }, [verifiedVoices, voiceURI])
 
   // Indices of blocks with text on the current page; empty blocks are skipped
   // so keyboard navigation never lands on an unanalyzable target.
@@ -524,6 +561,22 @@ export default function MokuroReader() {
     const loadResult = await getJLPTDictionary()
     loadedCache = calibrateAnalysisRecord(loadedCache, loadResult)
 
+    const progressKey = createMokuroProgressKey({
+      mokuro: parsedMokuro,
+      mokuroName: plan.mokuroFile.name,
+      directoryName: selectedDirectoryName
+    })
+    let restoredProgress = { pageIndex: 0, selectedBlockIndex: null as number | null }
+    try {
+      restoredProgress = restoreMokuroProgress(window.localStorage.getItem(progressKey), parsedMokuro)
+    } catch (progressError) {
+      console.warn('Failed to restore Mokuro reading progress:', progressError)
+    }
+    const restoredBlock = restoredProgress.selectedBlockIndex === null
+      ? null
+      : parsedMokuro.pages[restoredProgress.pageIndex]?.blocks[restoredProgress.selectedBlockIndex]
+    const restoredText = restoredBlock ? getMokuroBlockText(restoredBlock) : ''
+
     // Migrate the legacy single file into per-page files only after a reliable calibration.
     if (directoryHandleRef.current && parsedMokuro && plan.legacyCacheFile && loadResult.status === 'ready' && (needsCacheMigration || Object.keys(loadedCache).length > 0)) {
       try {
@@ -546,8 +599,14 @@ export default function MokuroReader() {
     setMokuroName(plan.mokuroFile.name)
     setDirectoryName(selectedDirectoryName)
     setImageFiles(loadedImages)
-    setCurrentPageIndex(0)
-    setSelectedBlock(null)
+    setCurrentPageIndex(restoredProgress.pageIndex)
+    setSelectedBlock(restoredText
+      ? {
+          pageIndex: restoredProgress.pageIndex,
+          blockIndex: restoredProgress.selectedBlockIndex as number,
+          text: restoredText
+        }
+      : null)
     analysisCacheRef.current = loadedCache
     setAnalysisCache(loadedCache)
     setActiveAnalysis(null)
@@ -1098,7 +1157,7 @@ export default function MokuroReader() {
               ))}
             </div>
 
-            {speechSupported && japaneseVoices.length > 0 && (
+            {speechSupported && (
               <div className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-gray-950/40 py-1 pl-2 pr-1">
                 <Volume2 size={16} className="text-cyan-300" />
                 <span className="text-xs text-gray-400">{t.voiceLabel}</span>
@@ -1107,15 +1166,26 @@ export default function MokuroReader() {
                   onChange={event => setVoiceURI(event.target.value || null)}
                   aria-label={t.voiceLabel}
                   title={t.voiceLabel}
+                  disabled={isVerifying || verifiedVoices.length === 0}
                   className="h-7 rounded-md border border-white/10 bg-gray-950 px-2 text-sm text-white"
                 >
                   <option value="">{t.voiceAuto}</option>
-                  {japaneseVoices.map(voice => (
+                  {verifiedVoices.map(voice => (
                     <option key={voice.voiceURI} value={voice.voiceURI}>
                       {voice.name}
                     </option>
                   ))}
                 </select>
+                <button
+                  type="button"
+                  onClick={() => void verifyVoices()}
+                  disabled={isVerifying || !speechReady}
+                  aria-label={t.verifyVoices}
+                  title={t.verifyVoices}
+                  className="rounded-md p-1 text-gray-300 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <RefreshCw size={15} className={isVerifying ? 'animate-spin' : ''} />
+                </button>
               </div>
             )}
           </div>
