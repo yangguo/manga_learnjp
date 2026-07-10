@@ -23,7 +23,9 @@ export interface SavedWord {
   reading: string
   meaning: string
   partOfSpeech: string
-  difficulty: string
+  /** @deprecated Legacy persisted metadata. */
+  difficulty?: string
+  jlpt?: JLPTClassification
   sourceSentence: string | null
   savedAt: string
 }

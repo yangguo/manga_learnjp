@@ -1,4 +1,5 @@
 import type { SavedWord, WordAnalysis } from './types'
+import type { JLPTDictionary } from './jlpt-dictionary'
 
 export const savedWordKey = (word: string, reading: string): string =>
   JSON.stringify([word, reading])
@@ -12,10 +13,18 @@ export const toSavedWord = (
   reading: word.reading,
   meaning: word.meaning,
   partOfSpeech: word.partOfSpeech,
-  difficulty: word.difficulty ?? '',
+  ...(word.jlpt ? { jlpt: word.jlpt } : {}),
   sourceSentence,
   savedAt
 })
+
+export const reclassifySavedWords = (
+  words: SavedWord[],
+  dictionary: JLPTDictionary
+): SavedWord[] => words.map(word => ({
+  ...word,
+  jlpt: dictionary.classify(word.word, word.reading)
+}))
 
 export const addWord = (words: SavedWord[], entry: SavedWord): SavedWord[] => {
   const key = savedWordKey(entry.word, entry.reading)

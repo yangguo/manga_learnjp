@@ -3,6 +3,7 @@ import {
   addWord,
   isSaved,
   removeWord,
+  reclassifySavedWords,
   savedWordKey,
   toSavedWord,
   toggleWord
@@ -46,12 +47,42 @@ describe('savedWordKey', () => {
 describe('toSavedWord', () => {
   it('carries WordAnalysis fields and sourceSentence, injects savedAt', () => {
     const saved = toSavedWord(baseWord, 'あの橋を渡る', '2026-07-10T00:00:00.000Z')
-    expect(saved).toEqual(makeSaved())
+    expect(saved).toEqual({
+      word: baseWord.word,
+      reading: baseWord.reading,
+      meaning: baseWord.meaning,
+      partOfSpeech: baseWord.partOfSpeech,
+      sourceSentence: 'あの橋を渡る',
+      savedAt: '2026-07-10T00:00:00.000Z'
+    })
   })
 
   it('allows null sourceSentence', () => {
     const saved = toSavedWord(baseWord, null, '2026-07-10T00:00:00.000Z')
     expect(saved.sourceSentence).toBeNull()
+  })
+
+  it('copies canonical JLPT data into a newly saved word', () => {
+    const saved = toSavedWord({
+      ...baseWord,
+      jlpt: { level: 'N3', source: 'open-anki-jlpt-decks', datasetVersion: 'v1', match: 'exact' }
+    }, '橋を渡る', '2026-07-10T00:00:00.000Z')
+    expect(saved.jlpt?.level).toBe('N3')
+  })
+
+  it('reclassifies without changing identity or learning context', () => {
+    const before = makeSaved()
+    const after = reclassifySavedWords([before], {
+      datasetVersion: 'v2',
+      classify: () => ({ level: 'N4', source: 'open-anki-jlpt-decks', datasetVersion: 'v2', match: 'exact' })
+    })
+    expect(after[0]).toMatchObject({
+      word: before.word,
+      reading: before.reading,
+      sourceSentence: before.sourceSentence,
+      savedAt: before.savedAt,
+      jlpt: { level: 'N4', datasetVersion: 'v2' }
+    })
   })
 })
 
