@@ -2,8 +2,11 @@
 
 import { BookOpen, Github, Heart } from 'lucide-react'
 import { motion } from 'framer-motion'
+import Link from 'next/link'
+import { useWordBankStore } from '@/lib/word-bank-store'
 
 export default function Header() {
+  const wordCount = useWordBankStore(state => state.words.length)
   return (
     <motion.header 
       initial={{ opacity: 0, y: -20 }}
@@ -24,6 +27,19 @@ export default function Header() {
           </div>
           
           <div className="flex items-center space-x-4">
+            <Link
+              href="/words"
+              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
+            >
+              <BookOpen className="w-4 h-4" />
+              <span>生词本</span>
+              {wordCount > 0 && (
+                <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-300">
+                  {wordCount}
+                </span>
+              )}
+            </Link>
+
             <motion.a
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
