@@ -46,9 +46,10 @@ export const getVerifiedVoices = <T extends SpeechVoiceLike>(
   unavailableVoiceURIs: Set<string>
 ): T[] => {
   return getJapaneseVoices(voices).filter(voice => {
-    return Boolean(voice.voiceURI) &&
-      verifiedVoiceURIs.has(voice.voiceURI) &&
-      !unavailableVoiceURIs.has(voice.voiceURI)
+    const voiceURI = voice.voiceURI
+    return voiceURI !== undefined &&
+      verifiedVoiceURIs.has(voiceURI) &&
+      !unavailableVoiceURIs.has(voiceURI)
   })
 }
 
