@@ -1577,7 +1577,7 @@ Analyze this Japanese sentence for language learning:
 Text: "${segment.text}"
 
 ${getAnalysisLanguageInstruction(language)}
-${getLearningLevelInstruction(true)}
+${getLearningLevelInstruction(false)}
 
 Provide a JSON response:
 {
@@ -1588,7 +1588,7 @@ Provide a JSON response:
       "reading": "hiragana/katakana",
       "meaning": "${language === 'zh' ? 'Chinese meaning' : 'English meaning'}",
       "partOfSpeech": "noun/verb/adjective/etc",
-      "difficulty": "N4/N3/N2/N1/intermediate/advanced"
+      "difficulty": "beginner/intermediate/advanced"
     }
   ],
   "grammar": [
@@ -1602,8 +1602,8 @@ Provide a JSON response:
 }
 
 IMPORTANT:
-- Include only the 2-4 most important non-N5 words
-- Limit to 1-2 key non-N5 grammar patterns
+- Include only the 2-4 most important words
+- Limit to 1-2 key grammar patterns
 - Keep explanations concise
 `
 
@@ -2094,7 +2094,7 @@ Analyze this Japanese sentence for language learning:
 Text: "${segment.text}"
 
 ${getAnalysisLanguageInstruction(language)}
-${getLearningLevelInstruction(true)}
+${getLearningLevelInstruction(false)}
 
 Provide a JSON response:
 {
@@ -2105,7 +2105,7 @@ Provide a JSON response:
       "reading": "hiragana/katakana",
       "meaning": "${language === 'zh' ? 'Chinese meaning' : 'English meaning'}",
       "partOfSpeech": "noun/verb/adjective/etc",
-      "difficulty": "N4/N3/N2/N1/intermediate/advanced"
+      "difficulty": "beginner/intermediate/advanced"
     }
   ],
   "grammar": [
@@ -2119,8 +2119,8 @@ Provide a JSON response:
 }
 
 IMPORTANT:
-- Include only the 2-4 most important non-N5 words
-- Limit to 1-2 key non-N5 grammar patterns
+- Include only the 2-4 most important words
+- Limit to 1-2 key grammar patterns
 - Keep explanations concise
 `
 
