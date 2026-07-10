@@ -24,6 +24,9 @@ import { useMokuroKeyboardNav } from '@/components/useMokuroKeyboardNav'
 import { useSpeech } from '@/components/useSpeech'
 import { runWithBatchAwake } from '@/lib/batch-awake'
 import { analyzeText } from '@/lib/client-api'
+import { calibrateAnalysisRecord } from '@/lib/jlpt-calibration'
+import { getJLPTDictionary } from '@/lib/jlpt-dictionary'
+import { JLPT_DATASET_VERSION } from '@/lib/jlpt-levels'
 import { runConcurrentTasks } from '@/lib/concurrency'
 import {
   MOKURO_ANALYSIS_CACHE_DIRNAME,
@@ -481,10 +484,12 @@ export default function MokuroReader() {
       .filter(importedFile => isImageFile(importedFile.file))
       .map(createImageWithUrl)
     let loadedCache: Record<string, AnalysisResult> = {}
+    let needsCacheMigration = false
 
     for (const cachePageFile of plan.cachePageFiles) {
       try {
         const parsed = parseMokuroPageAnalysisCacheContent(await cachePageFile.file.text())
+        needsCacheMigration ||= parsed.version === 1 || parsed.jlptDatasetVersion !== JLPT_DATASET_VERSION
         loadedCache = { ...loadedCache, ...parsed.analyses }
       } catch (cacheError) {
         console.warn('Failed to parse Mokuro page analysis cache:', cacheError)
@@ -494,6 +499,7 @@ export default function MokuroReader() {
     if (plan.legacyCacheFile) {
       try {
         const legacy = parseMokuroAnalysisCacheContent(await plan.legacyCacheFile.file.text())
+        needsCacheMigration ||= legacy.version === 1 || legacy.jlptDatasetVersion !== JLPT_DATASET_VERSION
         loadedCache = { ...legacy.analyses, ...loadedCache }
       } catch (cacheError) {
         console.warn('Failed to parse legacy Mokuro analysis cache:', cacheError)
@@ -502,15 +508,20 @@ export default function MokuroReader() {
       const browserCache = window.localStorage.getItem(getBrowserCacheKey(plan.mokuroFile.name))
       if (browserCache) {
         try {
-          loadedCache = { ...parseMokuroAnalysisCacheContent(browserCache).analyses, ...loadedCache }
+          const browser = parseMokuroAnalysisCacheContent(browserCache)
+          needsCacheMigration ||= browser.version === 1 || browser.jlptDatasetVersion !== JLPT_DATASET_VERSION
+          loadedCache = { ...browser.analyses, ...loadedCache }
         } catch (cacheError) {
           console.warn('Failed to parse browser Mokuro analysis cache:', cacheError)
         }
       }
     }
 
-    // Migrate the legacy single file into per-page files (directory mode only).
-    if (directoryHandleRef.current && parsedMokuro && plan.legacyCacheFile) {
+    const loadResult = await getJLPTDictionary()
+    loadedCache = calibrateAnalysisRecord(loadedCache, loadResult)
+
+    // Migrate the legacy single file into per-page files only after a reliable calibration.
+    if (directoryHandleRef.current && parsedMokuro && plan.legacyCacheFile && loadResult.status === 'ready' && (needsCacheMigration || Object.keys(loadedCache).length > 0)) {
       try {
         const cacheDir = await directoryHandleRef.current.getDirectoryHandle(MOKURO_ANALYSIS_CACHE_DIRNAME, { create: true })
         const groups = groupAnalysesByPageIndex(loadedCache)

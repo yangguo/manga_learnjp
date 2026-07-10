@@ -201,7 +201,8 @@ export interface MokuroFile {
 }
 
 export interface MokuroAnalysisCacheFile {
-  version: 1
+  version: 1 | 2
+  jlptDatasetVersion?: string
   savedAt: string
   source: {
     title?: string

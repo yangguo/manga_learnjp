@@ -7,6 +7,7 @@ import {
   filterAnalysesByPageIndex,
   findMokuroPageImageFile,
   getMokuroPageAnalysisConcurrency,
+  getPersistableAnalysisRecord,
   isMokuroPageAnalysisComplete,
   shouldStopMokuroRangeAfterPageAnalysis,
   getPageCacheFilename,
@@ -19,6 +20,7 @@ import {
   serializeMokuroPageAnalysisCache,
   parseMokuroFileContent
 } from './mokuro'
+import { JLPT_DATASET_VERSION } from './jlpt-levels'
 
 describe('parseMokuroFileContent', () => {
   it('parses a Mokuro file and normalizes block text', () => {
@@ -117,7 +119,12 @@ describe('mokuro analysis cache', () => {
     sentences: [],
     translation: '你好',
     summary: '问候',
-    provider: 'openai-format' as const
+    provider: 'openai-format' as const,
+    jlptCalibration: {
+      status: 'ready' as const,
+      datasetVersion: JLPT_DATASET_VERSION,
+      persistable: true
+    }
   }
 
   it('uses provider and language in cache keys', () => {
@@ -143,9 +150,36 @@ describe('mokuro analysis cache', () => {
 
     const parsed = parseMokuroAnalysisCacheContent(content)
 
-    expect(parsed.version).toBe(1)
+    expect(parsed.version).toBe(2)
+    expect(parsed.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
     expect(parsed.source.title).toBe('spy6')
     expect(parsed.analyses[key]).toEqual(result)
+  })
+
+  it('reads v1 caches but always serializes v2 with the JLPT dataset version', () => {
+    const v1 = JSON.stringify({
+      version: 1,
+      savedAt: '2026-07-10T00:00:00.000Z',
+      source: {},
+      analyses: {}
+    })
+    expect(parseMokuroAnalysisCacheContent(v1).version).toBe(1)
+    const v2 = JSON.parse(serializeMokuroAnalysisCache({}))
+    expect(v2.version).toBe(2)
+    expect(v2.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
+  })
+
+  it('writes only persistable calibrated analyses', () => {
+    const ready = { ...result }
+    const error = {
+      ...result,
+      jlptCalibration: {
+        status: 'error' as const,
+        datasetVersion: JLPT_DATASET_VERSION,
+        persistable: false
+      }
+    }
+    expect(Object.keys(getPersistableAnalysisRecord({ ready, error }))).toEqual(['ready'])
   })
 })
 
@@ -190,7 +224,12 @@ describe('serializeMokuroPageAnalysisCache / parseMokuroPageAnalysisCacheContent
       sentences: [],
       translation: 'Hello',
       summary: 'greeting',
-      provider: 'openai-format'
+      provider: 'openai-format',
+      jlptCalibration: {
+        status: 'ready' as const,
+        datasetVersion: JLPT_DATASET_VERSION,
+        persistable: true
+      }
     }
   }
 
@@ -198,7 +237,17 @@ describe('serializeMokuroPageAnalysisCache / parseMokuroPageAnalysisCacheContent
     const content = serializeMokuroPageAnalysisCache(2, analyses)
     const parsed = parseMokuroPageAnalysisCacheContent(content)
     expect(parsed.pageIndex).toBe(2)
+    expect(parsed.version).toBe(2)
+    expect(parsed.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
     expect(parsed.analyses[key]).toEqual(analyses[key])
+  })
+
+  it('reads v1 page caches but serializes v2', () => {
+    const v1 = JSON.stringify({ version: 1, savedAt: '2026-07-10T00:00:00.000Z', pageIndex: 2, analyses: {} })
+    expect(parseMokuroPageAnalysisCacheContent(v1).version).toBe(1)
+    const v2 = JSON.parse(serializeMokuroPageAnalysisCache(2, {}))
+    expect(v2.version).toBe(2)
+    expect(v2.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
   })
 
   it('throws on invalid JSON', () => {
