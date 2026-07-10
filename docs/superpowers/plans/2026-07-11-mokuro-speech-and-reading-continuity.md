@@ -170,4 +170,3 @@
    - 在本地 Mokuro fixture/真实目录第 N 页选块，重新选择同一目录后恢复页码与高亮块。
 3. 使用 @superpowers:requesting-code-review 审查分支 diff；修复真实问题后重跑本任务自动验证。
 4. 使用 @superpowers:finishing-a-development-branch 完成合并和分支清理；禁止强制或破坏性 Git 命令。
-
