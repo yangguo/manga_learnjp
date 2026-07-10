@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion'
 import { BookOpen, Loader2, Quote, Sparkles, Star } from 'lucide-react'
 import { filterLearningGrammar, filterLearningVocabulary } from '@/lib/analysis-filters'
+import { isPersistableAnalysis } from '@/lib/jlpt-calibration'
 import { useWordBankStore } from '@/lib/word-bank-store'
 import JLPTBadge from '@/components/JLPTBadge'
 import type { AnalysisLanguage, AnalysisResult, WordAnalysis } from '@/lib/types'
@@ -178,7 +179,11 @@ export default function MokuroAnalysisPanel({
                   </div>
                   <div className="flex items-center gap-1">
                     <JLPTBadge classification={word.jlpt} language={language} />
-                    <WordSaveButton word={word} sourceSentence={selectedText} />
+                    <WordSaveButton
+                      word={word}
+                      sourceSentence={selectedText}
+                      persistJLPT={isPersistableAnalysis(analysisResult)}
+                    />
                   </div>
                 </div>
                 <p className="mt-1 text-sm text-gray-100">{word.meaning}</p>
@@ -231,16 +236,17 @@ export default function MokuroAnalysisPanel({
 interface WordSaveButtonProps {
   word: WordAnalysis
   sourceSentence: string | null
+  persistJLPT: boolean
 }
 
-function WordSaveButton({ word, sourceSentence }: WordSaveButtonProps) {
+function WordSaveButton({ word, sourceSentence, persistJLPT }: WordSaveButtonProps) {
   const saved = useWordBankStore(state => state.isSaved(word.word, word.reading))
   const toggleWord = useWordBankStore(state => state.toggleWord)
 
   return (
     <button
       type="button"
-      onClick={() => toggleWord(word, sourceSentence)}
+      onClick={() => toggleWord(word, sourceSentence, persistJLPT)}
       aria-label={saved ? 'Remove from word bank' : 'Save to word bank'}
       aria-pressed={saved}
       className={`shrink-0 rounded-full p-1 transition-colors hover:bg-white/10 ${

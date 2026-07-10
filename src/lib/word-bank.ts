@@ -7,13 +7,14 @@ export const savedWordKey = (word: string, reading: string): string =>
 export const toSavedWord = (
   word: WordAnalysis,
   sourceSentence: string | null,
-  savedAt: string
+  savedAt: string,
+  persistJLPT = false
 ): SavedWord => ({
   word: word.word,
   reading: word.reading,
   meaning: word.meaning,
   partOfSpeech: word.partOfSpeech,
-  ...(word.jlpt ? { jlpt: word.jlpt } : {}),
+  ...(persistJLPT && word.jlpt ? { jlpt: word.jlpt } : {}),
   sourceSentence,
   savedAt
 })

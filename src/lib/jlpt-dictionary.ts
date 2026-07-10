@@ -83,11 +83,15 @@ export async function loadJLPTDictionary(
       throw new Error('JLPT data files are unavailable')
     }
     const manifest = await manifestResponse.json() as {
+      schemaVersion?: unknown
       datasetVersion?: unknown
       checksums?: { dataSha256?: unknown }
     }
     const dataText = await dataResponse.text()
     const data = JSON.parse(dataText) as Partial<DataFile>
+    if (manifest.schemaVersion !== 1) {
+      throw new Error('JLPT manifest schema is invalid')
+    }
     if (manifest.datasetVersion !== JLPT_DATASET_VERSION || data.datasetVersion !== JLPT_DATASET_VERSION) {
       throw new Error('JLPT dataset version mismatch')
     }

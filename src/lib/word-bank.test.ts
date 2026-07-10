@@ -66,8 +66,16 @@ describe('toSavedWord', () => {
     const saved = toSavedWord({
       ...baseWord,
       jlpt: { level: 'N3', source: 'open-anki-jlpt-decks', datasetVersion: 'v1', match: 'exact' }
-    }, '橋を渡る', '2026-07-10T00:00:00.000Z')
+    }, '橋を渡る', '2026-07-10T00:00:00.000Z', true)
     expect(saved.jlpt?.level).toBe('N3')
+  })
+
+  it('omits render-only JLPT data when calibration is not persistable', () => {
+    const saved = toSavedWord({
+      ...baseWord,
+      jlpt: { level: null, source: 'open-anki-jlpt-decks', datasetVersion: 'v1', match: 'none' }
+    }, '橋を渡る', '2026-07-10T00:00:00.000Z', false)
+    expect(saved).not.toHaveProperty('jlpt')
   })
 
   it('reclassifies without changing identity or learning context', () => {

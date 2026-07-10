@@ -15,9 +15,9 @@ export const migrateWordBankState = (persisted: unknown) => {
 interface WordBankState {
   words: SavedWord[]
   calibrationStatus: 'idle' | 'loading' | 'ready' | 'error'
-  addWord: (word: WordAnalysis, sourceSentence: string | null) => void
+  addWord: (word: WordAnalysis, sourceSentence: string | null, persistJLPT: boolean) => void
   removeWord: (word: string, reading: string) => void
-  toggleWord: (word: WordAnalysis, sourceSentence: string | null) => void
+  toggleWord: (word: WordAnalysis, sourceSentence: string | null, persistJLPT: boolean) => void
   isSaved: (word: string, reading: string) => boolean
   clearAll: () => void
   calibrateWords: () => Promise<void>
@@ -27,14 +27,14 @@ export const useWordBankStore = create<WordBankState>()(persist(
   (set, get) => ({
     words: [],
     calibrationStatus: 'idle',
-    addWord: (word, sourceSentence) => set(state => ({
-      words: addWord(state.words, toSavedWord(word, sourceSentence, new Date().toISOString()))
+    addWord: (word, sourceSentence, persistJLPT) => set(state => ({
+      words: addWord(state.words, toSavedWord(word, sourceSentence, new Date().toISOString(), persistJLPT))
     })),
     removeWord: (word, reading) => set(state => ({
       words: removeWord(state.words, word, reading)
     })),
-    toggleWord: (word, sourceSentence) => set(state => ({
-      words: toggleWord(state.words, toSavedWord(word, sourceSentence, new Date().toISOString()))
+    toggleWord: (word, sourceSentence, persistJLPT) => set(state => ({
+      words: toggleWord(state.words, toSavedWord(word, sourceSentence, new Date().toISOString(), persistJLPT))
     })),
     isSaved: (word, reading) => isSaved(get().words, word, reading),
     clearAll: () => set({ words: [] }),

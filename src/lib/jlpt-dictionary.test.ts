@@ -61,4 +61,14 @@ describe('loadJLPTDictionary', () => {
     )
     await expect(loadJLPTDictionary(fetchMock)).resolves.toMatchObject({ status: 'error' })
   })
+
+  it('fails closed on manifest schema mismatch', async () => {
+    const fixtures = await responseSet()
+    const fetchMock = async (input: RequestInfo | URL) => new Response(
+      String(input).includes('manifest')
+        ? fixtures.manifestText.replace('"schemaVersion":1', '"schemaVersion":2')
+        : fixtures.dataText
+    )
+    await expect(loadJLPTDictionary(fetchMock)).resolves.toMatchObject({ status: 'error' })
+  })
 })
