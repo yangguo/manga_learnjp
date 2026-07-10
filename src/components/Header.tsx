@@ -4,9 +4,11 @@ import { BookOpen, Github, Heart } from 'lucide-react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useWordBankStore } from '@/lib/word-bank-store'
+import { useHydrated } from '@/hooks/useHydrated'
 
 export default function Header() {
   const wordCount = useWordBankStore(state => state.words.length)
+  const hydrated = useHydrated()
   return (
     <motion.header 
       initial={{ opacity: 0, y: -20 }}
@@ -33,7 +35,7 @@ export default function Header() {
             >
               <BookOpen className="w-4 h-4" />
               <span>生词本</span>
-              {wordCount > 0 && (
+              {hydrated && wordCount > 0 && (
                 <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-300">
                   {wordCount}
                 </span>

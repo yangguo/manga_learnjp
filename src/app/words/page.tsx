@@ -3,6 +3,7 @@
 import { BookOpen, Star, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useWordBankStore } from '@/lib/word-bank-store'
+import { useHydrated } from '@/hooks/useHydrated'
 import type { AnalysisLanguage, SavedWord } from '@/lib/types'
 
 const UI_TEXT = {
@@ -110,6 +111,7 @@ function WordCard({ word }: { word: SavedWord }) {
 export default function WordBankPage() {
   const words = useWordBankStore(state => state.words)
   const clearAll = useWordBankStore(state => state.clearAll)
+  const hydrated = useHydrated()
 
   const handleClear = () => {
     if (window.confirm(t.clearConfirm)) {
@@ -123,7 +125,7 @@ export default function WordBankPage() {
         <BookOpen size={20} className="text-amber-300" />
         <h1 className="text-xl font-bold text-white">{t.title}</h1>
         <span className="text-sm text-gray-400">{words.length} {t.count}</span>
-        {words.length > 0 && (
+        {hydrated && words.length > 0 && (
           <button
             type="button"
             onClick={handleClear}
@@ -134,7 +136,7 @@ export default function WordBankPage() {
         )}
       </div>
 
-      {words.length > 0 ? (
+      {hydrated && words.length > 0 ? (
         <ul className="space-y-2">
           {words.map(word => (
             <WordCard key={`${word.word}-${word.reading}`} word={word} />
