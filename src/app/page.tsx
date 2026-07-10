@@ -6,6 +6,7 @@ import MokuroReader from '@/components/MokuroReader'
 import ReadingModeViewer from '@/components/ReadingModeViewer'
 import ImagePageAnalysisViewer from '@/components/ImagePageAnalysisViewer'
 import Header from '@/components/Header'
+import WordBankDrawer from '@/components/WordBankDrawer'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AnalysisLanguage, AnalysisResult, ReadingModeResult, AnalysisMode } from '@/lib/types'
 import { AlertCircle, X } from 'lucide-react'
@@ -17,6 +18,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('image')
   const [imageAnalysisLanguage, setImageAnalysisLanguage] = useState<AnalysisLanguage>('zh')
+  const [isWordBankOpen, setIsWordBankOpen] = useState(false)
 
   const handleAnalysisComplete = (result: AnalysisResult) => {
     setAnalysisResult(result)
@@ -55,7 +57,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <Header />
+      <Header onOpenWordBank={() => setIsWordBankOpen(true)} />
       
       <main className="container mx-auto px-4 py-8">
         <motion.div
@@ -141,6 +143,7 @@ export default function Home() {
           </motion.div>
         </div>
       </main>
+      <WordBankDrawer open={isWordBankOpen} onClose={() => setIsWordBankOpen(false)} />
     </div>
   )
 }

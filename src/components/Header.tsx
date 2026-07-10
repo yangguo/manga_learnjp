@@ -7,7 +7,11 @@ import { useWordBankStore } from '@/lib/word-bank-store'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useWordBankJLPTCalibration } from '@/hooks/useWordBankJLPTCalibration'
 
-export default function Header() {
+interface HeaderProps {
+  onOpenWordBank?: () => void
+}
+
+export default function Header({ onOpenWordBank }: HeaderProps) {
   useWordBankJLPTCalibration()
   const wordCount = useWordBankStore(state => state.words.length)
   const hydrated = useHydrated()
@@ -39,18 +43,34 @@ export default function Header() {
             >
               <Info className="h-5 w-5" />
             </Link>
-            <Link
-              href="/words"
-              className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
-            >
-              <BookOpen className="w-4 h-4" />
-              <span>生词本</span>
-              {hydrated && wordCount > 0 && (
-                <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-300">
-                  {wordCount}
-                </span>
-              )}
-            </Link>
+            {onOpenWordBank ? (
+              <button
+                type="button"
+                onClick={onOpenWordBank}
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>生词本</span>
+                {hydrated && wordCount > 0 && (
+                  <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-300">
+                    {wordCount}
+                  </span>
+                )}
+              </button>
+            ) : (
+              <Link
+                href="/words"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-gray-200 transition-colors hover:bg-white/10"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>生词本</span>
+                {hydrated && wordCount > 0 && (
+                  <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-300">
+                    {wordCount}
+                  </span>
+                )}
+              </Link>
+            )}
 
             <motion.a
               whileHover={{ scale: 1.05 }}
