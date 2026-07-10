@@ -4,6 +4,11 @@
 
 export interface SpeechVoiceLike {
   lang: string
+  voiceURI?: string
+}
+
+const isJapaneseVoice = (voice: SpeechVoiceLike): boolean => {
+  return voice.lang.toLowerCase().split('-')[0] === 'ja'
 }
 
 // Pick the best voice for a BCP-47 language tag (e.g. 'ja-JP'). Prefers an
@@ -30,3 +35,35 @@ export const hasVoiceForLang = <T extends SpeechVoiceLike>(
   voices: T[],
   lang: string
 ): boolean => selectVoice(voices, lang) !== null
+
+export const getJapaneseVoices = <T extends SpeechVoiceLike>(voices: T[]): T[] => {
+  return voices.filter(isJapaneseVoice)
+}
+
+export const getVerifiedVoices = <T extends SpeechVoiceLike>(
+  voices: T[],
+  verifiedVoiceURIs: Set<string>,
+  unavailableVoiceURIs: Set<string>
+): T[] => {
+  return getJapaneseVoices(voices).filter(voice => {
+    return Boolean(voice.voiceURI) &&
+      verifiedVoiceURIs.has(voice.voiceURI) &&
+      !unavailableVoiceURIs.has(voice.voiceURI)
+  })
+}
+
+export const isSpeechFailure = (reason: string | undefined): boolean => {
+  return Boolean(reason) && reason !== 'canceled' && reason !== 'interrupted'
+}
+
+export const selectFallbackVoice = <T extends SpeechVoiceLike>(
+  voices: T[],
+  preferredVoiceURI: string | null,
+  lang: string
+): T | null => {
+  const preferred = preferredVoiceURI
+    ? voices.find(voice => voice.voiceURI === preferredVoiceURI) ?? null
+    : null
+
+  return preferred ?? selectVoice(voices, lang)
+}

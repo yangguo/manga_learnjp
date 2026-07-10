@@ -1,8 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { hasVoiceForLang, selectVoice } from './speech'
+import {
+  getJapaneseVoices,
+  getVerifiedVoices,
+  hasVoiceForLang,
+  isSpeechFailure,
+  selectFallbackVoice,
+  selectVoice
+} from './speech'
 import type { SpeechVoiceLike } from './speech'
 
 const voice = (lang: string): SpeechVoiceLike => ({ lang })
+const namedVoice = (voiceURI: string, lang: string): SpeechVoiceLike => ({ voiceURI, lang })
 
 describe('selectVoice', () => {
   it('returns null for an empty voice list', () => {
@@ -51,5 +59,39 @@ describe('hasVoiceForLang', () => {
 
   it('is false for an empty voice list', () => {
     expect(hasVoiceForLang([], 'ja-JP')).toBe(false)
+  })
+})
+
+describe('verified Japanese voices', () => {
+  const ayumi = namedVoice('ja-ayumi', 'ja-JP')
+  const haruka = namedVoice('ja-haruka', 'ja-JP')
+  const english = namedVoice('en-ava', 'en-US')
+
+  it('keeps only Japanese voice candidates', () => {
+    expect(getJapaneseVoices([english, ayumi, haruka])).toEqual([ayumi, haruka])
+  })
+
+  it('keeps only verified voices that have not failed', () => {
+    expect(getVerifiedVoices(
+      [english, ayumi, haruka],
+      new Set(['ja-ayumi', 'ja-haruka']),
+      new Set(['ja-haruka'])
+    )).toEqual([ayumi])
+  })
+
+  it('does not treat deliberate cancellation as a voice failure', () => {
+    expect(isSpeechFailure('canceled')).toBe(false)
+    expect(isSpeechFailure('interrupted')).toBe(false)
+  })
+
+  it('treats synthesis errors and start timeout as a voice failure', () => {
+    expect(isSpeechFailure('voice-unavailable')).toBe(true)
+    expect(isSpeechFailure('synthesis-unavailable')).toBe(true)
+    expect(isSpeechFailure('timeout')).toBe(true)
+  })
+
+  it('keeps the chosen verified voice or falls back to a matching Japanese voice', () => {
+    expect(selectFallbackVoice([ayumi, haruka], 'ja-haruka', 'ja-JP')).toBe(haruka)
+    expect(selectFallbackVoice([ayumi, haruka], 'missing', 'ja-JP')).toBe(ayumi)
   })
 })
