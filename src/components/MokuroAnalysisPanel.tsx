@@ -1,9 +1,10 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { BookOpen, Loader2, Quote, Sparkles } from 'lucide-react'
+import { BookOpen, Loader2, Quote, Sparkles, Star } from 'lucide-react'
 import { filterLearningGrammar, filterLearningVocabulary } from '@/lib/analysis-filters'
-import type { AnalysisLanguage, AnalysisResult } from '@/lib/types'
+import { useWordBankStore } from '@/lib/word-bank-store'
+import type { AnalysisLanguage, AnalysisResult, WordAnalysis } from '@/lib/types'
 
 interface MokuroAnalysisPanelProps {
   analysisResult: AnalysisResult | null
@@ -181,9 +182,12 @@ export default function MokuroAnalysisPanel({
                     </p>
                     <p className="text-xs text-gray-400">{word.reading}</p>
                   </div>
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${DIFFICULTY_BADGE_CLASSES[normalizeDifficulty(word.difficulty)] ?? FALLBACK_DIFFICULTY_CLASS}`}>
-                    {word.difficulty}
-                  </span>
+                  <div className="flex items-center gap-1">
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${DIFFICULTY_BADGE_CLASSES[normalizeDifficulty(word.difficulty)] ?? FALLBACK_DIFFICULTY_CLASS}`}>
+                      {word.difficulty}
+                    </span>
+                    <WordSaveButton word={word} sourceSentence={selectedText} />
+                  </div>
                 </div>
                 <p className="mt-1 text-sm text-gray-100">{word.meaning}</p>
                 <p className="mt-0.5 text-xs text-gray-500">{word.partOfSpeech}</p>
@@ -229,5 +233,29 @@ export default function MokuroAnalysisPanel({
         )}
       </section>
     </motion.div>
+  )
+}
+
+interface WordSaveButtonProps {
+  word: WordAnalysis
+  sourceSentence: string | null
+}
+
+function WordSaveButton({ word, sourceSentence }: WordSaveButtonProps) {
+  const saved = useWordBankStore(state => state.isSaved(word.word, word.reading))
+  const toggleWord = useWordBankStore(state => state.toggleWord)
+
+  return (
+    <button
+      type="button"
+      onClick={() => toggleWord(word, sourceSentence)}
+      aria-label={saved ? 'Remove from word bank' : 'Save to word bank'}
+      aria-pressed={saved}
+      className={`shrink-0 rounded-full p-1 transition-colors hover:bg-white/10 ${
+        saved ? 'text-amber-300' : 'text-gray-500'
+      }`}
+    >
+      <Star size={16} className={saved ? 'fill-current' : ''} />
+    </button>
   )
 }
