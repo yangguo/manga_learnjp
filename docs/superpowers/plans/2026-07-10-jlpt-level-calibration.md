@@ -1,5 +1,7 @@
 # JLPT Vocabulary Level Calibration Implementation Plan
 
+> **完成状态（2026-07-11）：M2A 已实现并验证。** 自动化验证为 `20` 个 Vitest 文件、`145` 个测试通过；lint 为 `0` 错误和既有的 `7` 个 `<img>` 警告；生产构建通过；Netlify 定向检查仅保留已知的 `netlify/src/lib/improved-text-detection.ts(226,16)` TS2367。Playwright 已检查 `/sources` 与 `/words` 的 1440x900 和 390x844 视口、同源词表网络请求和 v1 词库迁移。任务复选框保留为原始执行历史。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace AI-generated vocabulary difficulty with a deterministic, versioned local JLPT reference dataset across new analysis results, Mokuro caches, the word bank, and all vocabulary badges.
