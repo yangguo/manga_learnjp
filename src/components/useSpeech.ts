@@ -110,8 +110,8 @@ export const useSpeech = ({
       let settled = false
       let started = false
       const timeout = window.setTimeout(() => {
-        synth.cancel()
         finish({ started: false, reason: 'timeout' })
+        synth.cancel()
       }, SPEECH_START_TIMEOUT_MS)
 
       const finish = (result: SpeechAttemptResult) => {
