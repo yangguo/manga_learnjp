@@ -242,9 +242,8 @@ interface WordSaveButtonProps {
 }
 
 function WordSaveButton({ word, sourceSentence }: WordSaveButtonProps) {
-  const isSaved = useWordBankStore(state => state.isSaved)
+  const saved = useWordBankStore(state => state.isSaved(word.word, word.reading))
   const toggleWord = useWordBankStore(state => state.toggleWord)
-  const saved = isSaved(word.word, word.reading)
 
   return (
     <button
