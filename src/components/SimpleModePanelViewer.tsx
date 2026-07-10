@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { MangaAnalysisResult, MangaPanel } from '@/lib/types'
 import { X } from 'lucide-react'
+import JLPTBadge from '@/components/JLPTBadge'
 
 interface SimpleModePanelViewerProps {
   result: MangaAnalysisResult
@@ -99,9 +100,7 @@ function PanelDetailModal({ panel, isOpen, onClose }: PanelDetailModalProps) {
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-white font-japanese">{word.word}</span>
                                 <span className="text-gray-400 font-japanese">({word.reading})</span>
-                                <span className="text-[10px] uppercase tracking-wide text-gray-500">
-                                  {word.difficulty}
-                                </span>
+                                <JLPTBadge classification={word.jlpt} language="en" />
                               </div>
                               <p className="text-gray-300 mt-1">{word.meaning}</p>
                               {word.partOfSpeech && (

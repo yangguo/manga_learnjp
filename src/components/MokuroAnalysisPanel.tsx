@@ -4,6 +4,7 @@ import { motion } from 'framer-motion'
 import { BookOpen, Loader2, Quote, Sparkles, Star } from 'lucide-react'
 import { filterLearningGrammar, filterLearningVocabulary } from '@/lib/analysis-filters'
 import { useWordBankStore } from '@/lib/word-bank-store'
+import JLPTBadge from '@/components/JLPTBadge'
 import type { AnalysisLanguage, AnalysisResult, WordAnalysis } from '@/lib/types'
 
 interface MokuroAnalysisPanelProps {
@@ -13,21 +14,6 @@ interface MokuroAnalysisPanelProps {
   language: AnalysisLanguage
   hideSelectedText?: boolean
 }
-
-const normalizeDifficulty = (difficulty?: string): string => difficulty?.toLowerCase() ?? ''
-
-const DIFFICULTY_BADGE_CLASSES: Record<string, string> = {
-  beginner: 'bg-green-500/15 text-green-300 border-green-500/25',
-  n5: 'bg-green-500/15 text-green-300 border-green-500/25',
-  n4: 'bg-green-500/15 text-green-300 border-green-500/25',
-  intermediate: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
-  n3: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
-  n2: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
-  advanced: 'bg-red-500/15 text-red-300 border-red-500/25',
-  n1: 'bg-red-500/15 text-red-300 border-red-500/25'
-}
-
-const FALLBACK_DIFFICULTY_CLASS = 'bg-gray-500/15 text-gray-300 border-gray-500/25'
 
 const UI_TEXT = {
   zh: {
@@ -45,7 +31,8 @@ const UI_TEXT = {
     grammar: '语法',
     pattern: '个语法点',
     noGrammar: '没有需要重点学习的 N4+ 语法点。',
-    example: '例句'
+    example: '例句',
+    jlptUnavailable: 'JLPT 词表暂不可用，当前定级不会写入缓存。'
   },
   en: {
     selectedText: 'Selected text',
@@ -62,7 +49,8 @@ const UI_TEXT = {
     grammar: 'Grammar',
     pattern: 'pattern',
     noGrammar: 'No N4+ grammar patterns need special focus in this selection.',
-    example: 'Example'
+    example: 'Example',
+    jlptUnavailable: 'JLPT data is unavailable. Current classifications will not be saved.'
   }
 } satisfies Record<AnalysisLanguage, Record<string, string>>
 
@@ -160,6 +148,12 @@ export default function MokuroAnalysisPanel({
         </section>
       ) : null}
 
+      {analysisResult.jlptCalibration?.status === 'error' && (
+        <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          {t.jlptUnavailable}
+        </p>
+      )}
+
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
         <div className="mb-3 flex items-center gap-2">
           <BookOpen size={16} className="text-amber-300" />
@@ -183,9 +177,7 @@ export default function MokuroAnalysisPanel({
                     <p className="text-xs text-gray-400">{word.reading}</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${DIFFICULTY_BADGE_CLASSES[normalizeDifficulty(word.difficulty)] ?? FALLBACK_DIFFICULTY_CLASS}`}>
-                      {word.difficulty}
-                    </span>
+                    <JLPTBadge classification={word.jlpt} language={language} />
                     <WordSaveButton word={word} sourceSentence={selectedText} />
                   </div>
                 </div>

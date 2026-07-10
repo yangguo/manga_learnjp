@@ -1,12 +1,14 @@
 'use client'
 
-import { BookOpen, Github, Heart } from 'lucide-react'
+import { BookOpen, Github, Heart, Info } from 'lucide-react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useWordBankStore } from '@/lib/word-bank-store'
 import { useHydrated } from '@/hooks/useHydrated'
+import { useWordBankJLPTCalibration } from '@/hooks/useWordBankJLPTCalibration'
 
 export default function Header() {
+  useWordBankJLPTCalibration()
   const wordCount = useWordBankStore(state => state.words.length)
   const hydrated = useHydrated()
   return (
@@ -29,6 +31,14 @@ export default function Header() {
           </div>
           
           <div className="flex items-center space-x-4">
+            <Link
+              href="/sources"
+              aria-label="JLPT data sources"
+              title="JLPT data sources"
+              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <Info className="h-5 w-5" />
+            </Link>
             <Link
               href="/words"
               className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-gray-200 transition-colors hover:bg-white/10"

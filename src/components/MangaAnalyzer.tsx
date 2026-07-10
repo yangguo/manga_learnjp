@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react'
 import { Copy, ChevronRight, ChevronDown } from 'lucide-react'
 import PanelImageViewer from './PanelImageViewer'
+import JLPTBadge from '@/components/JLPTBadge'
 import type { MangaAnalysisResult, MangaPanel, WordAnalysis, GrammarPattern } from '@/lib/types'
 
 interface MangaAnalyzerProps {
@@ -64,15 +65,6 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, selecti
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
-  }
-
-  const getDifficultyColor = (difficulty?: string) => {
-    switch (difficulty) {
-      case 'beginner': return 'text-green-300 bg-green-500/10 border-green-500/30'
-      case 'intermediate': return 'text-orange-300 bg-orange-500/10 border-orange-500/30'
-      case 'advanced': return 'text-red-300 bg-red-500/10 border-red-500/30'
-      default: return 'text-gray-300 bg-white/5 border-white/10'
-    }
   }
 
   // Sort panels by reading order (panel numbers now match reading order positions)
@@ -323,14 +315,12 @@ export default function MangaAnalyzer({ analysisResult, selectedPanelId, selecti
                                 {sentence.words.map((word, wordIndex) => (
                                   <div
                                     key={wordIndex}
-                                    className={`p-3 rounded-lg border ${getDifficultyColor(word.difficulty)}`}
+                                    className="p-3 rounded-lg border"
                                   >
                                     <div className="flex items-center gap-2 mb-2">
                                       <span className="font-japanese font-semibold text-lg">{word.word}</span>
                                       <span className="text-gray-400 font-japanese">({word.reading})</span>
-                                      <span className="text-xs px-2 py-1 rounded-full bg-white/10">
-                                        {word.difficulty}
-                                      </span>
+                                      <JLPTBadge classification={word.jlpt} language="en" />
                                     </div>
                                     <div className="text-sm space-y-1 text-gray-300">
                                       <p><span className="font-medium">Meaning:</span> {word.meaning}</p>

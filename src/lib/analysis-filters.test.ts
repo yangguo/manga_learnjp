@@ -8,16 +8,20 @@ import {
 import type { GrammarPattern, WordAnalysis } from './types'
 
 describe('analysis filters', () => {
-  it('hides N5 and beginner vocabulary while keeping N4+ items', () => {
+  it('uses canonical JLPT data and ignores contradictory provider difficulty', () => {
     const words = [
-      { word: '私', reading: 'わたし', meaning: 'I', partOfSpeech: '代名词', difficulty: 'N5' },
-      { word: '猫', reading: 'ねこ', meaning: 'cat', partOfSpeech: '名词', difficulty: 'beginner' },
-      { word: '火種', reading: 'ひだね', meaning: '火种', partOfSpeech: '名词', difficulty: 'N3' },
-      { word: '綴る', reading: 'つづる', meaning: '书写', partOfSpeech: '动词', difficulty: 'intermediate' }
+      {
+        word: '私', reading: 'わたし', meaning: 'I', partOfSpeech: 'pronoun', difficulty: 'N1',
+        jlpt: { level: 'N5', source: 'open-anki-jlpt-decks', datasetVersion: 'v1', match: 'exact' }
+      },
+      {
+        word: '未知語', reading: 'みちご', meaning: 'unknown', partOfSpeech: 'noun', difficulty: 'N5',
+        jlpt: { level: null, source: 'open-anki-jlpt-decks', datasetVersion: 'v1', match: 'none' }
+      }
     ] as WordAnalysis[]
 
-    expect(words.map(isN5OrBasicVocabulary)).toEqual([true, true, false, false])
-    expect(filterLearningVocabulary(words).map(word => word.word)).toEqual(['火種', '綴る'])
+    expect(words.map(isN5OrBasicVocabulary)).toEqual([true, false])
+    expect(filterLearningVocabulary(words).map(word => word.word)).toEqual(['未知語'])
   })
 
   it('hides obvious N5 grammar and keeps higher-value patterns', () => {

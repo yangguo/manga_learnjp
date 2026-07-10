@@ -5,6 +5,7 @@ import { Brain, BookOpen, Zap, Copy, Check, Sparkles, FileText } from 'lucide-re
 import { motion, AnimatePresence } from 'framer-motion'
 import toast from 'react-hot-toast'
 import { AnalysisResult } from '@/lib/types'
+import JLPTBadge from '@/components/JLPTBadge'
 
 interface TextAnalyzerProps {
   analysisResult: AnalysisResult | null
@@ -21,24 +22,6 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
       setTimeout(() => setCopiedText(null), 2000)
     } catch (err) {
       toast.error('Failed to copy text')
-    }
-  }
-
-  const getDifficultyColor = (difficulty?: string) => {
-    switch (difficulty) {
-      case 'beginner': return 'text-green-600 bg-green-100'
-      case 'intermediate': return 'text-yellow-600 bg-yellow-100'
-      case 'advanced': return 'text-red-600 bg-red-100'
-      default: return 'text-gray-600 bg-gray-100'
-    }
-  }
-
-  const getDifficultyIcon = (difficulty?: string) => {
-    switch (difficulty) {
-      case 'beginner': return '🟢'
-      case 'intermediate': return '🟡'
-      case 'advanced': return '🔴'
-      default: return '⚪'
     }
   }
 
@@ -253,14 +236,12 @@ export default function TextAnalyzer({ analysisResult }: TextAnalyzerProps) {
                         {sentence.words.map((word, wordIndex) => (
                           <div
                             key={wordIndex}
-                            className={`p-3 rounded-lg border ${getDifficultyColor(word.difficulty)}`}
+                            className="p-3 rounded-lg border"
                           >
                             <div className="flex items-center gap-2 mb-2">
                               <span className="font-japanese font-semibold text-lg">{word.word}</span>
                               <span className="text-gray-600 font-japanese">({word.reading})</span>
-                              <span className="text-xs px-2 py-1 rounded-full bg-white/50">
-                                {getDifficultyIcon(word.difficulty)} {word.difficulty}
-                              </span>
+                              <JLPTBadge classification={word.jlpt} language="en" />
                             </div>
                             <div className="text-sm space-y-1">
                               <p><span className="font-medium">Meaning:</span> {word.meaning}</p>

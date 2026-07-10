@@ -1,7 +1,5 @@
 import type { GrammarPattern, WordAnalysis } from './types'
 
-const BASIC_VOCABULARY_DIFFICULTIES = new Set(['n5', 'beginner'])
-
 const BASIC_GRAMMAR_PATTERNS = [
   'です',
   'ます',
@@ -39,9 +37,8 @@ const normalize = (value: string): string => {
     .replace(/\s+/g, ' ')
 }
 
-export const isN5OrBasicVocabulary = (word: Pick<WordAnalysis, 'difficulty'>): boolean => {
-  return BASIC_VOCABULARY_DIFFICULTIES.has(normalize(word.difficulty ?? ''))
-}
+export const isN5OrBasicVocabulary = (word: WordAnalysis): boolean =>
+  word.jlpt?.level === 'N5'
 
 export const filterLearningVocabulary = (words: WordAnalysis[]): WordAnalysis[] => {
   return words.filter(word => !isN5OrBasicVocabulary(word))

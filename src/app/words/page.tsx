@@ -4,6 +4,8 @@ import { BookOpen, Star, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { useWordBankStore } from '@/lib/word-bank-store'
 import { useHydrated } from '@/hooks/useHydrated'
+import { useWordBankJLPTCalibration } from '@/hooks/useWordBankJLPTCalibration'
+import JLPTBadge from '@/components/JLPTBadge'
 import type { AnalysisLanguage, SavedWord } from '@/lib/types'
 
 const UI_TEXT = {
@@ -41,19 +43,6 @@ const UI_TEXT = {
 const language: AnalysisLanguage = 'zh'
 const t = UI_TEXT[language]
 
-const DIFFICULTY_BADGE_CLASSES: Record<string, string> = {
-  beginner: 'bg-green-500/15 text-green-300 border-green-500/25',
-  n5: 'bg-green-500/15 text-green-300 border-green-500/25',
-  n4: 'bg-green-500/15 text-green-300 border-green-500/25',
-  intermediate: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
-  n3: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
-  n2: 'bg-yellow-500/15 text-yellow-300 border-yellow-500/25',
-  advanced: 'bg-red-500/15 text-red-300 border-red-500/25',
-  n1: 'bg-red-500/15 text-red-300 border-red-500/25'
-}
-const FALLBACK_DIFFICULTY_CLASS = 'bg-gray-500/15 text-gray-300 border-gray-500/25'
-const normalizeDifficulty = (difficulty?: string): string => difficulty?.toLowerCase() ?? ''
-
 const relativeTime = (iso: string): string => {
   const then = new Date(iso).getTime()
   if (Number.isNaN(then)) return ''
@@ -78,9 +67,7 @@ function WordCard({ word }: { word: SavedWord }) {
           <p className="text-xs text-gray-400">{word.reading}</p>
         </div>
         <div className="flex items-center gap-1">
-          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${DIFFICULTY_BADGE_CLASSES[normalizeDifficulty(word.difficulty)] ?? FALLBACK_DIFFICULTY_CLASS}`}>
-            {word.difficulty}
-          </span>
+          <JLPTBadge classification={word.jlpt} language="zh" />
           <button
             type="button"
             onClick={() => removeWord(word.word, word.reading)}
@@ -109,6 +96,7 @@ function WordCard({ word }: { word: SavedWord }) {
 }
 
 export default function WordBankPage() {
+  useWordBankJLPTCalibration()
   const words = useWordBankStore(state => state.words)
   const clearAll = useWordBankStore(state => state.clearAll)
   const hydrated = useHydrated()
