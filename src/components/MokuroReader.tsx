@@ -24,7 +24,7 @@ import { useMokuroKeyboardNav } from '@/components/useMokuroKeyboardNav'
 import { useSpeech } from '@/components/useSpeech'
 import { runWithBatchAwake } from '@/lib/batch-awake'
 import { analyzeText } from '@/lib/client-api'
-import { calibrateAnalysisRecord } from '@/lib/jlpt-calibration'
+import { calibrateAnalysisRecord, isPersistableAnalysis } from '@/lib/jlpt-calibration'
 import { getJLPTDictionary } from '@/lib/jlpt-dictionary'
 import { JLPT_DATASET_VERSION } from '@/lib/jlpt-levels'
 import { runConcurrentTasks } from '@/lib/concurrency'
@@ -430,6 +430,10 @@ export default function MokuroReader() {
     sourceMokuroFile = mokuroFile,
     sourceMokuroName = mokuroName
   ) => {
+    if (Object.values(nextCache).some(result => !isPersistableAnalysis(result))) {
+      return
+    }
+
     const fallbackContent = () => serializeMokuroAnalysisCache(nextCache, {
       title: sourceMokuroFile?.title ?? sourceMokuroName ?? undefined,
       pageCount: sourceMokuroFile?.pages.length
