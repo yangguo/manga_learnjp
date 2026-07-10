@@ -6,6 +6,16 @@ export interface WordAnalysis {
   difficulty: 'beginner' | 'intermediate' | 'advanced' | 'N5' | 'N4' | 'N3' | 'N2' | 'N1'
 }
 
+export interface SavedWord {
+  word: string
+  reading: string
+  meaning: string
+  partOfSpeech: string
+  difficulty: string
+  sourceSentence: string | null
+  savedAt: string
+}
+
 export interface GrammarPattern {
   pattern: string
   explanation: string
