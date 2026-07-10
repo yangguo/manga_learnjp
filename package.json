@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
+    "update:jlpt-data": "tsx scripts/update-jlpt-vocabulary.ts",
     "prepare": "bash scripts/install-hooks.sh || true"
   },
   "dependencies": {
@@ -35,8 +36,10 @@
   "devDependencies": {
     "@netlify/plugin-nextjs": "^5.14.3",
     "baseline-browser-mapping": "^2.10.42",
+    "csv-parse": "^7.0.1",
     "eslint": "^9.39.1",
     "eslint-config-next": "^16.0.7",
+    "tsx": "^4.23.0",
     "vitest": "^4.1.9"
   },
   "overrides": {

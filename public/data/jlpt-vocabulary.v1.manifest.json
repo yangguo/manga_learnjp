@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "datasetVersion": "open-anki-jlpt-decks@1ad66734417aca9dbcca6b2d5ee440cb13ab3ba0",
+  "generatedAt": "2026-07-10T17:11:56.689Z",
+  "source": {
+    "name": "open-anki-jlpt-decks",
+    "repository": "https://github.com/jamsinclair/open-anki-jlpt-decks",
+    "commit": "1ad66734417aca9dbcca6b2d5ee440cb13ab3ba0",
+    "commitDate": "2025-08-11",
+    "license": "MIT"
+  },
+  "stats": {
+    "rows": 8131,
+    "uniqueEntries": 8034,
+    "duplicateRows": 97,
+    "conflictingKeys": 96,
+    "repairedReadings": 2,
+    "normalizedEntries": 8034,
+    "normalizedConflictingKeys": 96
+  },
+  "checksums": {
+    "dataSha256": "5219af8a31b5ae4b3aa912184b4ddae7e8253efc4692e7a4ac5f999b2f482fa6",
+    "licenseSha256": "dfb9747630305cda572f2ed4f77586593ead9f886dc784ee3cd4e35a19acd9eb"
+  }
+}
