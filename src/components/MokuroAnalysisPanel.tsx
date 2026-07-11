@@ -6,6 +6,7 @@ import { filterLearningGrammar, filterLearningVocabulary } from '@/lib/analysis-
 import { isPersistableAnalysis } from '@/lib/jlpt-calibration'
 import { useWordBankStore } from '@/lib/word-bank-store'
 import JLPTBadge from '@/components/JLPTBadge'
+import JLPTTargetSelector from '@/components/JLPTTargetSelector'
 import type { AnalysisLanguage, AnalysisResult, WordAnalysis } from '@/lib/types'
 
 interface MokuroAnalysisPanelProps {
@@ -163,6 +164,7 @@ export default function MokuroAnalysisPanel({
             {learningVocabulary.length} {t.item}{language === 'en' && learningVocabulary.length !== 1 ? 's' : ''}
           </span>
         </div>
+        <JLPTTargetSelector language={language} />
         {learningVocabulary.length > 0 ? (
           <ul className="space-y-2">
             {learningVocabulary.map((word, index) => (
