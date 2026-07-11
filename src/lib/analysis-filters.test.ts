@@ -1,29 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterLearningGrammar,
-  filterLearningVocabulary,
-  isN5OrBasicGrammar,
-  isN5OrBasicVocabulary
+  isN5OrBasicGrammar
 } from './analysis-filters'
-import type { GrammarPattern, WordAnalysis } from './types'
+import type { GrammarPattern } from './types'
 
 describe('analysis filters', () => {
-  it('uses canonical JLPT data and ignores contradictory provider difficulty', () => {
-    const words = [
-      {
-        word: '私', reading: 'わたし', meaning: 'I', partOfSpeech: 'pronoun', difficulty: 'N1',
-        jlpt: { level: 'N5', source: 'open-anki-jlpt-decks', datasetVersion: 'v1', match: 'exact' }
-      },
-      {
-        word: '未知語', reading: 'みちご', meaning: 'unknown', partOfSpeech: 'noun', difficulty: 'N5',
-        jlpt: { level: null, source: 'open-anki-jlpt-decks', datasetVersion: 'v1', match: 'none' }
-      }
-    ] as WordAnalysis[]
-
-    expect(words.map(isN5OrBasicVocabulary)).toEqual([true, false])
-    expect(filterLearningVocabulary(words).map(word => word.word)).toEqual(['未知語'])
-  })
-
   it('hides obvious N5 grammar and keeps higher-value patterns', () => {
     const grammar = [
       { pattern: 'です', explanation: 'JLPT N5 polite copula', example: '学生です' },

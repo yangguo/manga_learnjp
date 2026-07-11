@@ -1,11 +1,14 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { BookOpen, Loader2, Quote, Sparkles, Star } from 'lucide-react'
-import { filterLearningGrammar, filterLearningVocabulary } from '@/lib/analysis-filters'
+import { BookOpen, ChevronDown, Loader2, Quote, Sparkles, Star } from 'lucide-react'
+import { filterLearningGrammar } from '@/lib/analysis-filters'
 import { isPersistableAnalysis } from '@/lib/jlpt-calibration'
+import { formatJLPTLevelRange, getJLPTLevelsForBand, groupVocabularyByTarget } from '@/lib/jlpt-target'
+import { useJLPTTargetStore } from '@/lib/jlpt-target-store'
 import { useWordBankStore } from '@/lib/word-bank-store'
 import JLPTBadge from '@/components/JLPTBadge'
+import JLPTTargetSelector from '@/components/JLPTTargetSelector'
 import type { AnalysisLanguage, AnalysisResult, WordAnalysis } from '@/lib/types'
 
 interface MokuroAnalysisPanelProps {
@@ -28,10 +31,17 @@ const UI_TEXT = {
     translation: '翻译',
     vocabulary: '词汇',
     item: '项',
-    noVocabulary: '没有需要重点学习的 N4+ 词汇。',
+    focus: '重点',
+    stretch: '超纲',
+    unclassified: '未定级',
+    foundation: '基础',
+    noFocus: '当前文本没有目标等级词汇。',
+    noStretch: '当前文本没有超纲词汇。',
+    noUnclassified: '当前文本没有未定级词汇。',
+    noFoundation: '当前文本没有基础词汇。',
     grammar: '语法',
     pattern: '个语法点',
-    noGrammar: '没有需要重点学习的 N4+ 语法点。',
+    noGrammar: '没有需要特别学习的语法点。',
     example: '例句',
     jlptUnavailable: 'JLPT 词表暂不可用，当前定级不会写入缓存。'
   },
@@ -46,10 +56,17 @@ const UI_TEXT = {
     translation: 'Translation',
     vocabulary: 'Vocabulary',
     item: 'item',
-    noVocabulary: 'No N4+ vocabulary needs special focus in this selection.',
+    focus: 'Focus',
+    stretch: 'Stretch',
+    unclassified: 'Unclassified',
+    foundation: 'Foundation',
+    noFocus: 'No target-level vocabulary in this selection.',
+    noStretch: 'No stretch vocabulary in this selection.',
+    noUnclassified: 'No unclassified vocabulary in this selection.',
+    noFoundation: 'No foundation vocabulary in this selection.',
     grammar: 'Grammar',
     pattern: 'pattern',
-    noGrammar: 'No N4+ grammar patterns need special focus in this selection.',
+    noGrammar: 'No grammar patterns need special focus in this selection.',
     example: 'Example',
     jlptUnavailable: 'JLPT data is unavailable. Current classifications will not be saved.'
   }
@@ -63,6 +80,7 @@ export default function MokuroAnalysisPanel({
   hideSelectedText = false
 }: MokuroAnalysisPanelProps) {
   const t = UI_TEXT[language]
+  const targetLevel = useJLPTTargetStore(state => state.targetLevel)
   const selectedTextHeader = !hideSelectedText && selectedText ? (
     <div className="rounded-2xl border border-white/10 bg-gray-950/40 p-3">
       <p className="text-xs text-gray-500">{t.selectedText}</p>
@@ -118,7 +136,8 @@ export default function MokuroAnalysisPanel({
 
   const vocabulary = analysisResult.sentences
     .flatMap(sentence => sentence.words)
-  const learningVocabulary = filterLearningVocabulary(vocabulary)
+  const vocabularyGroups = groupVocabularyByTarget(vocabulary, targetLevel)
+  const persistJLPT = isPersistableAnalysis(analysisResult)
 
   const grammar = analysisResult.sentences
     .flatMap(sentence => sentence.grammar)
@@ -160,42 +179,51 @@ export default function MokuroAnalysisPanel({
           <BookOpen size={16} className="text-amber-300" />
           <h3 className="font-semibold text-white">{t.vocabulary}</h3>
           <span className="ml-auto text-xs text-gray-500">
-            {learningVocabulary.length} {t.item}{language === 'en' && learningVocabulary.length !== 1 ? 's' : ''}
+            {vocabulary.length} {t.item}{language === 'en' && vocabulary.length !== 1 ? 's' : ''}
           </span>
         </div>
-        {learningVocabulary.length > 0 ? (
-          <ul className="space-y-2">
-            {learningVocabulary.map((word, index) => (
-              <li
-                key={`${word.word}-${index}`}
-                className="rounded-lg border border-white/10 bg-gray-950/40 p-3"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-japanese font-semibold text-white">
-                      {word.word}
-                    </p>
-                    <p className="text-xs text-gray-400">{word.reading}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <JLPTBadge classification={word.jlpt} language={language} />
-                    <WordSaveButton
-                      word={word}
-                      sourceSentence={selectedText}
-                      persistJLPT={isPersistableAnalysis(analysisResult)}
-                    />
-                  </div>
-                </div>
-                <p className="mt-1 text-sm text-gray-100">{word.meaning}</p>
-                <p className="mt-0.5 text-xs text-gray-500">{word.partOfSpeech}</p>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="rounded-lg border border-white/10 bg-gray-950/40 p-3 text-sm text-gray-400">
-            {t.noVocabulary}
-          </p>
-        )}
+        <JLPTTargetSelector language={language} />
+        <VocabularyGroup
+          label={t.focus}
+          levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'focus'))}
+          emptyText={t.noFocus}
+          words={vocabularyGroups.focus}
+          toneClass="text-amber-300"
+          language={language}
+          sourceSentence={selectedText}
+          persistJLPT={persistJLPT}
+        />
+        <VocabularyGroup
+          label={t.stretch}
+          levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'stretch'))}
+          emptyText={t.noStretch}
+          words={vocabularyGroups.stretch}
+          toneClass="text-rose-300"
+          language={language}
+          sourceSentence={selectedText}
+          persistJLPT={persistJLPT}
+        />
+        <VocabularyGroup
+          label={t.unclassified}
+          levelLabel=""
+          emptyText={t.noUnclassified}
+          words={vocabularyGroups.unclassified}
+          toneClass="text-gray-300"
+          language={language}
+          sourceSentence={selectedText}
+          persistJLPT={persistJLPT}
+        />
+        <VocabularyGroup
+          label={t.foundation}
+          levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'foundation'))}
+          emptyText={t.noFoundation}
+          words={vocabularyGroups.foundation}
+          toneClass="text-emerald-300"
+          language={language}
+          sourceSentence={selectedText}
+          persistJLPT={persistJLPT}
+          collapsible
+        />
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -230,6 +258,104 @@ export default function MokuroAnalysisPanel({
         )}
       </section>
     </motion.div>
+  )
+}
+
+interface VocabularyGroupProps {
+  label: string
+  levelLabel: string
+  emptyText: string
+  words: WordAnalysis[]
+  toneClass: string
+  language: AnalysisLanguage
+  sourceSentence: string
+  persistJLPT: boolean
+  collapsible?: boolean
+}
+
+function VocabularyGroup({
+  label,
+  levelLabel,
+  emptyText,
+  words,
+  toneClass,
+  language,
+  sourceSentence,
+  persistJLPT,
+  collapsible = false
+}: VocabularyGroupProps) {
+  const header = (
+    <div className="flex min-h-7 items-center gap-2">
+      <span className={`text-sm font-semibold ${toneClass}`}>{label}</span>
+      {levelLabel ? <span className="text-xs text-gray-500">{levelLabel}</span> : null}
+      <span className="ml-auto text-xs tabular-nums text-gray-500">{words.length}</span>
+      {collapsible ? (
+        <ChevronDown className="h-4 w-4 text-gray-500 transition-transform group-open:rotate-180" />
+      ) : null}
+    </div>
+  )
+  const content = words.length > 0 ? (
+    <ul className="mt-2 space-y-2">
+      {words.map((word, index) => (
+        <VocabularyCard
+          key={`${word.word}-${word.reading}-${index}`}
+          word={word}
+          language={language}
+          sourceSentence={sourceSentence}
+          persistJLPT={persistJLPT}
+        />
+      ))}
+    </ul>
+  ) : (
+    <p className="mt-2 text-xs text-gray-500">{emptyText}</p>
+  )
+
+  if (collapsible) {
+    return (
+      <details className="group border-t border-white/10 py-3">
+        <summary className="cursor-pointer list-none rounded-md px-1 transition-colors hover:bg-white/5">
+          {header}
+        </summary>
+        <div className="px-1">{content}</div>
+      </details>
+    )
+  }
+
+  return (
+    <div className="border-t border-white/10 py-3 first:border-t-0">
+      {header}
+      {content}
+    </div>
+  )
+}
+
+interface VocabularyCardProps {
+  word: WordAnalysis
+  language: AnalysisLanguage
+  sourceSentence: string
+  persistJLPT: boolean
+}
+
+function VocabularyCard({ word, language, sourceSentence, persistJLPT }: VocabularyCardProps) {
+  return (
+    <li className="rounded-lg border border-white/10 bg-gray-950/40 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-japanese font-semibold text-white">{word.word}</p>
+          <p className="text-xs text-gray-400">{word.reading}</p>
+        </div>
+        <div className="flex items-center gap-1">
+          <JLPTBadge classification={word.jlpt} language={language} />
+          <WordSaveButton
+            word={word}
+            sourceSentence={sourceSentence}
+            persistJLPT={persistJLPT}
+          />
+        </div>
+      </div>
+      <p className="mt-1 text-sm text-gray-100">{word.meaning}</p>
+      <p className="mt-0.5 text-xs text-gray-500">{word.partOfSpeech}</p>
+    </li>
   )
 }
 
