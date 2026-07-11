@@ -1,12 +1,27 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildDailyReviewQueue,
   createSavedReviewCard,
+  getReviewSummary,
+  localDateKey,
   previewReviewIntervals,
   scheduleReview,
   type ReviewRating
 } from './srs'
+import type { SavedWord } from './types'
 
 const NOW = new Date('2026-07-12T08:00:00.000Z')
+
+const makeWord = (word: string, savedAt = '2026-07-12T00:00:00.000Z'): SavedWord => ({
+  word,
+  reading: `${word}-reading`,
+  meaning: `${word}-meaning`,
+  partOfSpeech: 'noun',
+  sourceSentence: null,
+  savedAt
+})
+
+const keyFor = (word: SavedWord): string => JSON.stringify([word.word, word.reading])
 
 describe('FSRS adapter', () => {
   it('creates a JSON-safe new card at the requested time', () => {
@@ -60,5 +75,64 @@ describe('FSRS adapter', () => {
     }
 
     expect(() => scheduleReview(card, 'good', NOW)).toThrow('system clock')
+  })
+})
+
+describe('daily review queue', () => {
+  it('uses a stable local calendar key', () => {
+    expect(localDateKey(new Date(2026, 6, 2, 23, 59))).toBe('2026-07-02')
+  })
+
+  it('puts due cards first in due order and ignores future cards', () => {
+    const words = [makeWord('new'), makeWord('first'), makeWord('second'), makeWord('future')]
+    const existingCard = (word: SavedWord) => ({
+      ...createSavedReviewCard(keyFor(word), NOW),
+      introducedAt: '2026-07-11T08:00:00.000Z'
+    })
+    const first = { ...existingCard(words[1]), due: '2026-07-12T07:00:00.000Z' }
+    const second = { ...existingCard(words[2]), due: '2026-07-12T07:30:00.000Z' }
+    const future = { ...existingCard(words[3]), due: '2026-07-13T08:00:00.000Z' }
+
+    const result = buildDailyReviewQueue(words, {
+      [second.key]: second,
+      [future.key]: future,
+      [first.key]: first
+    }, NOW, 1)
+
+    expect(result.queueKeys).toEqual([first.key, second.key, keyFor(words[0])])
+    expect(result.reviewCards[future.key]).toEqual(future)
+  })
+
+  it('limits new cards by how many were already introduced today', () => {
+    const words = Array.from({ length: 12 }, (_, index) => makeWord(`word-${index}`))
+    const introduced = {
+      ...createSavedReviewCard(keyFor(words[0]), NOW),
+      due: '2026-07-13T08:00:00.000Z'
+    }
+
+    const result = buildDailyReviewQueue(words, { [introduced.key]: introduced }, NOW, 3)
+
+    expect(result.queueKeys).toEqual([keyFor(words[1]), keyFor(words[2])])
+    expect(Object.keys(result.reviewCards)).toHaveLength(3)
+    expect(getReviewSummary(words, { [introduced.key]: introduced }, NOW, 3)).toEqual({
+      dueCount: 0,
+      newCount: 2,
+      total: 2
+    })
+  })
+
+  it('filters orphan cards and does not mutate inputs', () => {
+    const words = [makeWord('saved')]
+    const orphan = createSavedReviewCard('missing-key', NOW)
+    const cards = { [orphan.key]: orphan }
+    const wordsSnapshot = structuredClone(words)
+    const cardsSnapshot = structuredClone(cards)
+
+    const result = buildDailyReviewQueue(words, cards, NOW, 0)
+
+    expect(result.queueKeys).toEqual([])
+    expect(result.reviewCards).toEqual({})
+    expect(words).toEqual(wordsSnapshot)
+    expect(cards).toEqual(cardsSnapshot)
   })
 })

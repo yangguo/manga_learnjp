@@ -1,4 +1,6 @@
 import { createEmptyCard, fsrs, Rating, type Card } from 'ts-fsrs'
+import { savedWordKey } from './word-bank'
+import type { SavedWord } from './types'
 
 export type ReviewRating = 'again' | 'hard' | 'good' | 'easy'
 
@@ -15,6 +17,17 @@ export interface SavedReviewCard {
   state: 0 | 1 | 2 | 3
   lastReview: string | null
   introducedAt: string
+}
+
+export interface ReviewSummary {
+  dueCount: number
+  newCount: number
+  total: number
+}
+
+export interface DailyReviewQueue {
+  queueKeys: string[]
+  reviewCards: Record<string, SavedReviewCard>
 }
 
 const scheduler = fsrs({
@@ -89,4 +102,69 @@ export const scheduleReview = (
   }
   const result = scheduler.next(toFSRSCard(card), now, RATING_MAP[rating])
   return fromFSRSCard(result.card, card.key, card.introducedAt)
+}
+
+export const localDateKey = (date: Date): string => {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+const getQueueParts = (
+  words: SavedWord[],
+  reviewCards: Record<string, SavedReviewCard>,
+  now: Date,
+  newLimit: number
+) => {
+  const validKeys = new Set(words.map(word => savedWordKey(word.word, word.reading)))
+  const validCards = Object.fromEntries(
+    Object.entries(reviewCards).filter(([key]) => validKeys.has(key))
+  )
+  const dueCards = Object.values(validCards)
+    .filter(card => new Date(card.due).getTime() <= now.getTime())
+    .toSorted((a, b) => new Date(a.due).getTime() - new Date(b.due).getTime())
+  const today = localDateKey(now)
+  const introducedToday = Object.values(validCards)
+    .filter(card => localDateKey(new Date(card.introducedAt)) === today)
+    .length
+  const slots = Math.max(0, newLimit - introducedToday)
+  const newWords = words
+    .filter(word => !validCards[savedWordKey(word.word, word.reading)])
+    .slice(0, slots)
+
+  return { validCards, dueCards, newWords }
+}
+
+export const getReviewSummary = (
+  words: SavedWord[],
+  reviewCards: Record<string, SavedReviewCard>,
+  now: Date,
+  newLimit = 10
+): ReviewSummary => {
+  const { dueCards, newWords } = getQueueParts(words, reviewCards, now, newLimit)
+  return {
+    dueCount: dueCards.length,
+    newCount: newWords.length,
+    total: dueCards.length + newWords.length
+  }
+}
+
+export const buildDailyReviewQueue = (
+  words: SavedWord[],
+  reviewCards: Record<string, SavedReviewCard>,
+  now: Date,
+  newLimit = 10
+): DailyReviewQueue => {
+  const { validCards, dueCards, newWords } = getQueueParts(words, reviewCards, now, newLimit)
+  const nextCards = { ...validCards }
+  const newKeys = newWords.map(word => {
+    const key = savedWordKey(word.word, word.reading)
+    nextCards[key] = createSavedReviewCard(key, now)
+    return key
+  })
+  return {
+    queueKeys: [...dueCards.map(card => card.key), ...newKeys],
+    reviewCards: nextCards
+  }
 }
