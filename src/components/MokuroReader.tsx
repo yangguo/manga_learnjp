@@ -11,7 +11,6 @@ import {
   Languages,
   Layers,
   Loader2,
-  RefreshCw,
   RotateCw,
   Search,
   Trash2,
@@ -178,7 +177,7 @@ const UI_TEXT = {
     noJapaneseVoice: '未检测到日语语音，请在系统设置中安装日语语音包后再朗读。',
     voiceLabel: '音色',
     voiceAuto: '自动',
-    verifyVoices: '验证音色',
+    voiceUnavailable: '该音色当前不可用，已从列表移除。',
     batchComplete: '本页批量分析完成',
     analyzeRange: '批量分析范围',
     analyzingRange: '正在分析范围...',
@@ -233,7 +232,7 @@ const UI_TEXT = {
     noJapaneseVoice: 'No Japanese voice found. Install a Japanese voice package in your system settings to hear sentences.',
     voiceLabel: 'Voice',
     voiceAuto: 'Auto',
-    verifyVoices: 'Verify voices',
+    voiceUnavailable: 'This voice is unavailable and was removed from the list.',
     batchComplete: 'Page batch analysis complete',
     analyzeRange: 'Analyze range',
     analyzingRange: 'Analyzing range...',
@@ -354,16 +353,16 @@ export default function MokuroReader() {
     cancel: cancelSpeech,
     supported: speechSupported,
     ready: speechReady,
-    verifiedVoices,
-    isVerifying,
-    verifyVoices
+    candidateVoices,
+    validatingVoiceURI,
+    validateVoice
   } = useSpeech({ voiceURI })
   const speakSelection = (text: string) => {
     if (!speechSupported || !text.trim()) return
     void speak(text).then(result => {
       // Only hint at a missing voice once the browser has populated its list,
       // so asynchronous loading never creates a false warning.
-      if (!result.started && speechReady && !isVerifying && !speechHintShownRef.current) {
+      if (!result.started && speechReady && !validatingVoiceURI && !speechHintShownRef.current) {
         speechHintShownRef.current = true
         toast(UI_TEXT[analysisLanguage].noJapaneseVoice)
       }
@@ -371,6 +370,21 @@ export default function MokuroReader() {
   }
 
   const t = UI_TEXT[analysisLanguage]
+
+  const handleVoiceChange = (nextVoiceURI: string) => {
+    if (!nextVoiceURI) {
+      setVoiceURI(null)
+      return
+    }
+
+    void validateVoice(nextVoiceURI).then(valid => {
+      if (valid) {
+        setVoiceURI(nextVoiceURI)
+      } else {
+        toast(UI_TEXT[analysisLanguage].voiceUnavailable)
+      }
+    })
+  }
 
   useEffect(() => {
     return () => {
@@ -426,10 +440,10 @@ export default function MokuroReader() {
 
   useEffect(() => {
     if (!voiceURI) return
-    if (!verifiedVoices.some(voice => voice.voiceURI === voiceURI)) {
-      setVoiceURI(verifiedVoices[0]?.voiceURI ?? null)
+    if (!candidateVoices.some(voice => voice.voiceURI === voiceURI)) {
+      setVoiceURI(null)
     }
-  }, [verifiedVoices, voiceURI])
+  }, [candidateVoices, voiceURI])
 
   // Indices of blocks with text on the current page; empty blocks are skipped
   // so keyboard navigation never lands on an unanalyzable target.
@@ -1163,29 +1177,19 @@ export default function MokuroReader() {
                 <span className="text-xs text-gray-400">{t.voiceLabel}</span>
                 <select
                   value={voiceURI ?? ''}
-                  onChange={event => setVoiceURI(event.target.value || null)}
+                  onChange={event => handleVoiceChange(event.target.value)}
                   aria-label={t.voiceLabel}
                   title={t.voiceLabel}
-                  disabled={isVerifying || verifiedVoices.length === 0}
+                  disabled={Boolean(validatingVoiceURI) || candidateVoices.length === 0}
                   className="h-7 rounded-md border border-white/10 bg-gray-950 px-2 text-sm text-white"
                 >
                   <option value="">{t.voiceAuto}</option>
-                  {verifiedVoices.map(voice => (
+                  {candidateVoices.map(voice => (
                     <option key={voice.voiceURI} value={voice.voiceURI}>
                       {voice.name}
                     </option>
                   ))}
                 </select>
-                <button
-                  type="button"
-                  onClick={() => void verifyVoices()}
-                  disabled={isVerifying || !speechReady}
-                  aria-label={t.verifyVoices}
-                  title={t.verifyVoices}
-                  className="rounded-md p-1 text-gray-300 transition-colors hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <RefreshCw size={15} className={isVerifying ? 'animate-spin' : ''} />
-                </button>
               </div>
             )}
           </div>
