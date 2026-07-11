@@ -121,6 +121,16 @@ describe('daily review queue', () => {
     })
   })
 
+  it('introduces the most recently saved words first', () => {
+    const old = makeWord('old', '2026-07-10T00:00:00.000Z')
+    const newest = makeWord('newest', '2026-07-12T00:00:00.000Z')
+    const middle = makeWord('middle', '2026-07-11T00:00:00.000Z')
+
+    const result = buildDailyReviewQueue([old, newest, middle], {}, NOW, 2)
+
+    expect(result.queueKeys).toEqual([keyFor(newest), keyFor(middle)])
+  })
+
   it('filters orphan cards and does not mutate inputs', () => {
     const words = [makeWord('saved')]
     const orphan = createSavedReviewCard('missing-key', NOW)

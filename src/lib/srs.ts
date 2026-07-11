@@ -131,6 +131,7 @@ const getQueueParts = (
   const slots = Math.max(0, newLimit - introducedToday)
   const newWords = words
     .filter(word => !validCards[savedWordKey(word.word, word.reading)])
+    .toSorted((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
     .slice(0, slots)
 
   return { validCards, dueCards, newWords }
