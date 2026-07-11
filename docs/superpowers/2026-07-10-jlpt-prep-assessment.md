@@ -83,4 +83,4 @@ M5 复用 M2A 的数据版本、来源和校准方法,但必须单独设计。�
 - M2B 设计:`docs/superpowers/specs/2026-07-11-jlpt-target-experience-design.md`
 - M2B 实施计划:`docs/superpowers/plans/2026-07-11-jlpt-target-experience.md`
 
-M2B 功能提交:`2165adf`。当前下一步:单独设计并实施 M3 Anki 兼容 CSV/TSV 导出。
+M2B 功能提交:`f89f480`。当前下一步:单独设计并实施 M3 Anki 兼容 CSV/TSV 导出。
