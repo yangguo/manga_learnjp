@@ -1,4 +1,4 @@
-import type { GrammarPattern, WordAnalysis } from './types'
+import type { GrammarPattern } from './types'
 
 const BASIC_GRAMMAR_PATTERNS = [
   'です',
@@ -35,13 +35,6 @@ const normalize = (value: string): string => {
     .toLowerCase()
     .replace(/[～〜]/g, '')
     .replace(/\s+/g, ' ')
-}
-
-export const isN5OrBasicVocabulary = (word: WordAnalysis): boolean =>
-  word.jlpt?.level === 'N5'
-
-export const filterLearningVocabulary = (words: WordAnalysis[]): WordAnalysis[] => {
-  return words.filter(word => !isN5OrBasicVocabulary(word))
 }
 
 export const isN5OrBasicGrammar = (grammar: GrammarPattern): boolean => {
