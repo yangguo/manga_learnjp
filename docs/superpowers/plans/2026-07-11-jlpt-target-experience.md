@@ -120,4 +120,3 @@
    - 选择器在 Mokuro 和图片分析共用 store，URL/网络无额外请求。
 4. 使用 @superpowers:requesting-code-review 审查分支 diff；修复问题后重新运行完整验证。
 5. 使用 @superpowers:finishing-a-development-branch 完成本地 merge 与 worktree 清理。
-
