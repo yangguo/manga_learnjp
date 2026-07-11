@@ -53,6 +53,43 @@ export const getVerifiedVoices = <T extends SpeechVoiceLike>(
   })
 }
 
+export const getCandidateVoices = <T extends SpeechVoiceLike>(
+  voices: T[],
+  unavailableVoiceURIs: Set<string>
+): T[] => {
+  return getJapaneseVoices(voices).filter(voice => {
+    return voice.voiceURI !== undefined && !unavailableVoiceURIs.has(voice.voiceURI)
+  })
+}
+
+export const orderSpeechCandidates = <T extends SpeechVoiceLike>(
+  voices: T[],
+  preferredVoiceURI: string | null,
+  verifiedVoiceURIs: Set<string>,
+  lang: string
+): T[] => {
+  const ordered: T[] = []
+  const seen = new Set<string>()
+  const add = (voice: T | null) => {
+    const voiceURI = voice?.voiceURI
+    if (!voice || !voiceURI || seen.has(voiceURI)) return
+    seen.add(voiceURI)
+    ordered.push(voice)
+  }
+
+  add(preferredVoiceURI
+    ? voices.find(voice => voice.voiceURI === preferredVoiceURI) ?? null
+    : null)
+
+  const verified = voices.filter(voice => {
+    return voice.voiceURI !== undefined && verifiedVoiceURIs.has(voice.voiceURI)
+  })
+  add(selectVoice(verified, lang))
+  verified.forEach(add)
+  voices.forEach(add)
+  return ordered
+}
+
 export const isSpeechFailure = (reason: string | undefined): boolean => {
   return Boolean(reason) && reason !== 'canceled' && reason !== 'interrupted'
 }

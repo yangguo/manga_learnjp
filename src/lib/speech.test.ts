@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  getCandidateVoices,
   getJapaneseVoices,
   getVerifiedVoices,
   hasVoiceForLang,
   isSpeechFailure,
+  orderSpeechCandidates,
   selectFallbackVoice,
   selectVoice
 } from './speech'
@@ -93,5 +95,37 @@ describe('verified Japanese voices', () => {
   it('keeps the chosen verified voice or falls back to a matching Japanese voice', () => {
     expect(selectFallbackVoice([ayumi, haruka], 'ja-haruka', 'ja-JP')).toBe(haruka)
     expect(selectFallbackVoice([ayumi, haruka], 'missing', 'ja-JP')).toBe(ayumi)
+  })
+})
+
+describe('lazy voice candidates', () => {
+  const ayumi = namedVoice('ja-ayumi', 'ja-JP')
+  const haruka = namedVoice('ja-haruka', 'ja-JP')
+  const kyoko = namedVoice('ja-kyoko', 'ja')
+  const english = namedVoice('en-ava', 'en-US')
+
+  it('shows Japanese candidates without requiring prior verification', () => {
+    expect(getCandidateVoices(
+      [english, ayumi, haruka],
+      new Set(['ja-haruka'])
+    )).toEqual([ayumi])
+  })
+
+  it('orders a preferred voice before verified and remaining candidates', () => {
+    expect(orderSpeechCandidates(
+      [ayumi, haruka, kyoko],
+      'ja-haruka',
+      new Set(['ja-ayumi']),
+      'ja-JP'
+    )).toEqual([haruka, ayumi, kyoko])
+  })
+
+  it('prefers a verified matching voice when no explicit voice is selected', () => {
+    expect(orderSpeechCandidates(
+      [ayumi, haruka, kyoko],
+      null,
+      new Set(['ja-kyoko']),
+      'ja-JP'
+    )).toEqual([kyoko, ayumi, haruka])
   })
 })
