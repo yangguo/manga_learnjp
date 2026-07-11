@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { serializeWordsForAnki } from './anki-export'
+import {
+  createAnkiExportFilename,
+  downloadTextFile,
+  serializeWordsForAnki
+} from './anki-export'
 import type { SavedWord } from './types'
 
 const makeWord = (overrides: Partial<SavedWord> = {}): SavedWord => ({
@@ -74,5 +78,49 @@ describe('serializeWordsForAnki', () => {
 
     expect(serializeWordsForAnki(words)).toBe(serializeWordsForAnki(words))
     expect(words).toEqual(snapshot)
+  })
+})
+
+describe('createAnkiExportFilename', () => {
+  it('uses the local calendar date', () => {
+    expect(createAnkiExportFilename(new Date(2026, 6, 12, 23, 59)))
+      .toBe('manga-learnjp-words-2026-07-12.tsv')
+  })
+})
+
+describe('downloadTextFile', () => {
+  it('downloads a UTF-8 TSV Blob and releases all temporary resources', async () => {
+    const events: string[] = []
+    const link = {
+      href: '',
+      download: '',
+      click: () => events.push('click'),
+      remove: () => events.push('remove')
+    }
+    let receivedBlob: Blob | null = null
+
+    downloadTextFile('橋\tはし\n', 'words.tsv', {
+      createBlob: (content, options) => new Blob(content, options),
+      createObjectURL: blob => {
+        receivedBlob = blob
+        events.push('create-url')
+        return 'blob:test'
+      },
+      revokeObjectURL: url => events.push(`revoke:${url}`),
+      createLink: () => link,
+      appendLink: () => events.push('append')
+    })
+
+    expect(receivedBlob?.type).toBe('text/tab-separated-values;charset=utf-8')
+    expect(await receivedBlob?.text()).toBe('橋\tはし\n')
+    expect(link.href).toBe('blob:test')
+    expect(link.download).toBe('words.tsv')
+    expect(events).toEqual([
+      'create-url',
+      'append',
+      'click',
+      'remove',
+      'revoke:blob:test'
+    ])
   })
 })
