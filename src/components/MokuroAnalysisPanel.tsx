@@ -1,10 +1,10 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { BookOpen, Loader2, Quote, Sparkles, Star } from 'lucide-react'
+import { BookOpen, ChevronDown, Loader2, Quote, Sparkles, Star } from 'lucide-react'
 import { filterLearningGrammar } from '@/lib/analysis-filters'
 import { isPersistableAnalysis } from '@/lib/jlpt-calibration'
-import { getJLPTLevelsForBand, groupVocabularyByTarget } from '@/lib/jlpt-target'
+import { formatJLPTLevelRange, getJLPTLevelsForBand, groupVocabularyByTarget } from '@/lib/jlpt-target'
 import { useJLPTTargetStore } from '@/lib/jlpt-target-store'
 import { useWordBankStore } from '@/lib/word-bank-store'
 import JLPTBadge from '@/components/JLPTBadge'
@@ -185,7 +185,7 @@ export default function MokuroAnalysisPanel({
         <JLPTTargetSelector language={language} />
         <VocabularyGroup
           label={t.focus}
-          levelLabel={getJLPTLevelsForBand(targetLevel, 'focus').join('–')}
+          levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'focus'))}
           emptyText={t.noFocus}
           words={vocabularyGroups.focus}
           toneClass="text-amber-300"
@@ -195,7 +195,7 @@ export default function MokuroAnalysisPanel({
         />
         <VocabularyGroup
           label={t.stretch}
-          levelLabel={getJLPTLevelsForBand(targetLevel, 'stretch').join('–')}
+          levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'stretch'))}
           emptyText={t.noStretch}
           words={vocabularyGroups.stretch}
           toneClass="text-rose-300"
@@ -215,7 +215,7 @@ export default function MokuroAnalysisPanel({
         />
         <VocabularyGroup
           label={t.foundation}
-          levelLabel={getJLPTLevelsForBand(targetLevel, 'foundation').join('–')}
+          levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'foundation'))}
           emptyText={t.noFoundation}
           words={vocabularyGroups.foundation}
           toneClass="text-emerald-300"
@@ -289,6 +289,9 @@ function VocabularyGroup({
       <span className={`text-sm font-semibold ${toneClass}`}>{label}</span>
       {levelLabel ? <span className="text-xs text-gray-500">{levelLabel}</span> : null}
       <span className="ml-auto text-xs tabular-nums text-gray-500">{words.length}</span>
+      {collapsible ? (
+        <ChevronDown className="h-4 w-4 text-gray-500 transition-transform group-open:rotate-180" />
+      ) : null}
     </div>
   )
   const content = words.length > 0 ? (
@@ -309,7 +312,7 @@ function VocabularyGroup({
 
   if (collapsible) {
     return (
-      <details className="border-t border-white/10 py-3">
+      <details className="group border-t border-white/10 py-3">
         <summary className="cursor-pointer list-none rounded-md px-1 transition-colors hover:bg-white/5">
           {header}
         </summary>

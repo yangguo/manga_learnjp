@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   classifyJLPTLevelForTarget,
+  formatJLPTLevelRange,
   getJLPTLevelsForBand,
   groupVocabularyByTarget
 } from './jlpt-target'
@@ -40,6 +41,14 @@ describe('getJLPTLevelsForBand', () => {
   it('returns only the target for the focus band and no levels for unclassified', () => {
     expect(getJLPTLevelsForBand('N3', 'focus')).toEqual(['N3'])
     expect(getJLPTLevelsForBand('N3', 'unclassified')).toEqual([])
+  })
+})
+
+describe('formatJLPTLevelRange', () => {
+  it('formats empty, single, and multi-level ranges compactly', () => {
+    expect(formatJLPTLevelRange([])).toBe('')
+    expect(formatJLPTLevelRange(['N4'])).toBe('N4')
+    expect(formatJLPTLevelRange(['N3', 'N2', 'N1'])).toBe('N3–N1')
   })
 })
 

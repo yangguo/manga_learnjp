@@ -34,6 +34,12 @@ export const getJLPTLevelsForBand = (
   return []
 }
 
+export const formatJLPTLevelRange = (levels: JLPTLevel[]): string => {
+  if (levels.length === 0) return ''
+  if (levels.length === 1) return levels[0]
+  return `${levels[0]}–${levels[levels.length - 1]}`
+}
+
 export const groupVocabularyByTarget = <T extends { jlpt?: JLPTClassification }>(
   words: T[],
   target: JLPTLevel
