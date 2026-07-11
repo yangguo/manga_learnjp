@@ -48,16 +48,18 @@ interface DownloadEnvironment {
   createBlob: (parts: BlobPart[], options: BlobPropertyBag) => Blob
   createObjectURL: (blob: Blob) => string
   revokeObjectURL: (url: string) => void
-  createLink: () => DownloadLink
-  appendLink: (link: DownloadLink) => void
+  createAttachedLink: () => DownloadLink
 }
 
 const getBrowserDownloadEnvironment = (): DownloadEnvironment => ({
   createBlob: (parts, options) => new Blob(parts, options),
   createObjectURL: blob => URL.createObjectURL(blob),
   revokeObjectURL: url => URL.revokeObjectURL(url),
-  createLink: () => document.createElement('a'),
-  appendLink: link => document.body.append(link)
+  createAttachedLink: () => {
+    const link = document.createElement('a')
+    document.body.append(link)
+    return link
+  }
 })
 
 export const downloadTextFile = (
@@ -72,10 +74,9 @@ export const downloadTextFile = (
   let link: DownloadLink | null = null
 
   try {
-    link = environment.createLink()
+    link = environment.createAttachedLink()
     link.href = url
     link.download = filename
-    environment.appendLink(link)
     link.click()
   } finally {
     link?.remove()

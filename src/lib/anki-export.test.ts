@@ -107,8 +107,10 @@ describe('downloadTextFile', () => {
         return 'blob:test'
       },
       revokeObjectURL: url => events.push(`revoke:${url}`),
-      createLink: () => link,
-      appendLink: () => events.push('append')
+      createAttachedLink: () => {
+        events.push('append')
+        return link
+      }
     })
 
     expect(receivedBlob?.type).toBe('text/tab-separated-values;charset=utf-8')
