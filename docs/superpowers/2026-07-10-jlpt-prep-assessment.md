@@ -1,8 +1,8 @@
 # JLPT 备考能力评估与开发路线图
 
 日期: 2026-07-10
-最后更新: 2026-07-11
-状态: M2B 已完成 / 当前阶段 M3 下一步
+最后更新: 2026-07-12
+状态: M3 已完成 / 当前阶段 M4 下一步
 
 ## 一、产品定位
 
@@ -22,7 +22,7 @@
 | Mokuro 分析缓存 | 已有 | `src/lib/mokuro.ts`、`src/components/MokuroReader.tsx` | 可复用分析结果,但还没有词表版本和重新校准机制 |
 | TTS 朗读 | 已有 | `src/lib/speech.ts`、相关 hook | 属于阅读辅助,不是 JLPT 听力训练 |
 | 可信 JLPT 词汇等级 | M2A 已完成 | `src/lib/jlpt-calibration.ts`、`src/lib/jlpt-dictionary.ts` | 固定词表确定性校准;AI `difficulty` 不参与产品行为 |
-| Anki / CSV 导出 | 缺失 | 无导出模块 | 排在等级体验之后 |
+| Anki 兼容导出 | M3 已完成 | `src/lib/anki-export.ts`、`src/components/WordBank.tsx` | 全部生词可导出为带字段与标签声明的 UTF-8 TSV |
 | SRS 复习 | 缺失 | 无复习状态和调度模型 | 排在导出之后独立推进 |
 
 ## 三、当前地基问题
@@ -55,8 +55,8 @@ https://www.jlpt.jp/tw/reference/pdf/guidebook_s_e.pdf
 | M1:个人生词本 | 已完成 | 从共用词汇卡收藏,在 `/words` 查看和删除 | 收藏状态实时同步;刷新后保留;纯函数测试覆盖 |
 | M2A:词汇等级校准地基 | 已完成 | 固定版本词表、确定性匹配、统一数据契约、旧数据重新校准、来源说明 | UI 不再把 AI `difficulty` 当作权威等级;未命中稳定为未定级;旧缓存和收藏零丢失 |
 | M2B:目标等级体验 | 已完成 | N1-N5 设置及基础/重点/超纲/未定级四类展示 | 默认 N4;图片分析和 Mokuro 共用设置;刷新后保持 |
-| M3:Anki 兼容导出 | 下一步 | 先交付可导入 Anki 的 CSV/TSV | 字段、编码、转义和批量导出可验证;直接 `.apkg` 不在首版 |
-| M4:基础 SRS | 待设计 | 为已收藏词增加复习状态和调度 | 调度逻辑可单测;不依赖账号或云同步 |
+| M3:Anki 兼容导出 | 已完成 | 从全部生词导出 Anki 可导入的 UTF-8 TSV | 固定八列、Anki headers、等级标签、空白规范化和浏览器下载均已验收;直接 `.apkg` 不在首版 |
+| M4:基础 SRS | 下一步 | 为已收藏词增加复习状态和调度 | 调度逻辑可单测;不依赖账号或云同步 |
 | M5:语法等级与收藏 | 待研究 | 独立评估语法参考数据、来源和授权 | 未验证数据来源前不进入实现 |
 
 依赖顺序:
@@ -82,5 +82,7 @@ M5 复用 M2A 的数据版本、来源和校准方法,但必须单独设计。�
 - M2A 设计:`docs/superpowers/specs/2026-07-10-jlpt-level-calibration-design.md`
 - M2B 设计:`docs/superpowers/specs/2026-07-11-jlpt-target-experience-design.md`
 - M2B 实施计划:`docs/superpowers/plans/2026-07-11-jlpt-target-experience.md`
+- M3 设计:`docs/superpowers/specs/2026-07-12-anki-tsv-export-design.md`
+- M3 实施计划:`docs/superpowers/plans/2026-07-12-anki-tsv-export.md`
 
-M2B 功能提交:`f89f480`。当前下一步:单独设计并实施 M3 Anki 兼容 CSV/TSV 导出。
+M3 功能提交:`5684b74`。当前下一步:单独设计并实施 M4 基础 SRS。

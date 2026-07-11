@@ -1,10 +1,16 @@
 'use client'
 
-import { BookOpen, Star, Trash2 } from 'lucide-react'
+import { BookOpen, Download, Star, Trash2 } from 'lucide-react'
 import Link from 'next/link'
+import toast from 'react-hot-toast'
 import { useWordBankStore } from '@/lib/word-bank-store'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useWordBankJLPTCalibration } from '@/hooks/useWordBankJLPTCalibration'
+import {
+  createAnkiExportFilename,
+  downloadTextFile,
+  serializeWordsForAnki
+} from '@/lib/anki-export'
 import JLPTBadge from '@/components/JLPTBadge'
 import type { AnalysisLanguage, SavedWord } from '@/lib/types'
 
@@ -19,6 +25,9 @@ const UI_TEXT = {
     empty: '还没有收藏任何词',
     emptyBody: '阅读时点词汇卡上的星标,把不认识的词收进来吧。',
     backHome: '返回首页',
+    exportAnki: '导出 Anki',
+    exportSuccess: '已导出',
+    exportError: '导出失败，请重试。',
     clearAll: '清空全部',
     clearConfirm: '确定要清空全部收藏的词吗?此操作不可撤销。',
     noSentence: '(无原句)',
@@ -33,6 +42,9 @@ const UI_TEXT = {
     empty: 'No saved words yet',
     emptyBody: 'Tap the star on a vocabulary card while reading to save words you don\'t know.',
     backHome: 'Back to home',
+    exportAnki: 'Export Anki',
+    exportSuccess: 'Exported',
+    exportError: 'Export failed. Please try again.',
     clearAll: 'Clear all',
     clearConfirm: 'Clear all saved words? This cannot be undone.',
     noSentence: '(no source sentence)',
@@ -106,21 +118,44 @@ export default function WordBank({ showBackHome = false }: WordBankProps) {
     if (window.confirm(t.clearConfirm)) clearAll()
   }
 
+  const handleExport = () => {
+    try {
+      downloadTextFile(
+        serializeWordsForAnki(words),
+        createAnkiExportFilename(new Date())
+      )
+      toast.success(`${t.exportSuccess} ${words.length} ${t.count}`)
+    } catch {
+      toast.error(t.exportError)
+    }
+  }
+
   return (
     <div className="px-4 py-8">
-      <div className="mb-6 flex items-center gap-2">
+      <div className="mb-6 flex flex-wrap items-center gap-2">
         <BookOpen size={20} className="text-amber-300" />
         <h1 className="text-xl font-bold text-white">{t.title}</h1>
         <span className="text-sm text-gray-400">{words.length} {t.count}</span>
-        {hydrated && words.length > 0 ? (
+        <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           <button
             type="button"
-            onClick={handleClear}
-            className="ml-auto rounded-lg border border-white/10 px-3 py-1 text-sm text-gray-300 transition-colors hover:bg-white/10"
+            onClick={handleExport}
+            disabled={!hydrated || words.length === 0}
+            className="flex h-8 items-center gap-1.5 rounded-md border border-white/10 px-3 text-sm text-gray-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {t.clearAll}
+            <Download size={15} />
+            <span>{t.exportAnki}</span>
           </button>
-        ) : null}
+          {hydrated && words.length > 0 ? (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="h-8 rounded-md border border-white/10 px-3 text-sm text-gray-300 transition-colors hover:bg-white/10"
+            >
+              {t.clearAll}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {hydrated && words.length > 0 ? (
