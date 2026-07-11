@@ -2,10 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  getJapaneseVoices,
-  getVerifiedVoices,
+  getCandidateVoices,
   isSpeechFailure,
-  selectFallbackVoice
+  orderSpeechCandidates
 } from '@/lib/speech'
 
 const SPEECH_START_TIMEOUT_MS = 5000
@@ -27,9 +26,9 @@ interface UseSpeechReturn {
   ready: boolean
   speaking: boolean
   voices: SpeechSynthesisVoice[]
-  verifiedVoices: SpeechSynthesisVoice[]
-  isVerifying: boolean
-  verifyVoices: () => Promise<void>
+  candidateVoices: SpeechSynthesisVoice[]
+  validatingVoiceURI: string | null
+  validateVoice: (voiceURI: string) => Promise<boolean>
   speak: (text: string) => Promise<SpeechAttemptResult>
   cancel: () => void
 }
@@ -38,9 +37,9 @@ interface ActiveSpeechAttempt {
   finish: (result: SpeechAttemptResult) => void
 }
 
-// Browser-provided voice registration is not evidence that an online or local
-// voice can synthesize right now. This hook makes verification explicit and
-// exposes only voices that started a real utterance during the current session.
+// Voice registration only supplies candidates. A voice becomes trusted when a
+// selected validation or real reading reaches onstart; failures are removed for
+// the current session without making every candidate block first use.
 export const useSpeech = ({
   lang = 'ja-JP',
   rate = 0.9,
@@ -48,15 +47,14 @@ export const useSpeech = ({
 }: UseSpeechOptions = {}): UseSpeechReturn => {
   const supported = typeof window !== 'undefined' && 'speechSynthesis' in window
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([])
-  const [verifiedVoices, setVerifiedVoices] = useState<SpeechSynthesisVoice[]>([])
+  const [candidateVoices, setCandidateVoices] = useState<SpeechSynthesisVoice[]>([])
   const [speaking, setSpeaking] = useState(false)
-  const [isVerifying, setIsVerifying] = useState(false)
+  const [validatingVoiceURI, setValidatingVoiceURI] = useState<string | null>(null)
   const langRef = useRef(lang)
   const rateRef = useRef(rate)
   const voiceURIRef = useRef(voiceURI)
   const verifiedVoiceURIsRef = useRef(new Set<string>())
   const unavailableVoiceURIsRef = useRef(new Set<string>())
-  const isVerifyingRef = useRef(false)
   const activeAttemptRef = useRef<ActiveSpeechAttempt | null>(null)
 
   useEffect(() => {
@@ -65,12 +63,8 @@ export const useSpeech = ({
     voiceURIRef.current = voiceURI
   }, [lang, rate, voiceURI])
 
-  const refreshVerifiedVoices = useCallback((nextVoices: SpeechSynthesisVoice[]) => {
-    setVerifiedVoices(getVerifiedVoices(
-      nextVoices,
-      verifiedVoiceURIsRef.current,
-      unavailableVoiceURIsRef.current
-    ))
+  const refreshCandidateVoices = useCallback((nextVoices: SpeechSynthesisVoice[]) => {
+    setCandidateVoices(getCandidateVoices(nextVoices, unavailableVoiceURIsRef.current))
   }, [])
 
   const finishActiveAttempt = useCallback((result: SpeechAttemptResult) => {
@@ -83,18 +77,18 @@ export const useSpeech = ({
     const load = () => {
       const nextVoices = synth.getVoices()
       setVoices(nextVoices)
-      refreshVerifiedVoices(nextVoices)
+      refreshCandidateVoices(nextVoices)
     }
     load()
     synth.addEventListener('voiceschanged', load)
     return () => synth.removeEventListener('voiceschanged', load)
-  }, [refreshVerifiedVoices, supported])
+  }, [refreshCandidateVoices, supported])
 
   const markVoiceUnavailable = useCallback((voiceURIToRemove: string, nextVoices = voices) => {
     unavailableVoiceURIsRef.current.add(voiceURIToRemove)
     verifiedVoiceURIsRef.current.delete(voiceURIToRemove)
-    refreshVerifiedVoices(nextVoices)
-  }, [refreshVerifiedVoices, voices])
+    refreshCandidateVoices(nextVoices)
+  }, [refreshCandidateVoices, voices])
 
   const speakWithVoice = useCallback((
     voice: SpeechSynthesisVoice,
@@ -118,9 +112,7 @@ export const useSpeech = ({
         if (settled) return
         settled = true
         window.clearTimeout(timeout)
-        if (activeAttemptRef.current?.finish === finish) {
-          activeAttemptRef.current = null
-        }
+        if (activeAttemptRef.current?.finish === finish) activeAttemptRef.current = null
         resolve(result)
       }
 
@@ -149,58 +141,51 @@ export const useSpeech = ({
     })
   }, [finishActiveAttempt])
 
-  const verifyVoices = useCallback(async (): Promise<void> => {
-    if (!supported || isVerifyingRef.current) return
+  const validateVoice = useCallback(async (voiceURIToValidate: string): Promise<boolean> => {
+    if (!supported || validatingVoiceURI) return false
+    const voice = getCandidateVoices(voices, unavailableVoiceURIsRef.current)
+      .find(candidate => candidate.voiceURI === voiceURIToValidate)
+    if (!voice) return false
 
-    isVerifyingRef.current = true
-    setIsVerifying(true)
-    const candidates = getJapaneseVoices(voices)
-      .filter(voice => !unavailableVoiceURIsRef.current.has(voice.voiceURI))
-
-    for (const voice of candidates) {
-      const result = await speakWithVoice(voice, VOICE_VALIDATION_TEXT, 0)
-      if (result.started) {
-        verifiedVoiceURIsRef.current.add(voice.voiceURI)
-      } else if (isSpeechFailure(result.reason)) {
-        unavailableVoiceURIsRef.current.add(voice.voiceURI)
-        verifiedVoiceURIsRef.current.delete(voice.voiceURI)
-      }
+    setValidatingVoiceURI(voiceURIToValidate)
+    const result = await speakWithVoice(voice, VOICE_VALIDATION_TEXT, 0, reason => {
+      markVoiceUnavailable(voice.voiceURI)
+    })
+    if (result.started) {
+      verifiedVoiceURIsRef.current.add(voice.voiceURI)
+    } else if (isSpeechFailure(result.reason)) {
+      markVoiceUnavailable(voice.voiceURI)
     }
-
-    refreshVerifiedVoices(voices)
-    isVerifyingRef.current = false
-    setIsVerifying(false)
-  }, [refreshVerifiedVoices, speakWithVoice, supported, voices])
+    setValidatingVoiceURI(null)
+    return result.started
+  }, [markVoiceUnavailable, speakWithVoice, supported, validatingVoiceURI, voices])
 
   const speak = useCallback(async (text: string): Promise<SpeechAttemptResult> => {
     if (!supported || !text.trim()) return { started: false }
 
-    const availableVoices = getVerifiedVoices(
-      voices,
+    const candidates = getCandidateVoices(voices, unavailableVoiceURIsRef.current)
+    const ordered = orderSpeechCandidates(
+      candidates,
+      voiceURIRef.current,
       verifiedVoiceURIsRef.current,
-      unavailableVoiceURIsRef.current
+      langRef.current
     )
-    const voice = selectFallbackVoice(availableVoices, voiceURIRef.current, langRef.current)
-    if (!voice) return { started: false }
+    let lastResult: SpeechAttemptResult = { started: false }
 
-    const attempt = async (candidate: SpeechSynthesisVoice): Promise<SpeechAttemptResult> => {
+    for (const candidate of ordered) {
       const result = await speakWithVoice(candidate, text, 1, reason => {
         markVoiceUnavailable(candidate.voiceURI)
       })
-      if (result.started || !isSpeechFailure(result.reason)) return result
-
+      if (result.started) {
+        verifiedVoiceURIsRef.current.add(candidate.voiceURI)
+        return result
+      }
+      if (!isSpeechFailure(result.reason)) return result
       markVoiceUnavailable(candidate.voiceURI)
-      const fallback = selectFallbackVoice(
-        getVerifiedVoices(voices, verifiedVoiceURIsRef.current, unavailableVoiceURIsRef.current),
-        null,
-        langRef.current
-      )
-      return fallback ? speakWithVoice(fallback, text, 1, reason => {
-        markVoiceUnavailable(fallback.voiceURI)
-      }) : result
+      lastResult = result
     }
 
-    return attempt(voice)
+    return lastResult
   }, [markVoiceUnavailable, speakWithVoice, supported, voices])
 
   const cancel = useCallback((): void => {
@@ -220,9 +205,9 @@ export const useSpeech = ({
     ready: voices.length > 0,
     speaking,
     voices,
-    verifiedVoices,
-    isVerifying,
-    verifyVoices,
+    candidateVoices,
+    validatingVoiceURI,
+    validateVoice,
     speak,
     cancel
   }
