@@ -1,8 +1,18 @@
 import type { SavedWord, WordAnalysis } from './types'
 import type { JLPTDictionary } from './jlpt-dictionary'
+import type { SavedReviewCard } from './srs'
 
 export const savedWordKey = (word: string, reading: string): string =>
   JSON.stringify([word, reading])
+
+export const removeSavedReviewCard = (
+  reviewCards: Record<string, SavedReviewCard>,
+  key: string
+): Record<string, SavedReviewCard> => {
+  if (!reviewCards[key]) return reviewCards
+  const { [key]: _removed, ...remaining } = reviewCards
+  return remaining
+}
 
 export const toSavedWord = (
   word: WordAnalysis,
