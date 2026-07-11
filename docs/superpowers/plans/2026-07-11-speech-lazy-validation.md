@@ -50,4 +50,3 @@
 2. 按 @playwright 验证无刷新按钮、select 加载候选、首次朗读无需预操作，记录浏览器实际语音能力限制。
 3. 按 @superpowers:requesting-code-review 审查完整 diff。
 4. 按 @superpowers:finishing-a-development-branch 选择集成方式。
-

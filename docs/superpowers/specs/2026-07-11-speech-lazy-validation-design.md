@@ -70,4 +70,3 @@ Mokuro 语音设置保留音量图标、音色标签和 select：
 4. 切换某个音色只验证该项，UI 不进入全量长等待。
 5. 失败项移除并回退，取消操作不移除。
 6. `npm test`、`npm run lint`、`npm run build`、`git diff --check` 通过。
-
