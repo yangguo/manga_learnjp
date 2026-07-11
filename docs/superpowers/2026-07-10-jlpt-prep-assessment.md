@@ -2,7 +2,7 @@
 
 日期: 2026-07-10
 最后更新: 2026-07-12
-状态: M3 已完成 / 当前阶段 M4 下一步
+状态: M3 已完成 / M4、M5 详细设计完成 / 当前阶段 M4 实施下一步
 
 ## 一、产品定位
 
@@ -56,8 +56,8 @@ https://www.jlpt.jp/tw/reference/pdf/guidebook_s_e.pdf
 | M2A:词汇等级校准地基 | 已完成 | 固定版本词表、确定性匹配、统一数据契约、旧数据重新校准、来源说明 | UI 不再把 AI `difficulty` 当作权威等级;未命中稳定为未定级;旧缓存和收藏零丢失 |
 | M2B:目标等级体验 | 已完成 | N1-N5 设置及基础/重点/超纲/未定级四类展示 | 默认 N4;图片分析和 Mokuro 共用设置;刷新后保持 |
 | M3:Anki 兼容导出 | 已完成 | 从全部生词导出 Anki 可导入的 UTF-8 TSV | 固定八列、Anki headers、等级标签、空白规范化和浏览器下载均已验收;直接 `.apkg` 不在首版 |
-| M4:基础 SRS | 下一步 | 为已收藏词增加复习状态和调度 | 调度逻辑可单测;不依赖账号或云同步 |
-| M5:语法等级与收藏 | 待研究 | 独立评估语法参考数据、来源和授权 | 未验证数据来源前不进入实现 |
+| M4:基础 SRS | 设计完成 / 下一步实施 | 使用 ts-fsrs 为已收藏词增加四档复习状态和每日队列 | 本地持久化、旧收藏零丢失、调度逻辑可单测;不依赖账号或云同步 |
+| M5:语法等级与收藏 | 设计完成 / 数据准入待实施验证 | Tanos CC BY 参考等级、确定性匹配、四组展示和独立语法收藏 | 数据来源、许可、哈希和生成统计通过准入门槛后才能展示等级 |
 
 依赖顺序:
 
@@ -84,5 +84,7 @@ M5 复用 M2A 的数据版本、来源和校准方法,但必须单独设计。�
 - M2B 实施计划:`docs/superpowers/plans/2026-07-11-jlpt-target-experience.md`
 - M3 设计:`docs/superpowers/specs/2026-07-12-anki-tsv-export-design.md`
 - M3 实施计划:`docs/superpowers/plans/2026-07-12-anki-tsv-export.md`
+- M4 设计:`docs/superpowers/specs/2026-07-12-basic-srs-design.md`
+- M5 设计:`docs/superpowers/specs/2026-07-12-grammar-level-and-bank-design.md`
 
-M3 功能提交:`5684b74`。当前下一步:单独设计并实施 M4 基础 SRS。
+M3 功能提交:`5684b74`。M4、M5 详细设计已完成;当前下一步:编写 M4 实施计划并开发基础 SRS。
