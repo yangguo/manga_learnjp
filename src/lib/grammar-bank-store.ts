@@ -2,8 +2,16 @@ import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import type { GrammarJLPTClassification } from './jlpt-levels'
 import type { SavedGrammar } from './types'
-import { addGrammar, isSavedGrammar, normalizeGrammarPattern, removeGrammar, toggleGrammar } from './grammar-bank'
+import {
+  addGrammar,
+  isSavedGrammar,
+  normalizeGrammarPattern,
+  reclassifySavedGrammar,
+  removeGrammar,
+  toggleGrammar
+} from './grammar-bank'
 import { GRAMMAR_JLPT_DATASET_SOURCE, isJLPTLevel } from './jlpt-levels'
+import { getJLPTGrammarDictionary } from './jlpt-grammar-dictionary'
 
 const STORAGE_KEY = 'grammar-bank-storage'
 
@@ -75,7 +83,7 @@ const readSnapshot = (fallback: GrammarBankSnapshot): GrammarBankSnapshot => {
 const writeSnapshot = (snapshot: GrammarBankSnapshot): void => {
   const storage = getBrowserStorage()
   if (!storage) return
-  storage.setItem(STORAGE_KEY, JSON.stringify({ state: snapshot, version: 1 }))
+  storage.setItem(STORAGE_KEY, JSON.stringify({ state: snapshot, version: 2 }))
 }
 
 let suppressNextPersistWrite = false
@@ -111,11 +119,13 @@ const withStorageLock = async <T>(operation: () => T | Promise<T>): Promise<T> =
 
 interface GrammarBankState {
   grammars: SavedGrammar[]
+  calibrationStatus: 'idle' | 'loading' | 'ready' | 'error'
   addGrammar: (entry: SavedGrammar) => Promise<void>
   removeGrammar: (pattern: string) => Promise<void>
   toggleGrammar: (entry: SavedGrammar) => Promise<void>
   isSaved: (pattern: string) => boolean
   clearAll: () => Promise<void>
+  calibrateGrammar: () => Promise<void>
 }
 
 export const useGrammarBankStore = create<GrammarBankState>()(persist(
@@ -140,22 +150,37 @@ export const useGrammarBankStore = create<GrammarBankState>()(persist(
 
     return {
       grammars: [],
+      calibrationStatus: 'idle',
       addGrammar: entry => commit(snapshot => ({ grammars: addGrammar(snapshot.grammars, entry) })),
       removeGrammar: pattern => commit(snapshot => ({ grammars: removeGrammar(snapshot.grammars, pattern) })),
       toggleGrammar: entry => commit(snapshot => ({ grammars: toggleGrammar(snapshot.grammars, entry) })),
       isSaved: pattern => isSavedGrammar(get().grammars, pattern),
-      clearAll: () => commit(() => ({ grammars: [] }))
+      clearAll: () => commit(() => ({ grammars: [] })),
+      calibrateGrammar: async () => {
+        const status = get().calibrationStatus
+        if (status === 'loading' || status === 'ready') return
+        setWithoutPersist({ calibrationStatus: 'loading' })
+        const result = await getJLPTGrammarDictionary()
+        if (result.status === 'error') {
+          setWithoutPersist({ calibrationStatus: 'error' })
+          return
+        }
+        await commit(snapshot => ({
+          grammars: reclassifySavedGrammar(snapshot.grammars, result)
+        }))
+        setWithoutPersist({ calibrationStatus: 'ready' })
+      }
     }
   },
   {
     name: STORAGE_KEY,
     storage: persistStorage,
-    version: 1,
+    version: 2,
     migrate: persisted => migrateGrammarBankState(persisted),
     merge: (persisted, current) => ({
       ...current,
       ...migrateGrammarBankState(persisted)
     }),
-    partialize: state => ({ grammars: state.grammars })
+    partialize: state => ({ grammars: state.grammars, calibrationStatus: 'idle' as const })
   }
 ))

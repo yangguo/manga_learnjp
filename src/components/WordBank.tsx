@@ -8,6 +8,7 @@ import { useWordBankStore } from '@/lib/word-bank-store'
 import { useGrammarBankStore } from '@/lib/grammar-bank-store'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useWordBankJLPTCalibration } from '@/hooks/useWordBankJLPTCalibration'
+import { useGrammarBankJLPTCalibration } from '@/hooks/useGrammarBankJLPTCalibration'
 import {
   createAnkiExportFilename,
   downloadTextFile,
@@ -148,15 +149,18 @@ function GrammarCard({ grammar }: { grammar: SavedGrammar }) {
     <li className="rounded-lg border border-white/10 bg-gray-950/40 p-3">
       <div className="flex items-start justify-between gap-3">
         <p lang="ja" className="font-japanese font-semibold text-white break-words">{grammar.pattern}</p>
-        <button
-          type="button"
-          onClick={handleRemove}
-          aria-label="Remove grammar from collection"
-          title="Remove grammar from collection"
-          className="shrink-0 rounded-full p-1 text-gray-500 transition-colors hover:bg-white/10 hover:text-red-300"
-        >
-          <Trash2 size={16} />
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <JLPTBadge classification={grammar.jlpt} language="zh" />
+          <button
+            type="button"
+            onClick={handleRemove}
+            aria-label="Remove grammar from collection"
+            title="Remove grammar from collection"
+            className="rounded-full p-1 text-gray-500 transition-colors hover:bg-white/10 hover:text-red-300"
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
       <p className="mt-2 text-sm leading-relaxed text-gray-100 break-words">{grammar.explanation}</p>
       {grammar.example ? (
@@ -179,6 +183,7 @@ function GrammarCard({ grammar }: { grammar: SavedGrammar }) {
 
 export default function WordBank({ showBackHome = false }: WordBankProps) {
   useWordBankJLPTCalibration()
+  useGrammarBankJLPTCalibration()
   const words = useWordBankStore(state => state.words)
   const clearAll = useWordBankStore(state => state.clearAll)
   const grammars = useGrammarBankStore(state => state.grammars)

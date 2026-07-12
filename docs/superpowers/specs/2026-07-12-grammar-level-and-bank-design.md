@@ -1,7 +1,7 @@
 # M5 Grammar Level And Bank Design
 
 日期: 2026-07-12
-状态: 降级完成：语法收藏；语法等级数据准入受上游阻塞
+状态: 已完成：同源 Tanos `.doc` grammar list 的固定等级、收藏与四分组交付
 
 ## 目标
 
@@ -24,13 +24,13 @@ JLPT 官方不发布逐项语法清单，因此所有 UI 继续使用“JLPT 参
 
 新增显式更新脚本 `scripts/update-jlpt-grammar.ts`：
 
-1. 下载 Tanos 五个等级的 HTML grammar list 页面，而不是抓取商业音频或教材内容。
-2. 使用结构化 HTML parser 读取列表节点，禁止 regex 解析 HTML。
+1. 下载 Tanos 五个等级公开链接的 `.doc` grammar list 文档，而不是抓取商业音频或教材内容。
+2. 使用 `word-extractor@1.0.4` 读取 Word 正文，禁止解析 HTML 或复制解释内容。
 3. 提取 pattern 和 level，不复制解释、例句或付费内容。
 4. 对 pattern 做 NFKC、空白和波浪占位符规范化。
 5. 输出冲突、空值、重复项、各等级数量和总量摘要。
 6. 对每个源页面保存 URL、抓取时间、响应 SHA-256 和生成器版本。
-7. 原子写入 `public/data/jlpt-grammar-v1.json`、manifest 和 attribution 文本。
+7. 原子写入 `public/data/jlpt-grammar.v1.json`、manifest 和 attribution 文本。
 
 正常安装、构建和运行只读取已提交静态数据，不访问 Tanos。数据更新是人工执行并审查的维护动作。由于网站没有 commit pin，manifest 的源 payload 哈希就是可复现边界；任何哈希变化都生成明确 diff。
 
@@ -91,7 +91,7 @@ interface SavedGrammar {
 - 字典加载失败时 grammar 全部显示为未定级，分析和收藏仍可用，但不持久化临时等级。
 - `/sources` 增加语法来源、许可措辞、版本、哈希和免责声明。
 
-现有 prompt 会排除 N5/basic grammar，M5 必须改为“返回句子中有教学价值的完整语法构式，忽略孤立助词”。现有 `filterLearningGrammar` 在校准链路稳定后移除，避免可靠 N5 项再次被启发式隐藏。所有 provider 与 Netlify prompt 必须保持 parity。
+现有 prompt 会排除 N5/basic grammar，M5 必须改为“返回句子中有教学价值的完整语法构式，忽略孤立助词”。`filterLearningGrammar` 只移除空模式，不隐藏可靠 N5 项。所有 provider 与 Netlify prompt 必须保持 parity。
 
 ## 目标等级体验
 
@@ -175,9 +175,9 @@ interface SavedGrammar {
 ## 2026-07-12 Source Gate Record
 
 - 许可页 `https://www.tanos.co.uk/jlpt/sharing/` 于 `2026-07-12T03:10:27Z` 返回 HTTP 200；完整响应 SHA-256 为 `ec041fa5ed97b59dd4d7d9749d4f3828049422a8da0404700ac12f64f32a8a56`。页面写明非售卖内容以 Creative Commons "BY" 许可并要求署名，版本未注明。
-- N1–N5 的 `https://www.tanos.co.uk/jlpt/jlpt{1..5}/grammar/` 在 curl、浏览器和网页提取器中均返回 HTTP 500，无法取得可结构化解析的五级列表。
-- 因第二项未满足，当前交付只实现语法收藏。不会创建或加载 grammar level 数据、不会展示语法 JLPT badge、不会改变 provider prompt 以索取 AI 等级。
-- 上游恢复后必须重新跑完整数据准入和静态数据生成流程，才可实施本设计中的等级、缓存和四分组部分。
+- N1–N5 的 HTML list 页面仍返回 HTTP 500；同一语法入口链接的 `GrammarList.N1.doc` 至 `GrammarList.N5.doc` 均返回 HTTP 200，并只包含模式与等级。脚本以文档二进制 SHA-256 固定其版本。
+- 生成器使用同源文档生成 284 个唯一构式，包含 4 个别名展开和 5 个跨级冲突（统一选择较易等级）。数据、manifest 与许可快照均已提交并在运行时校验。
+- HTML 端点的故障不再阻塞本设计；更新时仍需验证许可页措辞、五份文档非空和生成统计。
 
 ## 完成定义
 
@@ -189,9 +189,4 @@ interface SavedGrammar {
 
 ## 降级交付记录
 
-- 许可页可审查，但 N1–N5 grammar list 端点在本次准入时均为 HTTP 500；未创建 grammar level 数据、字典、等级 badge 或 AI 等级回退。
-- `grammar-bank-storage` v1 独立保存 pattern、解释、例句、原句、说明语言和收藏时间；损坏或重复持久化条目会被校验并去重。
-- Mokuro 面板保留所有非空教学语法点并支持收藏；基础语法不再被 AI 文案过滤。
-- 收藏页和 drawer 提供词汇/语法 tabs；Anki、复习和 SRS 仍只属于词汇。
-- `/sources` 公开 Tanos attribution、许可页快照、SHA-256 和当前无等级状态。
-- 功能提交：`d596e2d`、`7e049c9`、`932c00e`、`33d04bf`、`70b8ea1`、`425d502`、`1e0340f`。
+降级语法收藏已作为本次完整等级交付的基础保留：Anki、复习和 SRS 仍只属于词汇；语法收藏独立持久化并可随着字典版本重新校准。

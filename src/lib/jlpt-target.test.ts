@@ -2,10 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   classifyJLPTLevelForTarget,
   formatJLPTLevelRange,
+  groupGrammarByTarget,
   getJLPTLevelsForBand,
   groupVocabularyByTarget
 } from './jlpt-target'
 import type { JLPTClassification, JLPTLevel } from './jlpt-levels'
+import type { GrammarPattern } from './types'
 
 const classification = (level: JLPTLevel | null): JLPTClassification => ({
   level,
@@ -71,5 +73,27 @@ describe('groupVocabularyByTarget', () => {
     expect(grouped.stretch.map(word => word.id)).toEqual(['stretch-one', 'stretch-two'])
     expect(grouped.unclassified.map(word => word.id)).toEqual(['unclassified', 'missing'])
     expect(words).toEqual(snapshot)
+  })
+})
+
+describe('groupGrammarByTarget', () => {
+  it('groups N4 grammar into foundation, focus, stretch, and unclassified without mutation', () => {
+    const grammar = [
+      { pattern: '〜ようだ', jlpt: { level: 'N3', source: 'tanos-jlpt-grammar', datasetVersion: 'test', match: 'exact' } },
+      { pattern: '〜ます', jlpt: { level: 'N5', source: 'tanos-jlpt-grammar', datasetVersion: 'test', match: 'exact' } },
+      { pattern: '〜ながら', jlpt: { level: 'N4', source: 'tanos-jlpt-grammar', datasetVersion: 'test', match: 'exact' } },
+      { pattern: '〜にもかかわらず', jlpt: { level: 'N2', source: 'tanos-jlpt-grammar', datasetVersion: 'test', match: 'exact' } },
+      { pattern: '〜不明', jlpt: { level: null, source: 'tanos-jlpt-grammar', datasetVersion: 'test', match: 'none' } },
+      { pattern: '〜未校准' }
+    ] satisfies Pick<GrammarPattern, 'pattern' | 'jlpt'>[]
+    const snapshot = structuredClone(grammar)
+
+    const grouped = groupGrammarByTarget(grammar, 'N4')
+
+    expect(grouped.foundation.map(item => item.pattern)).toEqual(['〜ます'])
+    expect(grouped.focus.map(item => item.pattern)).toEqual(['〜ながら'])
+    expect(grouped.stretch.map(item => item.pattern)).toEqual(['〜ようだ', '〜にもかかわらず'])
+    expect(grouped.unclassified.map(item => item.pattern)).toEqual(['〜不明', '〜未校准'])
+    expect(grammar).toEqual(snapshot)
   })
 })

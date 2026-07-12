@@ -1,5 +1,5 @@
 import type { AnalysisLanguage } from '@/lib/types'
-import type { JLPTClassification, JLPTLevel } from '@/lib/jlpt-levels'
+import type { GrammarJLPTClassification, JLPTClassification, JLPTLevel } from '@/lib/jlpt-levels'
 
 const CLASSES: Record<JLPTLevel, string> = {
   N5: 'border-emerald-500/25 bg-emerald-500/15 text-emerald-300',
@@ -13,7 +13,7 @@ export default function JLPTBadge({
   classification,
   language = 'zh'
 }: {
-  classification?: JLPTClassification
+  classification?: JLPTClassification | GrammarJLPTClassification
   language?: AnalysisLanguage
 }) {
   const level = classification?.level ?? null

@@ -1,5 +1,5 @@
 import { JLPT_LEVELS } from './jlpt-levels'
-import type { JLPTClassification, JLPTLevel } from './jlpt-levels'
+import type { GrammarJLPTClassification, JLPTClassification, JLPTLevel } from './jlpt-levels'
 
 export type JLPTVocabularyBand = 'foundation' | 'focus' | 'stretch' | 'unclassified'
 
@@ -9,6 +9,8 @@ export interface JLPTVocabularyGroups<T> {
   stretch: T[]
   unclassified: T[]
 }
+
+export type JLPTGrammarGroups<T> = JLPTVocabularyGroups<T>
 
 export const classifyJLPTLevelForTarget = (
   level: JLPTLevel | null,
@@ -54,6 +56,25 @@ export const groupVocabularyByTarget = <T extends { jlpt?: JLPTClassification }>
   words.forEach(word => {
     const band = classifyJLPTLevelForTarget(word.jlpt?.level ?? null, target)
     groups[band].push(word)
+  })
+
+  return groups
+}
+
+export const groupGrammarByTarget = <T extends { jlpt?: GrammarJLPTClassification }>(
+  grammar: T[],
+  target: JLPTLevel
+): JLPTGrammarGroups<T> => {
+  const groups: JLPTGrammarGroups<T> = {
+    foundation: [],
+    focus: [],
+    stretch: [],
+    unclassified: []
+  }
+
+  grammar.forEach(pattern => {
+    const band = classifyJLPTLevelForTarget(pattern.jlpt?.level ?? null, target)
+    groups[band].push(pattern)
   })
 
   return groups

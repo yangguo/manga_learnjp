@@ -8,6 +8,7 @@ import { useWordBankStore } from '@/lib/word-bank-store'
 import { useGrammarBankStore } from '@/lib/grammar-bank-store'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useWordBankJLPTCalibration } from '@/hooks/useWordBankJLPTCalibration'
+import { useGrammarBankJLPTCalibration } from '@/hooks/useGrammarBankJLPTCalibration'
 import { getReviewSummary } from '@/lib/srs'
 
 interface HeaderProps {
@@ -16,6 +17,7 @@ interface HeaderProps {
 
 export default function Header({ onOpenWordBank }: HeaderProps) {
   useWordBankJLPTCalibration()
+  useGrammarBankJLPTCalibration()
   const words = useWordBankStore(state => state.words)
   const grammarCount = useGrammarBankStore(state => state.grammars.length)
   const reviewCards = useWordBankStore(state => state.reviewCards)
