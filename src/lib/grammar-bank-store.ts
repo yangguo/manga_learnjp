@@ -24,9 +24,16 @@ const isValidSavedGrammar = (value: unknown): value is SavedGrammar => {
 
 export const migrateGrammarBankState = (persisted: unknown): GrammarBankSnapshot => {
   const state = persisted as { grammars?: unknown }
+  const seen = new Set<string>()
   return {
     grammars: Array.isArray(state?.grammars)
-      ? state.grammars.filter(isValidSavedGrammar)
+      ? state.grammars.filter((grammar): grammar is SavedGrammar => {
+        if (!isValidSavedGrammar(grammar)) return false
+        const key = normalizeGrammarPattern(grammar.pattern)
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
       : []
   }
 }

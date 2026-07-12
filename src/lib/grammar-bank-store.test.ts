@@ -25,6 +25,7 @@ describe('grammar bank store', () => {
     expect(migrateGrammarBankState({
       grammars: [
         entry,
+        { ...entry, pattern: '～に違いない', explanation: 'replacement' },
         { ...entry, pattern: '  ', savedAt: 'not-a-date' },
         { ...entry, pattern: '〜はずだ', language: 'fr' }
       ]
