@@ -1,7 +1,9 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
+import type { GrammarJLPTClassification } from './jlpt-levels'
 import type { SavedGrammar } from './types'
 import { addGrammar, isSavedGrammar, normalizeGrammarPattern, removeGrammar, toggleGrammar } from './grammar-bank'
+import { GRAMMAR_JLPT_DATASET_SOURCE, isJLPTLevel } from './jlpt-levels'
 
 const STORAGE_KEY = 'grammar-bank-storage'
 
@@ -22,13 +24,27 @@ const isValidSavedGrammar = (value: unknown): value is SavedGrammar => {
     && Number.isFinite(Date.parse(grammar.savedAt))
 }
 
+const hasValidGrammarJLPT = (value: unknown): boolean => {
+  if (!value || typeof value !== 'object') return false
+  const jlpt = value as Partial<GrammarJLPTClassification>
+  if (!isJLPTLevel(jlpt.level) && jlpt.level !== null) return false
+  return jlpt.source === GRAMMAR_JLPT_DATASET_SOURCE
+    && typeof jlpt.datasetVersion === 'string'
+    && (jlpt.match === 'exact' || jlpt.match === 'normalized' || jlpt.match === 'none')
+}
+
+const sanitizeSavedGrammar = (grammar: SavedGrammar): SavedGrammar => {
+  if (grammar.jlpt === undefined || hasValidGrammarJLPT(grammar.jlpt)) return grammar
+  const { jlpt: _jlpt, ...savedGrammar } = grammar
+  return savedGrammar
+}
+
 export const migrateGrammarBankState = (persisted: unknown): GrammarBankSnapshot => {
   const state = persisted as { grammars?: unknown }
   const seen = new Set<string>()
   return {
     grammars: Array.isArray(state?.grammars)
-      ? state.grammars.filter((grammar): grammar is SavedGrammar => {
-        if (!isValidSavedGrammar(grammar)) return false
+      ? state.grammars.filter(isValidSavedGrammar).map(sanitizeSavedGrammar).filter(grammar => {
         const key = normalizeGrammarPattern(grammar.pattern)
         if (seen.has(key)) return false
         seen.add(key)

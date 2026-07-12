@@ -32,6 +32,22 @@ describe('grammar bank store', () => {
     })).toEqual({ grammars: [entry] })
   })
 
+  it('drops untrusted persisted grammar level snapshots without dropping the learner entry', () => {
+    const migrated = migrateGrammarBankState({
+      grammars: [{
+        ...entry,
+        jlpt: {
+          level: 'N0',
+          source: 'unknown-source',
+          datasetVersion: 123,
+          match: 'guessed'
+        }
+      }]
+    })
+
+    expect(migrated.grammars).toEqual([entry])
+  })
+
   it('persists grammar independently from the word bank state', async () => {
     await useGrammarBankStore.getState().addGrammar(entry)
 

@@ -1,4 +1,5 @@
 import { getJLPTDictionary } from './jlpt-dictionary'
+import { getJLPTGrammarDictionary } from './jlpt-grammar-dictionary'
 import { calibrateAnalysisResult, calibrateReadingModeResult } from './jlpt-calibration'
 import type {
   AIProvider,
@@ -57,7 +58,8 @@ export async function analyzeText(
   }
 
   const result = await response.json()
-  return calibrateAnalysisResult(result, await getJLPTDictionary())
+  const [dictionary, grammarDictionary] = await Promise.all([getJLPTDictionary(), getJLPTGrammarDictionary()])
+  return calibrateAnalysisResult(result, dictionary, grammarDictionary)
 }
 
 export async function analyzeImage(
@@ -84,7 +86,8 @@ export async function analyzeImage(
   }
 
   const result = await response.json()
-  return calibrateAnalysisResult(result, await getJLPTDictionary())
+  const [dictionary, grammarDictionary] = await Promise.all([getJLPTDictionary(), getJLPTGrammarDictionary()])
+  return calibrateAnalysisResult(result, dictionary, grammarDictionary)
 }
 
 export async function analyzeImageForReading(
@@ -112,5 +115,6 @@ export async function analyzeImageForReading(
   }
 
   const result = await response.json() as ReadingModeResult
-  return calibrateReadingModeResult(result, await getJLPTDictionary())
+  const [dictionary, grammarDictionary] = await Promise.all([getJLPTDictionary(), getJLPTGrammarDictionary()])
+  return calibrateReadingModeResult(result, dictionary, grammarDictionary)
 }

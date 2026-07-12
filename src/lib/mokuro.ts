@@ -1,5 +1,5 @@
 import type { AIProvider, AnalysisLanguage, AnalysisResult, MokuroAnalysisCacheFile, MokuroBlock, MokuroFile, MokuroPage } from './types'
-import { JLPT_DATASET_VERSION } from './jlpt-levels'
+import { GRAMMAR_JLPT_DATASET_VERSION, JLPT_DATASET_VERSION } from './jlpt-levels'
 import { isPersistableAnalysis } from './jlpt-calibration'
 
 export interface MokuroImageCandidate {
@@ -223,7 +223,7 @@ export const parseMokuroAnalysisCacheContent = (content: string): MokuroAnalysis
     throw new Error('Mokuro analysis cache must contain valid JSON')
   }
 
-  if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== 2) || !isRecord(parsed.analyses)) {
+  if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) || !isRecord(parsed.analyses)) {
     throw new Error('Mokuro analysis cache has an invalid format')
   }
 
@@ -239,6 +239,7 @@ export const parseMokuroAnalysisCacheContent = (content: string): MokuroAnalysis
   return {
     version: parsed.version,
     jlptDatasetVersion: typeof parsed.jlptDatasetVersion === 'string' ? parsed.jlptDatasetVersion : undefined,
+    grammarDatasetVersion: typeof parsed.grammarDatasetVersion === 'string' ? parsed.grammarDatasetVersion : undefined,
     savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : new Date(0).toISOString(),
     source: {
       title: typeof source.title === 'string' ? source.title : undefined,
@@ -253,8 +254,9 @@ export const serializeMokuroAnalysisCache = (
   source: MokuroAnalysisCacheFile['source'] = {}
 ): string => {
   const cacheFile: MokuroAnalysisCacheFile = {
-    version: 2,
+    version: 3,
     jlptDatasetVersion: JLPT_DATASET_VERSION,
+    grammarDatasetVersion: GRAMMAR_JLPT_DATASET_VERSION,
     savedAt: new Date().toISOString(),
     source,
     analyses: getPersistableAnalysisRecord(analyses)
@@ -298,8 +300,9 @@ export const serializeMokuroPageAnalysisCache = (
   analyses: Record<string, AnalysisResult>
 ): string => {
   const file = {
-    version: 2 as const,
+    version: 3 as const,
     jlptDatasetVersion: JLPT_DATASET_VERSION,
+    grammarDatasetVersion: GRAMMAR_JLPT_DATASET_VERSION,
     savedAt: new Date().toISOString(),
     pageIndex,
     analyses: getPersistableAnalysisRecord(analyses)
@@ -308,8 +311,9 @@ export const serializeMokuroPageAnalysisCache = (
 }
 
 export interface ParsedMokuroPageAnalysisCache {
-  version: 1 | 2
+  version: 1 | 2 | 3
   jlptDatasetVersion?: string
+  grammarDatasetVersion?: string
   pageIndex: number
   analyses: Record<string, AnalysisResult>
 }
@@ -322,7 +326,7 @@ export const parseMokuroPageAnalysisCacheContent = (content: string): ParsedMoku
     throw new Error('Mokuro page analysis cache must contain valid JSON')
   }
 
-  if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== 2) || !isRecord(parsed.analyses)) {
+  if (!isRecord(parsed) || (parsed.version !== 1 && parsed.version !== 2 && parsed.version !== 3) || !isRecord(parsed.analyses)) {
     throw new Error('Mokuro page analysis cache has an invalid format')
   }
 
@@ -336,6 +340,7 @@ export const parseMokuroPageAnalysisCacheContent = (content: string): ParsedMoku
   return {
     version: parsed.version,
     jlptDatasetVersion: typeof parsed.jlptDatasetVersion === 'string' ? parsed.jlptDatasetVersion : undefined,
+    grammarDatasetVersion: typeof parsed.grammarDatasetVersion === 'string' ? parsed.grammarDatasetVersion : undefined,
     pageIndex: isFiniteNumber(parsed.pageIndex) ? parsed.pageIndex : -1,
     analyses
   }

@@ -33,7 +33,7 @@ const isDocumentChrome = (line: string): boolean =>
   || /^PAGE\b/i.test(line)
 
 const containsPatternScript = (line: string): boolean =>
-  /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}～〜]/u.test(line)
+  /[ぁ-んァ-ヶ一-龠々〆〤～〜]/.test(line)
 
 export const normalizeGrammarPattern = (pattern: string): string => {
   let normalized = pattern.normalize('NFKC').trim()

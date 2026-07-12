@@ -20,7 +20,7 @@ import {
   serializeMokuroPageAnalysisCache,
   parseMokuroFileContent
 } from './mokuro'
-import { JLPT_DATASET_VERSION } from './jlpt-levels'
+import { GRAMMAR_JLPT_DATASET_VERSION, JLPT_DATASET_VERSION } from './jlpt-levels'
 
 describe('parseMokuroFileContent', () => {
   it('parses a Mokuro file and normalizes block text', () => {
@@ -124,6 +124,11 @@ describe('mokuro analysis cache', () => {
       status: 'ready' as const,
       datasetVersion: JLPT_DATASET_VERSION,
       persistable: true
+    },
+    grammarCalibration: {
+      status: 'ready' as const,
+      datasetVersion: GRAMMAR_JLPT_DATASET_VERSION,
+      persistable: true
     }
   }
 
@@ -150,13 +155,14 @@ describe('mokuro analysis cache', () => {
 
     const parsed = parseMokuroAnalysisCacheContent(content)
 
-    expect(parsed.version).toBe(2)
+    expect(parsed.version).toBe(3)
     expect(parsed.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
+    expect(parsed.grammarDatasetVersion).toBe(GRAMMAR_JLPT_DATASET_VERSION)
     expect(parsed.source.title).toBe('spy6')
     expect(parsed.analyses[key]).toEqual(result)
   })
 
-  it('reads v1 caches but always serializes v2 with the JLPT dataset version', () => {
+  it('reads v1/v2 caches but always serializes v3 with both JLPT dataset versions', () => {
     const v1 = JSON.stringify({
       version: 1,
       savedAt: '2026-07-10T00:00:00.000Z',
@@ -164,9 +170,12 @@ describe('mokuro analysis cache', () => {
       analyses: {}
     })
     expect(parseMokuroAnalysisCacheContent(v1).version).toBe(1)
-    const v2 = JSON.parse(serializeMokuroAnalysisCache({}))
-    expect(v2.version).toBe(2)
-    expect(v2.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
+    const v2 = JSON.stringify({ version: 2, jlptDatasetVersion: JLPT_DATASET_VERSION, savedAt: '2026-07-10T00:00:00.000Z', source: {}, analyses: {} })
+    expect(parseMokuroAnalysisCacheContent(v2).version).toBe(2)
+    const v3 = JSON.parse(serializeMokuroAnalysisCache({}))
+    expect(v3.version).toBe(3)
+    expect(v3.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
+    expect(v3.grammarDatasetVersion).toBe(GRAMMAR_JLPT_DATASET_VERSION)
   })
 
   it('writes only persistable calibrated analyses', () => {
@@ -229,6 +238,11 @@ describe('serializeMokuroPageAnalysisCache / parseMokuroPageAnalysisCacheContent
         status: 'ready' as const,
         datasetVersion: JLPT_DATASET_VERSION,
         persistable: true
+      },
+      grammarCalibration: {
+        status: 'ready' as const,
+        datasetVersion: GRAMMAR_JLPT_DATASET_VERSION,
+        persistable: true
       }
     }
   }
@@ -237,17 +251,19 @@ describe('serializeMokuroPageAnalysisCache / parseMokuroPageAnalysisCacheContent
     const content = serializeMokuroPageAnalysisCache(2, analyses)
     const parsed = parseMokuroPageAnalysisCacheContent(content)
     expect(parsed.pageIndex).toBe(2)
-    expect(parsed.version).toBe(2)
+    expect(parsed.version).toBe(3)
     expect(parsed.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
+    expect(parsed.grammarDatasetVersion).toBe(GRAMMAR_JLPT_DATASET_VERSION)
     expect(parsed.analyses[key]).toEqual(analyses[key])
   })
 
-  it('reads v1 page caches but serializes v2', () => {
+  it('reads v1 page caches but serializes v3', () => {
     const v1 = JSON.stringify({ version: 1, savedAt: '2026-07-10T00:00:00.000Z', pageIndex: 2, analyses: {} })
     expect(parseMokuroPageAnalysisCacheContent(v1).version).toBe(1)
-    const v2 = JSON.parse(serializeMokuroPageAnalysisCache(2, {}))
-    expect(v2.version).toBe(2)
-    expect(v2.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
+    const v3 = JSON.parse(serializeMokuroPageAnalysisCache(2, {}))
+    expect(v3.version).toBe(3)
+    expect(v3.jlptDatasetVersion).toBe(JLPT_DATASET_VERSION)
+    expect(v3.grammarDatasetVersion).toBe(GRAMMAR_JLPT_DATASET_VERSION)
   })
 
   it('throws on invalid JSON', () => {

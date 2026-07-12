@@ -45,14 +45,18 @@ const getTranslationLabel = (language: AnalysisLanguage = 'en'): string => {
   return language === 'zh' ? 'Chinese translation' : 'English translation'
 }
 
-const getLearningLevelInstruction = (excludeN5: boolean): string => {
-  if (!excludeN5) return ''
+const getGrammarInstruction = (): string => `
+Grammar extraction:
+- In "grammar", return standard grammar constructions (including N5) but exclude isolated particles, bare inflections, and punctuation.
+- Do not assign JLPT levels; the client uses a static dictionary.`
 
-  return `
+const getLearningLevelInstruction = (excludeN5: boolean): string => {
+  if (!excludeN5) return getGrammarInstruction()
+
+  return `${getGrammarInstruction()}
 Learning-level filter:
 - Do NOT include JLPT N5, beginner, or very basic vocabulary in "words".
-- Do NOT include JLPT N5/basic grammar patterns in "grammar" such as は/が/を/に/で/の, です/ます, simple negation, simple past, or basic question particles.
-- Include only vocabulary and grammar that is useful beyond N5, roughly JLPT N4 or higher, manga-specific expressions, idioms, colloquialisms, or context-critical terms.
+- Include only vocabulary that is useful beyond N5, roughly JLPT N4 or higher, manga-specific expressions, idioms, colloquialisms, or context-critical terms.
 - For word difficulty, prefer "N4", "N3", "N2", "N1", "intermediate", or "advanced"; never return "N5" or "beginner".`
 }
 
@@ -112,6 +116,7 @@ const MANGA_PANEL_ANALYSIS_PROMPT = () => `
 You are a Japanese language learning assistant specialized in manga analysis. Analyze this manga image by identifying individual panels and extracting text from each panel separately.
 
 IMPORTANT: Manga panels are read from RIGHT to LEFT, TOP to BOTTOM. Please identify panels in the correct reading order.
+${getGrammarInstruction()}
 
 Please provide a JSON response with the following structure:
 {
@@ -200,6 +205,7 @@ IMPORTANT: Keep responses under 5000 characters. Be concise but accurate.`
 // Concise manga panel analysis prompt for providers with response length limits
 const CONCISE_MANGA_PANEL_ANALYSIS_PROMPT = () => `
 Analyze this manga image. Identify panels in RIGHT-to-LEFT, TOP-to-BOTTOM order.
+${getGrammarInstruction()}
 
 Provide concise JSON:
 {
