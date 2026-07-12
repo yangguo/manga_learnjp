@@ -1,22 +1,14 @@
 'use client'
 
 import { motion } from 'framer-motion'
-import { BookOpen, ChevronDown, Loader2, Quote, Sparkles, Star } from 'lucide-react'
+import { BookOpen, Loader2, Quote, Sparkles, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
-import { filterLearningGrammar } from '@/lib/analysis-filters'
-import { getVocabularyInTextOrder } from '@/lib/analysis-order'
+import { getLearningGrammarInTextOrder, getVocabularyInTextOrder } from '@/lib/analysis-order'
 import { isPersistableAnalysis } from '@/lib/jlpt-calibration'
-import {
-  formatJLPTLevelRange,
-  getJLPTLevelsForBand,
-  groupGrammarByTarget
-} from '@/lib/jlpt-target'
-import { useJLPTTargetStore } from '@/lib/jlpt-target-store'
 import { useWordBankStore } from '@/lib/word-bank-store'
 import { useGrammarBankStore } from '@/lib/grammar-bank-store'
 import { toSavedGrammar } from '@/lib/grammar-bank'
 import JLPTBadge from '@/components/JLPTBadge'
-import JLPTTargetSelector from '@/components/JLPTTargetSelector'
 import type { AnalysisLanguage, AnalysisResult, GrammarPattern, WordAnalysis } from '@/lib/types'
 
 interface MokuroAnalysisPanelProps {
@@ -39,15 +31,7 @@ const UI_TEXT = {
     translation: '翻译',
     vocabulary: '词汇',
     item: '项',
-    focus: '重点',
-    stretch: '超纲',
-    unclassified: '未定级',
-    foundation: '基础',
     noVocabulary: '当前文本没有需要显示的词汇。',
-    noGrammarFocus: '当前文本没有目标等级语法。',
-    noGrammarStretch: '当前文本没有超纲语法。',
-    noGrammarUnclassified: '当前文本没有未定级语法。',
-    noGrammarFoundation: '当前文本没有基础语法。',
     grammar: '语法',
     pattern: '个语法点',
     noGrammar: '没有需要特别学习的语法点。',
@@ -66,15 +50,7 @@ const UI_TEXT = {
     translation: 'Translation',
     vocabulary: 'Vocabulary',
     item: 'item',
-    focus: 'Focus',
-    stretch: 'Stretch',
-    unclassified: 'Unclassified',
-    foundation: 'Foundation',
     noVocabulary: 'No vocabulary to display in this selection.',
-    noGrammarFocus: 'No target-level grammar in this selection.',
-    noGrammarStretch: 'No stretch grammar in this selection.',
-    noGrammarUnclassified: 'No unclassified grammar in this selection.',
-    noGrammarFoundation: 'No foundation grammar in this selection.',
     grammar: 'Grammar',
     pattern: 'pattern',
     noGrammar: 'No grammar patterns need special focus in this selection.',
@@ -92,7 +68,6 @@ export default function MokuroAnalysisPanel({
   hideSelectedText = false
 }: MokuroAnalysisPanelProps) {
   const t = UI_TEXT[language]
-  const targetLevel = useJLPTTargetStore(state => state.targetLevel)
   const selectedTextHeader = !hideSelectedText && selectedText ? (
     <div className="rounded-2xl border border-white/10 bg-gray-950/40 p-3">
       <p className="text-xs text-gray-500">{t.selectedText}</p>
@@ -149,10 +124,7 @@ export default function MokuroAnalysisPanel({
   const vocabulary = getVocabularyInTextOrder(analysisResult.sentences)
   const persistJLPT = isPersistableAnalysis(analysisResult)
 
-  const grammar = analysisResult.sentences
-    .flatMap(sentence => sentence.grammar)
-  const learningGrammar = filterLearningGrammar(grammar)
-  const grammarGroups = groupGrammarByTarget(learningGrammar, targetLevel)
+  const learningGrammar = getLearningGrammarInTextOrder(analysisResult.sentences)
 
   return (
     <motion.div
@@ -220,55 +192,19 @@ export default function MokuroAnalysisPanel({
             {learningGrammar.length} {t.pattern}{language === 'en' && learningGrammar.length !== 1 ? 's' : ''}
           </span>
         </div>
-        <JLPTTargetSelector language={language} />
         {learningGrammar.length > 0 ? (
-          <>
-            <GrammarGroup
-              label={t.focus}
-              levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'focus'))}
-              emptyText={t.noGrammarFocus}
-              patterns={grammarGroups.focus}
-              toneClass="text-amber-300"
-              language={language}
-              sourceSentence={selectedText}
-              exampleLabel={t.example}
-              saveError={t.grammarSaveError}
-            />
-            <GrammarGroup
-              label={t.stretch}
-              levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'stretch'))}
-              emptyText={t.noGrammarStretch}
-              patterns={grammarGroups.stretch}
-              toneClass="text-rose-300"
-              language={language}
-              sourceSentence={selectedText}
-              exampleLabel={t.example}
-              saveError={t.grammarSaveError}
-            />
-            <GrammarGroup
-              label={t.unclassified}
-              levelLabel=""
-              emptyText={t.noGrammarUnclassified}
-              patterns={grammarGroups.unclassified}
-              toneClass="text-gray-300"
-              language={language}
-              sourceSentence={selectedText}
-              exampleLabel={t.example}
-              saveError={t.grammarSaveError}
-            />
-            <GrammarGroup
-              label={t.foundation}
-              levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'foundation'))}
-              emptyText={t.noGrammarFoundation}
-              patterns={grammarGroups.foundation}
-              toneClass="text-emerald-300"
-              language={language}
-              sourceSentence={selectedText}
-              exampleLabel={t.example}
-              saveError={t.grammarSaveError}
-              collapsible
-            />
-          </>
+          <ul className="mt-3 space-y-2">
+            {learningGrammar.map((pattern, index) => (
+              <GrammarCard
+                key={`${pattern.pattern}-${index}`}
+                pattern={pattern}
+                language={language}
+                sourceSentence={selectedText}
+                exampleLabel={t.example}
+                saveError={t.grammarSaveError}
+              />
+            ))}
+          </ul>
         ) : (
           <p className="rounded-lg border border-white/10 bg-gray-950/40 p-3 text-sm text-gray-400">
             {t.noGrammar}
@@ -326,66 +262,6 @@ function GrammarCard({
       ) : null}
     </li>
   )
-}
-
-interface GrammarGroupProps {
-  label: string
-  levelLabel: string
-  emptyText: string
-  patterns: GrammarPattern[]
-  toneClass: string
-  language: AnalysisLanguage
-  sourceSentence: string
-  exampleLabel: string
-  saveError: string
-  collapsible?: boolean
-}
-
-function GrammarGroup({
-  label,
-  levelLabel,
-  emptyText,
-  patterns,
-  toneClass,
-  language,
-  sourceSentence,
-  exampleLabel,
-  saveError,
-  collapsible = false
-}: GrammarGroupProps) {
-  const header = (
-    <div className="flex min-h-7 items-center gap-2">
-      <span className={`text-sm font-semibold ${toneClass}`}>{label}</span>
-      {levelLabel ? <span className="text-xs text-gray-500">{levelLabel}</span> : null}
-      <span className="ml-auto text-xs tabular-nums text-gray-500">{patterns.length}</span>
-      {collapsible ? <ChevronDown className="h-4 w-4 text-gray-500 transition-transform group-open:rotate-180" /> : null}
-    </div>
-  )
-  const content = patterns.length > 0 ? (
-    <ul className="mt-2 space-y-2">
-      {patterns.map((pattern, index) => (
-        <GrammarCard
-          key={`${pattern.pattern}-${index}`}
-          pattern={pattern}
-          language={language}
-          sourceSentence={sourceSentence}
-          exampleLabel={exampleLabel}
-          saveError={saveError}
-        />
-      ))}
-    </ul>
-  ) : <p className="mt-2 text-xs text-gray-500">{emptyText}</p>
-
-  if (collapsible) {
-    return (
-      <details className="group border-t border-white/10 py-3">
-        <summary className="cursor-pointer list-none rounded-md px-1 transition-colors hover:bg-white/5">{header}</summary>
-        <div className="px-1">{content}</div>
-      </details>
-    )
-  }
-
-  return <div className="border-t border-white/10 py-3 first:border-t-0">{header}{content}</div>
 }
 
 interface VocabularyCardProps {
