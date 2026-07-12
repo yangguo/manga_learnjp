@@ -1,7 +1,7 @@
 # Review Return And Vocabulary Order Design
 
 日期: 2026-07-12
-状态: 已确认，待实施
+状态: 已完成
 
 ## 目标
 
@@ -112,3 +112,14 @@
 - 词汇严格按选中文本分析顺序平铺，语法分组保持原行为。
 - 独立 `/review` 和 `/words` 工作流无回归。
 - 单元测试、lint、生产构建与浏览器验收全部通过。
+
+## 交付记录
+
+2026-07-12 完成实现与验收：
+
+- `getVocabularyInTextOrder` 保持跨句与句内词汇顺序，不按 JLPT 等级重排，也不修改输入。
+- 首页 Header 和收藏抽屉使用全屏内嵌复习层，复习期间 URL 保持 `/`，保留的 Mokuro DOM 节点在进入、退出和空队列完成状态均保持连接。
+- `Escape` 可退出内嵌复习，body 滚动锁会恢复；375x812 视口的 `scrollWidth` 与 `clientWidth` 均为 375。
+- 独立 `/words` 仍通过链接进入 `/review`。
+- 全量 Vitest 为 31 个测试文件、221 项测试通过；`npm run lint -- --quiet`、`npm run build` 与 `git diff --check` 通过。
+- 生产浏览器控制台仅有既存的 `/favicon.ico` 404，没有 React 或业务运行时错误。
