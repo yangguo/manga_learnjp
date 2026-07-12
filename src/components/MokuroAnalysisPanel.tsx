@@ -220,9 +220,9 @@ export default function MokuroAnalysisPanel({
             {learningGrammar.length} {t.pattern}{language === 'en' && learningGrammar.length !== 1 ? 's' : ''}
           </span>
         </div>
+        <JLPTTargetSelector language={language} />
         {learningGrammar.length > 0 ? (
           <>
-            <JLPTTargetSelector language={language} />
             <GrammarGroup
               label={t.focus}
               levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'focus'))}
