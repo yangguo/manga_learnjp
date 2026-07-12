@@ -36,6 +36,15 @@ export interface GrammarPattern {
   example: string
 }
 
+export interface SavedGrammar {
+  pattern: string
+  explanation: string
+  example: string
+  sourceSentence: string | null
+  language: AnalysisLanguage
+  savedAt: string
+}
+
 export interface OpenAIFormatSettings {
   endpoint: string
   model: string
