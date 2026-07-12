@@ -48,8 +48,12 @@ const readSnapshot = (fallback: GrammarBankSnapshot): GrammarBankSnapshot => {
   if (!storage) return fallback
   const raw = storage.getItem(STORAGE_KEY)
   if (raw === null) return fallback
-  const parsed = JSON.parse(raw) as { state?: { grammars?: unknown } }
-  return migrateGrammarBankState(parsed.state)
+  try {
+    const parsed = JSON.parse(raw) as { state?: { grammars?: unknown } }
+    return migrateGrammarBankState(parsed.state)
+  } catch {
+    return fallback
+  }
 }
 
 const writeSnapshot = (snapshot: GrammarBankSnapshot): void => {

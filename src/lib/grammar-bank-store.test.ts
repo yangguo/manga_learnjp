@@ -62,4 +62,19 @@ describe('grammar bank store', () => {
     expect(useGrammarBankStore.getState().grammars).toEqual([])
     expect(useGrammarBankStore.getState().grammars.find(item => savedGrammarKey(item.pattern) === key)).toBeUndefined()
   })
+
+  it('recovers from malformed storage JSON on the next successful write', async () => {
+    const setItem = vi.fn()
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: () => '{',
+        setItem
+      }
+    })
+
+    await useGrammarBankStore.getState().addGrammar(entry)
+
+    expect(useGrammarBankStore.getState().grammars).toEqual([entry])
+    expect(setItem).toHaveBeenCalledWith('grammar-bank-storage', expect.stringContaining('〜に違いない'))
+  })
 })
