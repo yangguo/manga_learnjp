@@ -4,13 +4,13 @@
 
 **Goal:** Render Mokuro grammar as one compact, text-ordered list without JLPT target controls or level groups.
 
-**Architecture:** Keep ordering and filtering in `src/lib/analysis-order.ts`, so the React panel only renders the resulting list. The existing `filterLearningGrammar` rule remains authoritative for excluding basic N5 grammar.
+**Architecture:** Keep ordering and filtering in `src/lib/analysis-order.ts`, so the React panel only renders the resulting list. The existing `filterLearningGrammar` rule remains authoritative for removing blank grammar patterns.
 
 **Tech Stack:** TypeScript, React, Vitest, Tailwind CSS.
 
 ## Global Constraints
 
-- Keep existing N5 grammar filtering through `filterLearningGrammar`.
+- Keep existing blank grammar-pattern filtering through `filterLearningGrammar`.
 - Preserve grammar-card explanation, example, JLPT badge, and collection controls.
 - Do not change persistence, API contracts, or the global default N4 setting.
 
