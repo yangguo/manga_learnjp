@@ -30,6 +30,19 @@ export default function SourcesPage() {
         </section>
 
         <section className="border-b border-white/10 py-6">
+          <h2 className="text-lg font-medium text-white">语法参考状态</h2>
+          <p className="mt-3 text-sm leading-6 text-amber-200">
+            本应用当前只提供语法收藏，不显示 JLPT 语法等级。Tanos 的许可页可审查，但 N1–N5 grammar list 页面在本次数据准入时均返回 HTTP 500，无法生成可追踪的静态等级字典。
+          </p>
+          <dl className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+            <div><dt className="text-gray-500">参考作者</dt><dd>Jonathan Waller</dd></div>
+            <div><dt className="text-gray-500">许可</dt><dd>Creative Commons BY（发布者未注明版本）</dd></div>
+            <div><dt className="text-gray-500">许可页抓取时间</dt><dd>2026-07-12T03:10:27Z</dd></div>
+            <div><dt className="text-gray-500">许可页 SHA-256</dt><dd className="break-all">ec041fa5ed97b59dd4d7d9749d4f3828049422a8da0404700ac12f64f32a8a56</dd></div>
+          </dl>
+        </section>
+
+        <section className="border-b border-white/10 py-6">
           <h2 className="text-lg font-medium text-white">数据统计</h2>
           <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
             <div><dt className="text-gray-500">原始行</dt><dd>{manifest.stats.rows}</dd></div>
@@ -44,6 +57,8 @@ export default function SourcesPage() {
           <ul className="mt-3 space-y-2 text-sky-300">
             <li><a href={manifest.source.repository} target="_blank" rel="noreferrer" className="hover:text-sky-200">上游社区词表仓库</a></li>
             <li><a href="/licenses/open-anki-jlpt-decks-MIT.txt" className="hover:text-sky-200">MIT 许可证</a></li>
+            <li><a href="https://www.tanos.co.uk/jlpt/sharing/" target="_blank" rel="noreferrer" className="hover:text-sky-200">Tanos 数据共享说明</a></li>
+            <li><a href="/licenses/tanos-sharing-CC-BY.txt" className="hover:text-sky-200">Tanos 许可页快照</a></li>
             <li><a href="https://www.jlpt.jp/e/guideline/" target="_blank" rel="noreferrer" className="hover:text-sky-200">JLPT 官方指南</a></li>
           </ul>
         </section>
