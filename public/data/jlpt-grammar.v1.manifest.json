@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "datasetVersion": "tanos-jlpt-grammar@2026-07-12",
+  "generatedAt": "2026-07-12T00:00:00.000Z",
+  "source": {
+    "name": "tanos-jlpt-grammar",
+    "author": "Jonathan Waller",
+    "license": "CC BY (version unspecified by publisher)",
+    "licenseUrl": "https://www.tanos.co.uk/jlpt/sharing/",
+    "documents": {
+      "N5": {
+        "url": "https://www.tanos.co.uk/jlpt/jlpt5/grammar/GrammarList.N5.doc",
+        "sha256": "4fa7f64979bf73157b8f8286c82aa75c39dae748a944819f214f06e686f49bab"
+      },
+      "N4": {
+        "url": "https://www.tanos.co.uk/jlpt/jlpt4/grammar/GrammarList.N4.doc",
+        "sha256": "3f12afb1453124e7a45be5768cae558bb19bd65508d06232eb6412f2b0c701a7"
+      },
+      "N3": {
+        "url": "https://www.tanos.co.uk/jlpt/jlpt3/grammar/GrammarList.N3.doc",
+        "sha256": "64a38d86d9ab08f0c6851201edebc135a8b72e2bd8bb8c3f76668e4929cb776d"
+      },
+      "N2": {
+        "url": "https://www.tanos.co.uk/jlpt/jlpt2/grammar/GrammarList.N2.doc",
+        "sha256": "4913b5c21f0dc226d27a87c48542b65848c13ba5509f30176523d35ad195c6cf"
+      },
+      "N1": {
+        "url": "https://www.tanos.co.uk/jlpt/jlpt1/grammar/GrammarList.N1.doc",
+        "sha256": "7e7d275b1f5c1ce4da990f5fb741ff04a6261f82b8bdaca115efa74f7d389721"
+      }
+    }
+  },
+  "stats": {
+    "rawPatterns": 287,
+    "uniquePatterns": 284,
+    "aliases": 4,
+    "conflictingPatterns": 5
+  },
+  "checksums": {
+    "dataSha256": "430b407ff7ff5f71dd1945f9663e71ca8f7674b43dd45c22c0a714b86668f201",
+    "licenseSha256": "ec041fa5ed97b59dd4d7d9749d4f3828049422a8da0404700ac12f64f32a8a56"
+  }
+}

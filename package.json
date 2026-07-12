@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "update:jlpt-data": "tsx scripts/update-jlpt-vocabulary.ts",
+    "update:jlpt-grammar": "tsx scripts/update-jlpt-grammar.ts",
     "prepare": "bash scripts/install-hooks.sh || true"
   },
   "dependencies": {
@@ -41,7 +42,8 @@
     "eslint": "^9.39.1",
     "eslint-config-next": "^16.0.7",
     "tsx": "^4.23.0",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.9",
+    "word-extractor": "1.0.4"
   },
   "overrides": {
     "postcss": "^8.5.10"
