@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getVocabularyInTextOrder } from './analysis-order'
+import { getLearningGrammarInTextOrder, getVocabularyInTextOrder } from './analysis-order'
 import type { SentenceAnalysis } from './types'
 
 const sentence = (words: SentenceAnalysis['words']): Pick<SentenceAnalysis, 'words'> => ({ words })
@@ -8,6 +8,13 @@ const word = (value: string) => ({
   reading: value,
   meaning: value,
   partOfSpeech: 'test'
+})
+
+const grammarSentence = (grammar: SentenceAnalysis['grammar']): Pick<SentenceAnalysis, 'grammar'> => ({ grammar })
+const grammar = (pattern: string) => ({
+  pattern,
+  explanation: pattern,
+  example: pattern
 })
 
 describe('getVocabularyInTextOrder', () => {
@@ -51,5 +58,20 @@ describe('getVocabularyInTextOrder', () => {
 
     expect(result).not.toBe(input[0].words)
     expect(input).toEqual(snapshot)
+  })
+})
+
+describe('getLearningGrammarInTextOrder', () => {
+  it('keeps source order while filtering blank grammar patterns', () => {
+    const input = [
+      grammarSentence([grammar('first'), grammar('   ')]),
+      grammarSentence([grammar('second'), grammar('third')])
+    ]
+
+    expect(getLearningGrammarInTextOrder(input).map(item => item.pattern)).toEqual([
+      'first',
+      'second',
+      'third'
+    ])
   })
 })
