@@ -35,7 +35,12 @@ const isEditableTarget = (target: EventTarget | null): boolean => {
   return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT', 'BUTTON'].includes(target.tagName)
 }
 
-export default function ReviewSession() {
+interface ReviewSessionProps {
+  onExit?: () => void
+  exitLabel?: string
+}
+
+export default function ReviewSession({ onExit, exitLabel = '返回阅读' }: ReviewSessionProps) {
   const hydrated = useHydrated()
   const words = useWordBankStore(state => state.words)
   const reviewCards = useWordBankStore(state => state.reviewCards)
@@ -133,6 +138,11 @@ export default function ReviewSession() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && onExit && !isSubmitting) {
+        event.preventDefault()
+        onExit()
+        return
+      }
       if (isEditableTarget(event.target)) return
       const action = reviewActionForKey(event.key, answerVisible)
       if (!action) return
@@ -142,12 +152,17 @@ export default function ReviewSession() {
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [answerVisible, revealAnswer, submitRating])
+  }, [answerVisible, isSubmitting, onExit, revealAnswer, submitRating])
 
   if (sessionView === 'loading') {
     return (
-      <div className="flex min-h-[420px] items-center justify-center text-sm text-gray-400">
-        正在准备今日复习...
+      <div className="mx-auto flex min-h-[420px] max-w-xl flex-col items-center justify-center gap-5 text-sm text-gray-400">
+        <p>正在准备今日复习...</p>
+        {onExit ? (
+          <button type="button" onClick={onExit} className="inline-flex items-center gap-2 text-gray-300 hover:text-white">
+            <ArrowLeft size={16} /> {exitLabel}
+          </button>
+        ) : null}
       </div>
     )
   }
@@ -158,9 +173,15 @@ export default function ReviewSession() {
       <div className="mx-auto max-w-xl py-20 text-center">
         <h1 className="text-xl font-semibold text-white">无法载入复习进度</h1>
         <p className="mt-2 break-words text-sm text-red-300">{message}</p>
-        <Link href="/words" className="mt-6 inline-flex items-center gap-2 text-sm text-amber-300 hover:text-amber-200">
-          <BookOpen size={16} /> 返回生词本
-        </Link>
+        {onExit ? (
+          <button type="button" onClick={onExit} className="mt-6 inline-flex items-center gap-2 text-sm text-amber-300 hover:text-amber-200">
+            <ArrowLeft size={16} /> {exitLabel}
+          </button>
+        ) : (
+          <Link href="/words" className="mt-6 inline-flex items-center gap-2 text-sm text-amber-300 hover:text-amber-200">
+            <BookOpen size={16} /> 返回生词本
+          </Link>
+        )}
       </div>
     )
   }
@@ -172,9 +193,15 @@ export default function ReviewSession() {
         <h1 className="mt-4 text-2xl font-bold text-white">今日复习完成</h1>
         <p className="mt-2 text-sm text-gray-400">已完成 {completed} 个词，新的到期卡会在下次进入时出现。</p>
         <div className="mt-7 flex flex-wrap justify-center gap-3">
-          <Link href="/" className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 px-4 text-sm text-gray-200 hover:bg-white/10">
-            <ArrowLeft size={16} /> 返回阅读
-          </Link>
+          {onExit ? (
+            <button type="button" onClick={onExit} className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 px-4 text-sm text-gray-200 hover:bg-white/10">
+              <ArrowLeft size={16} /> {exitLabel}
+            </button>
+          ) : (
+            <Link href="/" className="inline-flex h-10 items-center gap-2 rounded-md border border-white/10 px-4 text-sm text-gray-200 hover:bg-white/10">
+              <ArrowLeft size={16} /> 返回阅读
+            </Link>
+          )}
           <Link href="/words" className="inline-flex h-10 items-center gap-2 rounded-md border border-amber-500/30 px-4 text-sm text-amber-200 hover:bg-amber-500/10">
             <BookOpen size={16} /> 生词本
           </Link>
@@ -186,9 +213,16 @@ export default function ReviewSession() {
   return (
     <div className="mx-auto flex min-h-[calc(100vh-3rem)] w-full max-w-3xl flex-col py-6 sm:py-10">
       <header className="flex items-center justify-between gap-4 border-b border-white/10 pb-4">
-        <div>
-          <p className="text-xs text-gray-500">今日进度</p>
-          <p className="mt-1 text-sm font-medium text-gray-200">{completed} / {initialTotal}</p>
+        <div className="flex items-center gap-4">
+          {onExit ? (
+            <button type="button" onClick={onExit} className="inline-flex items-center gap-1.5 text-sm text-gray-300 hover:text-white">
+              <ArrowLeft size={16} /> {exitLabel}
+            </button>
+          ) : null}
+          <div>
+            <p className="text-xs text-gray-500">今日进度</p>
+            <p className="mt-1 text-sm font-medium text-gray-200">{completed} / {initialTotal}</p>
+          </div>
         </div>
         <div className="flex items-center gap-4 text-right text-xs text-gray-400">
           <span>到期 <strong className="ml-1 text-white">{remainingDue}</strong></span>

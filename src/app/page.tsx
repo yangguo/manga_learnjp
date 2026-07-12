@@ -7,6 +7,7 @@ import ReadingModeViewer from '@/components/ReadingModeViewer'
 import ImagePageAnalysisViewer from '@/components/ImagePageAnalysisViewer'
 import Header from '@/components/Header'
 import WordBankDrawer from '@/components/WordBankDrawer'
+import ReaderReviewOverlay from '@/components/ReaderReviewOverlay'
 import { motion, AnimatePresence } from 'framer-motion'
 import { AnalysisLanguage, AnalysisResult, ReadingModeResult, AnalysisMode } from '@/lib/types'
 import { AlertCircle, X } from 'lucide-react'
@@ -19,6 +20,12 @@ export default function Home() {
   const [analysisMode, setAnalysisMode] = useState<AnalysisMode>('image')
   const [imageAnalysisLanguage, setImageAnalysisLanguage] = useState<AnalysisLanguage>('zh')
   const [isWordBankOpen, setIsWordBankOpen] = useState(false)
+  const [isReviewOpen, setIsReviewOpen] = useState(false)
+
+  const openReview = () => {
+    setIsWordBankOpen(false)
+    setIsReviewOpen(true)
+  }
 
   const handleAnalysisComplete = (result: AnalysisResult) => {
     setAnalysisResult(result)
@@ -57,7 +64,10 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      <Header onOpenWordBank={() => setIsWordBankOpen(true)} />
+      <Header
+        onOpenWordBank={() => setIsWordBankOpen(true)}
+        onOpenReview={openReview}
+      />
       
       <main className="container mx-auto px-4 py-8">
         <motion.div
@@ -143,7 +153,12 @@ export default function Home() {
           </motion.div>
         </div>
       </main>
-      <WordBankDrawer open={isWordBankOpen} onClose={() => setIsWordBankOpen(false)} />
+      <WordBankDrawer
+        open={isWordBankOpen}
+        onClose={() => setIsWordBankOpen(false)}
+        onStartReview={openReview}
+      />
+      <ReaderReviewOverlay open={isReviewOpen} onClose={() => setIsReviewOpen(false)} />
     </div>
   )
 }

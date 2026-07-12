@@ -7,9 +7,10 @@ import WordBank from '@/components/WordBank'
 interface WordBankDrawerProps {
   open: boolean
   onClose: () => void
+  onStartReview?: () => void
 }
 
-export default function WordBankDrawer({ open, onClose }: WordBankDrawerProps) {
+export default function WordBankDrawer({ open, onClose, onStartReview }: WordBankDrawerProps) {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null)
 
   useEffect(() => {
@@ -51,7 +52,7 @@ export default function WordBankDrawer({ open, onClose }: WordBankDrawerProps) {
           </button>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <WordBank />
+          <WordBank onStartReview={onStartReview} />
         </div>
       </aside>
     </div>
