@@ -1,7 +1,7 @@
 # M5 Grammar Level And Bank Design
 
 日期: 2026-07-12
-状态: 降级实施中：语法收藏；语法等级数据准入受上游阻塞
+状态: 降级完成：语法收藏；语法等级数据准入受上游阻塞
 
 ## 目标
 
@@ -186,3 +186,12 @@ interface SavedGrammar {
 - 未命中稳定为未定级，数据失败时分析与收藏继续工作。
 - 语法收藏可添加、查看、删除、清空和持久化，且与词汇/SRS 隔离。
 - 单元测试、provider parity、lint、生产构建和桌面/移动浏览器验收全部通过。
+
+## 降级交付记录
+
+- 许可页可审查，但 N1–N5 grammar list 端点在本次准入时均为 HTTP 500；未创建 grammar level 数据、字典、等级 badge 或 AI 等级回退。
+- `grammar-bank-storage` v1 独立保存 pattern、解释、例句、原句、说明语言和收藏时间；损坏或重复持久化条目会被校验并去重。
+- Mokuro 面板保留所有非空教学语法点并支持收藏；基础语法不再被 AI 文案过滤。
+- 收藏页和 drawer 提供词汇/语法 tabs；Anki、复习和 SRS 仍只属于词汇。
+- `/sources` 公开 Tanos attribution、许可页快照、SHA-256 和当前无等级状态。
+- 功能提交：`d596e2d`、`7e049c9`、`932c00e`、`33d04bf`、`70b8ea1`、`425d502`、`1e0340f`。
