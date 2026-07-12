@@ -14,11 +14,13 @@ import {
   downloadTextFile,
   serializeWordsForAnki
 } from '@/lib/anki-export'
+import { resolveReviewEntry } from '@/lib/review-entry'
 import JLPTBadge from '@/components/JLPTBadge'
 import type { AnalysisLanguage, SavedGrammar, SavedWord } from '@/lib/types'
 
 interface WordBankProps {
   showBackHome?: boolean
+  onStartReview?: () => void
 }
 
 const UI_TEXT = {
@@ -181,7 +183,7 @@ function GrammarCard({ grammar }: { grammar: SavedGrammar }) {
   )
 }
 
-export default function WordBank({ showBackHome = false }: WordBankProps) {
+export default function WordBank({ showBackHome = false, onStartReview }: WordBankProps) {
   useWordBankJLPTCalibration()
   useGrammarBankJLPTCalibration()
   const words = useWordBankStore(state => state.words)
@@ -190,6 +192,7 @@ export default function WordBank({ showBackHome = false }: WordBankProps) {
   const clearGrammar = useGrammarBankStore(state => state.clearAll)
   const hydrated = useHydrated()
   const [activeTab, setActiveTab] = useState<'words' | 'grammar'>('words')
+  const reviewEntry = resolveReviewEntry(onStartReview)
   const activeCount = activeTab === 'words' ? words.length : grammars.length
   const hasActiveEntries = activeTab === 'words' ? words.length > 0 : grammars.length > 0
 
@@ -228,16 +231,28 @@ export default function WordBank({ showBackHome = false }: WordBankProps) {
         <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
           {activeTab === 'words' ? (
             <>
-              <Link
-                href="/review"
-                aria-disabled={!hydrated || words.length === 0}
-                className={`flex h-8 items-center gap-1.5 rounded-md border border-emerald-500/30 px-3 text-sm text-emerald-200 transition-colors hover:bg-emerald-500/10 ${
-                  !hydrated || words.length === 0 ? 'pointer-events-none opacity-40' : ''
-                }`}
-              >
-                <Brain size={15} />
-                <span>{t.startReview}</span>
-              </Link>
+              {reviewEntry.mode === 'inline' ? (
+                <button
+                  type="button"
+                  onClick={reviewEntry.onStart}
+                  disabled={!hydrated || words.length === 0}
+                  className="flex h-8 items-center gap-1.5 rounded-md border border-emerald-500/30 px-3 text-sm text-emerald-200 transition-colors hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Brain size={15} />
+                  <span>{t.startReview}</span>
+                </button>
+              ) : (
+                <Link
+                  href={reviewEntry.href}
+                  aria-disabled={!hydrated || words.length === 0}
+                  className={`flex h-8 items-center gap-1.5 rounded-md border border-emerald-500/30 px-3 text-sm text-emerald-200 transition-colors hover:bg-emerald-500/10 ${
+                    !hydrated || words.length === 0 ? 'pointer-events-none opacity-40' : ''
+                  }`}
+                >
+                  <Brain size={15} />
+                  <span>{t.startReview}</span>
+                </Link>
+              )}
               <button
                 type="button"
                 onClick={handleExport}

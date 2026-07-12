@@ -9,13 +9,15 @@ import { useGrammarBankStore } from '@/lib/grammar-bank-store'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useWordBankJLPTCalibration } from '@/hooks/useWordBankJLPTCalibration'
 import { useGrammarBankJLPTCalibration } from '@/hooks/useGrammarBankJLPTCalibration'
+import { resolveReviewEntry } from '@/lib/review-entry'
 import { getReviewSummary } from '@/lib/srs'
 
 interface HeaderProps {
   onOpenWordBank?: () => void
+  onOpenReview?: () => void
 }
 
-export default function Header({ onOpenWordBank }: HeaderProps) {
+export default function Header({ onOpenWordBank, onOpenReview }: HeaderProps) {
   useWordBankJLPTCalibration()
   useGrammarBankJLPTCalibration()
   const words = useWordBankStore(state => state.words)
@@ -25,6 +27,19 @@ export default function Header({ onOpenWordBank }: HeaderProps) {
   const [summaryNow, setSummaryNow] = useState(() => new Date())
   const savedCount = words.length + grammarCount
   const reviewCount = hydrated ? getReviewSummary(words, reviewCards, summaryNow).total : 0
+  const reviewEntry = resolveReviewEntry(onOpenReview)
+  const reviewClassName = 'flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-gray-200 transition-colors hover:bg-white/10 sm:px-3'
+  const reviewContent = (
+    <>
+      <Brain className="h-4 w-4" />
+      <span className="hidden sm:inline">复习</span>
+      {hydrated && reviewCount > 0 ? (
+        <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-xs font-medium text-emerald-300">
+          {reviewCount}
+        </span>
+      ) : null}
+    </>
+  )
 
   useEffect(() => {
     const timer = window.setInterval(() => setSummaryNow(new Date()), 30_000)
@@ -72,20 +87,26 @@ export default function Header({ onOpenWordBank }: HeaderProps) {
             >
               <Info className="h-5 w-5" />
             </Link>
-            <Link
-              href="/review"
-              aria-label="开始复习"
-              title="开始复习"
-              className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm text-gray-200 transition-colors hover:bg-white/10 sm:px-3"
-            >
-              <Brain className="h-4 w-4" />
-              <span className="hidden sm:inline">复习</span>
-              {hydrated && reviewCount > 0 ? (
-                <span className="rounded-full bg-emerald-500/20 px-1.5 py-0.5 text-xs font-medium text-emerald-300">
-                  {reviewCount}
-                </span>
-              ) : null}
-            </Link>
+            {reviewEntry.mode === 'inline' ? (
+              <button
+                type="button"
+                onClick={reviewEntry.onStart}
+                aria-label="开始复习"
+                title="开始复习"
+                className={reviewClassName}
+              >
+                {reviewContent}
+              </button>
+            ) : (
+              <Link
+                href={reviewEntry.href}
+                aria-label="开始复习"
+                title="开始复习"
+                className={reviewClassName}
+              >
+                {reviewContent}
+              </Link>
+            )}
             {onOpenWordBank ? (
               <button
                 type="button"
