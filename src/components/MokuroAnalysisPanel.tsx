@@ -4,12 +4,12 @@ import { motion } from 'framer-motion'
 import { BookOpen, ChevronDown, Loader2, Quote, Sparkles, Star } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { filterLearningGrammar } from '@/lib/analysis-filters'
+import { getVocabularyInTextOrder } from '@/lib/analysis-order'
 import { isPersistableAnalysis } from '@/lib/jlpt-calibration'
 import {
   formatJLPTLevelRange,
   getJLPTLevelsForBand,
-  groupGrammarByTarget,
-  groupVocabularyByTarget
+  groupGrammarByTarget
 } from '@/lib/jlpt-target'
 import { useJLPTTargetStore } from '@/lib/jlpt-target-store'
 import { useWordBankStore } from '@/lib/word-bank-store'
@@ -43,10 +43,7 @@ const UI_TEXT = {
     stretch: '超纲',
     unclassified: '未定级',
     foundation: '基础',
-    noFocus: '当前文本没有目标等级词汇。',
-    noStretch: '当前文本没有超纲词汇。',
-    noUnclassified: '当前文本没有未定级词汇。',
-    noFoundation: '当前文本没有基础词汇。',
+    noVocabulary: '当前文本没有需要显示的词汇。',
     noGrammarFocus: '当前文本没有目标等级语法。',
     noGrammarStretch: '当前文本没有超纲语法。',
     noGrammarUnclassified: '当前文本没有未定级语法。',
@@ -73,10 +70,7 @@ const UI_TEXT = {
     stretch: 'Stretch',
     unclassified: 'Unclassified',
     foundation: 'Foundation',
-    noFocus: 'No target-level vocabulary in this selection.',
-    noStretch: 'No stretch vocabulary in this selection.',
-    noUnclassified: 'No unclassified vocabulary in this selection.',
-    noFoundation: 'No foundation vocabulary in this selection.',
+    noVocabulary: 'No vocabulary to display in this selection.',
     noGrammarFocus: 'No target-level grammar in this selection.',
     noGrammarStretch: 'No stretch grammar in this selection.',
     noGrammarUnclassified: 'No unclassified grammar in this selection.',
@@ -152,9 +146,7 @@ export default function MokuroAnalysisPanel({
     )
   }
 
-  const vocabulary = analysisResult.sentences
-    .flatMap(sentence => sentence.words)
-  const vocabularyGroups = groupVocabularyByTarget(vocabulary, targetLevel)
+  const vocabulary = getVocabularyInTextOrder(analysisResult.sentences)
   const persistJLPT = isPersistableAnalysis(analysisResult)
 
   const grammar = analysisResult.sentences
@@ -201,48 +193,23 @@ export default function MokuroAnalysisPanel({
             {vocabulary.length} {t.item}{language === 'en' && vocabulary.length !== 1 ? 's' : ''}
           </span>
         </div>
-        <JLPTTargetSelector language={language} />
-        <VocabularyGroup
-          label={t.focus}
-          levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'focus'))}
-          emptyText={t.noFocus}
-          words={vocabularyGroups.focus}
-          toneClass="text-amber-300"
-          language={language}
-          sourceSentence={selectedText}
-          persistJLPT={persistJLPT}
-        />
-        <VocabularyGroup
-          label={t.stretch}
-          levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'stretch'))}
-          emptyText={t.noStretch}
-          words={vocabularyGroups.stretch}
-          toneClass="text-rose-300"
-          language={language}
-          sourceSentence={selectedText}
-          persistJLPT={persistJLPT}
-        />
-        <VocabularyGroup
-          label={t.unclassified}
-          levelLabel=""
-          emptyText={t.noUnclassified}
-          words={vocabularyGroups.unclassified}
-          toneClass="text-gray-300"
-          language={language}
-          sourceSentence={selectedText}
-          persistJLPT={persistJLPT}
-        />
-        <VocabularyGroup
-          label={t.foundation}
-          levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'foundation'))}
-          emptyText={t.noFoundation}
-          words={vocabularyGroups.foundation}
-          toneClass="text-emerald-300"
-          language={language}
-          sourceSentence={selectedText}
-          persistJLPT={persistJLPT}
-          collapsible
-        />
+        {vocabulary.length > 0 ? (
+          <ul className="mt-3 space-y-2">
+            {vocabulary.map((word, index) => (
+              <VocabularyCard
+                key={`${word.word}-${word.reading}-${index}`}
+                word={word}
+                language={language}
+                sourceSentence={selectedText}
+                persistJLPT={persistJLPT}
+              />
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 rounded-lg border border-white/10 bg-gray-950/40 p-3 text-sm text-gray-400">
+            {t.noVocabulary}
+          </p>
+        )}
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/5 p-4">
@@ -255,6 +222,7 @@ export default function MokuroAnalysisPanel({
         </div>
         {learningGrammar.length > 0 ? (
           <>
+            <JLPTTargetSelector language={language} />
             <GrammarGroup
               label={t.focus}
               levelLabel={formatJLPTLevelRange(getJLPTLevelsForBand(targetLevel, 'focus'))}
@@ -418,74 +386,6 @@ function GrammarGroup({
   }
 
   return <div className="border-t border-white/10 py-3 first:border-t-0">{header}{content}</div>
-}
-
-interface VocabularyGroupProps {
-  label: string
-  levelLabel: string
-  emptyText: string
-  words: WordAnalysis[]
-  toneClass: string
-  language: AnalysisLanguage
-  sourceSentence: string
-  persistJLPT: boolean
-  collapsible?: boolean
-}
-
-function VocabularyGroup({
-  label,
-  levelLabel,
-  emptyText,
-  words,
-  toneClass,
-  language,
-  sourceSentence,
-  persistJLPT,
-  collapsible = false
-}: VocabularyGroupProps) {
-  const header = (
-    <div className="flex min-h-7 items-center gap-2">
-      <span className={`text-sm font-semibold ${toneClass}`}>{label}</span>
-      {levelLabel ? <span className="text-xs text-gray-500">{levelLabel}</span> : null}
-      <span className="ml-auto text-xs tabular-nums text-gray-500">{words.length}</span>
-      {collapsible ? (
-        <ChevronDown className="h-4 w-4 text-gray-500 transition-transform group-open:rotate-180" />
-      ) : null}
-    </div>
-  )
-  const content = words.length > 0 ? (
-    <ul className="mt-2 space-y-2">
-      {words.map((word, index) => (
-        <VocabularyCard
-          key={`${word.word}-${word.reading}-${index}`}
-          word={word}
-          language={language}
-          sourceSentence={sourceSentence}
-          persistJLPT={persistJLPT}
-        />
-      ))}
-    </ul>
-  ) : (
-    <p className="mt-2 text-xs text-gray-500">{emptyText}</p>
-  )
-
-  if (collapsible) {
-    return (
-      <details className="group border-t border-white/10 py-3">
-        <summary className="cursor-pointer list-none rounded-md px-1 transition-colors hover:bg-white/5">
-          {header}
-        </summary>
-        <div className="px-1">{content}</div>
-      </details>
-    )
-  }
-
-  return (
-    <div className="border-t border-white/10 py-3 first:border-t-0">
-      {header}
-      {content}
-    </div>
-  )
 }
 
 interface VocabularyCardProps {
