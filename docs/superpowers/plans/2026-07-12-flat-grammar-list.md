@@ -26,22 +26,22 @@
 - Consumes: `SentenceAnalysis[]` and `filterLearningGrammar`.
 - Produces: `getLearningGrammarInTextOrder(sentences): GrammarPattern[]`.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```ts
 expect(getLearningGrammarInTextOrder([
-  { grammar: [n2Pattern, n5Pattern] },
-  { grammar: [unclassifiedPattern, n3Pattern] }
-]).map(pattern => pattern.pattern)).toEqual(['N2', 'Unclassified', 'N3'])
+  { grammar: [firstPattern, blankPattern] },
+  { grammar: [secondPattern, thirdPattern] }
+]).map(pattern => pattern.pattern)).toEqual(['first', 'second', 'third'])
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- src/lib/analysis-order.test.ts`
 
 Expected: FAIL because `getLearningGrammarInTextOrder` is not exported.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```ts
 export const getLearningGrammarInTextOrder = (
@@ -49,13 +49,13 @@ export const getLearningGrammarInTextOrder = (
 ): GrammarPattern[] => filterLearningGrammar(sentences.flatMap(sentence => sentence.grammar))
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm test -- src/lib/analysis-order.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/lib/analysis-order.ts src/lib/analysis-order.test.ts
@@ -71,27 +71,27 @@ git commit -m "test(jlpt): cover flat grammar ordering"
 - Consumes: `getLearningGrammarInTextOrder(analysisResult.sentences)`.
 - Produces: One grammar `<ul>` in source order, or the existing empty state.
 
-- [ ] **Step 1: Replace grouped grammar data with the helper**
+- [x] **Step 1: Replace grouped grammar data with the helper**
 
 ```ts
 const learningGrammar = getLearningGrammarInTextOrder(analysisResult.sentences)
 ```
 
-- [ ] **Step 2: Render one compact list**
+- [x] **Step 2: Render one compact list**
 
 Render `learningGrammar` as a single `ul` of `GrammarCard` instances, preserving the existing empty state for a zero-length list.
 
-- [ ] **Step 3: Remove obsolete level UI**
+- [x] **Step 3: Remove obsolete level UI**
 
 Remove `JLPTTargetSelector`, `useJLPTTargetStore`, `groupGrammarByTarget`, level-range imports, group-only copy, `GrammarGroup`, and `ChevronDown`.
 
-- [ ] **Step 4: Verify source checks**
+- [x] **Step 4: Verify source checks**
 
 Run: `npm test -- src/lib/analysis-order.test.ts && npm run lint -- --quiet`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/MokuroAnalysisPanel.tsx
@@ -103,17 +103,17 @@ git commit -m "fix(reader): flatten grammar analysis list"
 **Files:**
 - Modify: `docs/superpowers/specs/2026-07-12-flat-grammar-list-design.md`
 
-- [ ] **Step 1: Record completed validation in the design document**
+- [x] **Step 1: Record completed validation in the design document**
 
 Set status to `已完成` and list the source-order, filtering, test, lint, build, and browser checks completed.
 
-- [ ] **Step 2: Run complete verification**
+- [x] **Step 2: Run complete verification**
 
 Run: `npm test && npm run lint -- --quiet && npm run build && git diff --check`
 
 Expected: all commands exit 0.
 
-- [ ] **Step 3: Commit and push**
+- [x] **Step 3: Commit and push**
 
 ```bash
 git add docs/superpowers/specs/2026-07-12-flat-grammar-list-design.md
