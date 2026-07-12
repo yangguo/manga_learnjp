@@ -1,6 +1,6 @@
 'use client'
 
-import { BookOpen, Download, Star, Trash2 } from 'lucide-react'
+import { BookOpen, Brain, Download, Star, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import toast from 'react-hot-toast'
 import { useWordBankStore } from '@/lib/word-bank-store'
@@ -28,6 +28,7 @@ const UI_TEXT = {
     exportAnki: '导出 Anki',
     exportSuccess: '已导出',
     exportError: '导出失败，请重试。',
+    startReview: '开始复习',
     clearAll: '清空全部',
     clearConfirm: '确定要清空全部收藏的词吗?此操作不可撤销。',
     noSentence: '(无原句)',
@@ -45,6 +46,7 @@ const UI_TEXT = {
     exportAnki: 'Export Anki',
     exportSuccess: 'Exported',
     exportError: 'Export failed. Please try again.',
+    startReview: 'Start review',
     clearAll: 'Clear all',
     clearConfirm: 'Clear all saved words? This cannot be undone.',
     noSentence: '(no source sentence)',
@@ -137,6 +139,16 @@ export default function WordBank({ showBackHome = false }: WordBankProps) {
         <h1 className="text-xl font-bold text-white">{t.title}</h1>
         <span className="text-sm text-gray-400">{words.length} {t.count}</span>
         <div className="flex w-full items-center gap-2 sm:ml-auto sm:w-auto">
+          <Link
+            href="/review"
+            aria-disabled={!hydrated || words.length === 0}
+            className={`flex h-8 items-center gap-1.5 rounded-md border border-emerald-500/30 px-3 text-sm text-emerald-200 transition-colors hover:bg-emerald-500/10 ${
+              !hydrated || words.length === 0 ? 'pointer-events-none opacity-40' : ''
+            }`}
+          >
+            <Brain size={15} />
+            <span>{t.startReview}</span>
+          </Link>
           <button
             type="button"
             onClick={handleExport}
