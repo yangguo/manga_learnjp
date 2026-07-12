@@ -5,6 +5,7 @@ import { motion } from 'framer-motion'
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useWordBankStore } from '@/lib/word-bank-store'
+import { useGrammarBankStore } from '@/lib/grammar-bank-store'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useWordBankJLPTCalibration } from '@/hooks/useWordBankJLPTCalibration'
 import { getReviewSummary } from '@/lib/srs'
@@ -16,10 +17,11 @@ interface HeaderProps {
 export default function Header({ onOpenWordBank }: HeaderProps) {
   useWordBankJLPTCalibration()
   const words = useWordBankStore(state => state.words)
+  const grammarCount = useGrammarBankStore(state => state.grammars.length)
   const reviewCards = useWordBankStore(state => state.reviewCards)
   const hydrated = useHydrated()
   const [summaryNow, setSummaryNow] = useState(() => new Date())
-  const wordCount = words.length
+  const savedCount = words.length + grammarCount
   const reviewCount = hydrated ? getReviewSummary(words, reviewCards, summaryNow).total : 0
 
   useEffect(() => {
@@ -28,6 +30,9 @@ export default function Header({ onOpenWordBank }: HeaderProps) {
       if (event.key === 'word-bank-storage') {
         setSummaryNow(new Date())
         void useWordBankStore.persist?.rehydrate?.()
+      }
+      if (event.key === 'grammar-bank-storage') {
+        void useGrammarBankStore.persist?.rehydrate?.()
       }
     }
     window.addEventListener('storage', handleStorage)
@@ -88,9 +93,9 @@ export default function Header({ onOpenWordBank }: HeaderProps) {
               >
                 <BookOpen className="w-4 h-4" />
                 <span className="hidden sm:inline">生词本</span>
-                {hydrated && wordCount > 0 && (
+                {hydrated && savedCount > 0 && (
                   <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-300">
-                    {wordCount}
+                    {savedCount}
                   </span>
                 )}
               </button>
@@ -102,9 +107,9 @@ export default function Header({ onOpenWordBank }: HeaderProps) {
               >
                 <BookOpen className="w-4 h-4" />
                 <span className="hidden sm:inline">生词本</span>
-                {hydrated && wordCount > 0 && (
+                {hydrated && savedCount > 0 && (
                   <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-xs font-medium text-amber-300">
-                    {wordCount}
+                    {savedCount}
                   </span>
                 )}
               </Link>

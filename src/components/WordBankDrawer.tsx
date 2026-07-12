@@ -38,7 +38,7 @@ export default function WordBankDrawer({ open, onClose }: WordBankDrawerProps) {
         className="flex h-full w-full max-w-md flex-col border-l border-white/10 bg-gray-950 shadow-2xl"
       >
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-          <h2 id="word-bank-drawer-title" className="text-sm font-medium text-gray-200">生词本</h2>
+          <h2 id="word-bank-drawer-title" className="text-sm font-medium text-gray-200">收藏</h2>
           <button
             ref={closeButtonRef}
             type="button"
