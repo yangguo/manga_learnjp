@@ -2,9 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDailyReviewQueue,
   createSavedReviewCard,
+  formatReviewInterval,
   getReviewSummary,
   localDateKey,
   previewReviewIntervals,
+  reviewActionForKey,
   scheduleReview,
   type ReviewRating
 } from './srs'
@@ -144,5 +146,24 @@ describe('daily review queue', () => {
     expect(result.reviewCards).toEqual({})
     expect(words).toEqual(wordsSnapshot)
     expect(cards).toEqual(cardsSnapshot)
+  })
+})
+
+describe('review session controls', () => {
+  it('maps reveal and rating keys only when each action is available', () => {
+    expect(reviewActionForKey(' ', false)).toBe('reveal')
+    expect(reviewActionForKey('1', false)).toBeNull()
+    expect(reviewActionForKey('1', true)).toBe('again')
+    expect(reviewActionForKey('2', true)).toBe('hard')
+    expect(reviewActionForKey('3', true)).toBe('good')
+    expect(reviewActionForKey('4', true)).toBe('easy')
+    expect(reviewActionForKey(' ', true)).toBeNull()
+  })
+
+  it('formats preview intervals into compact Chinese labels', () => {
+    expect(formatReviewInterval(NOW, new Date(NOW.getTime() + 30_000))).toBe('<1分钟')
+    expect(formatReviewInterval(NOW, new Date(NOW.getTime() + 5 * 60_000))).toBe('5分钟')
+    expect(formatReviewInterval(NOW, new Date(NOW.getTime() + 2 * 3_600_000))).toBe('2小时')
+    expect(formatReviewInterval(NOW, new Date(NOW.getTime() + 3 * 86_400_000))).toBe('3天')
   })
 })

@@ -3,6 +3,7 @@ import { savedWordKey } from './word-bank'
 import type { SavedWord } from './types'
 
 export type ReviewRating = 'again' | 'hard' | 'good' | 'easy'
+export type ReviewAction = 'reveal' | ReviewRating
 
 export interface SavedReviewCard {
   key: string
@@ -111,6 +112,33 @@ export const localDateKey = (date: Date): string => {
   return `${year}-${month}-${day}`
 }
 
+export const reviewActionForKey = (
+  key: string,
+  answerVisible: boolean
+): ReviewAction | null => {
+  if (!answerVisible) return key === ' ' ? 'reveal' : null
+  return ({
+    '1': 'again',
+    '2': 'hard',
+    '3': 'good',
+    '4': 'easy'
+  } as const)[key as '1' | '2' | '3' | '4'] ?? null
+}
+
+export const formatReviewInterval = (now: Date, due: Date): string => {
+  const milliseconds = Math.max(0, due.getTime() - now.getTime())
+  if (milliseconds < 60_000) return '<1分钟'
+  const minutes = Math.round(milliseconds / 60_000)
+  if (minutes < 60) return `${minutes}分钟`
+  const hours = Math.round(milliseconds / 3_600_000)
+  if (hours < 24) return `${hours}小时`
+  const days = Math.round(milliseconds / 86_400_000)
+  if (days < 30) return `${days}天`
+  const months = Math.round(days / 30)
+  if (months < 12) return `${months}个月`
+  return `${Math.round(days / 365)}年`
+}
+
 const getQueueParts = (
   words: SavedWord[],
   reviewCards: Record<string, SavedReviewCard>,
@@ -123,7 +151,7 @@ const getQueueParts = (
   )
   const dueCards = Object.values(validCards)
     .filter(card => new Date(card.due).getTime() <= now.getTime())
-    .toSorted((a, b) => new Date(a.due).getTime() - new Date(b.due).getTime())
+    .sort((a, b) => new Date(a.due).getTime() - new Date(b.due).getTime())
   const today = localDateKey(now)
   const introducedToday = Object.values(validCards)
     .filter(card => localDateKey(new Date(card.introducedAt)) === today)
@@ -131,7 +159,7 @@ const getQueueParts = (
   const slots = Math.max(0, newLimit - introducedToday)
   const newWords = words
     .filter(word => !validCards[savedWordKey(word.word, word.reading)])
-    .toSorted((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
+    .sort((a, b) => new Date(b.savedAt).getTime() - new Date(a.savedAt).getTime())
     .slice(0, slots)
 
   return { validCards, dueCards, newWords }
