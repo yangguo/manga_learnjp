@@ -1,7 +1,7 @@
 # M5 Grammar Level And Bank Design
 
 日期: 2026-07-12
-状态: 详细设计完成，待实施
+状态: 降级实施中：语法收藏；语法等级数据准入受上游阻塞
 
 ## 目标
 
@@ -171,6 +171,13 @@ interface SavedGrammar {
 4. 生成统计和冲突清单通过人工审查。
 
 若任一门槛失败，M5 降级为“语法收藏”交付，不展示或持久化 JLPT 语法等级；不得用 AI 自报等级替代。
+
+## 2026-07-12 Source Gate Record
+
+- 许可页 `https://www.tanos.co.uk/jlpt/sharing/` 于 `2026-07-12T03:10:27Z` 返回 HTTP 200；完整响应 SHA-256 为 `ec041fa5ed97b59dd4d7d9749d4f3828049422a8da0404700ac12f64f32a8a56`。页面写明非售卖内容以 Creative Commons "BY" 许可并要求署名，版本未注明。
+- N1–N5 的 `https://www.tanos.co.uk/jlpt/jlpt{1..5}/grammar/` 在 curl、浏览器和网页提取器中均返回 HTTP 500，无法取得可结构化解析的五级列表。
+- 因第二项未满足，当前交付只实现语法收藏。不会创建或加载 grammar level 数据、不会展示语法 JLPT badge、不会改变 provider prompt 以索取 AI 等级。
+- 上游恢复后必须重新跑完整数据准入和静态数据生成流程，才可实施本设计中的等级、缓存和四分组部分。
 
 ## 完成定义
 
