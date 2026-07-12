@@ -4,6 +4,14 @@ import type { SavedWord } from './types'
 
 export type ReviewRating = 'again' | 'hard' | 'good' | 'easy'
 export type ReviewAction = 'reveal' | ReviewRating
+export type ReviewSessionView = 'loading' | 'error' | 'ready'
+
+export class ReviewWordUnavailableError extends Error {
+  constructor() {
+    super('This word is no longer saved')
+    this.name = 'ReviewWordUnavailableError'
+  }
+}
 
 export interface SavedReviewCard {
   key: string
@@ -27,7 +35,7 @@ export interface ReviewSummary {
 }
 
 export interface DailyReviewQueue {
-  queueKeys: string[]
+  queueKeys: readonly string[]
   reviewCards: Record<string, SavedReviewCard>
 }
 
@@ -125,6 +133,24 @@ export const reviewActionForKey = (
   } as const)[key as '1' | '2' | '3' | '4'] ?? null
 }
 
+export const reviewSessionView = (
+  hydrated: boolean,
+  storageReady: boolean,
+  queueKeys: readonly string[] | null,
+  loadError: string | null
+): ReviewSessionView => {
+  if (hydrated && (!storageReady || loadError)) return 'error'
+  if (!hydrated || queueKeys === null) return 'loading'
+  return 'ready'
+}
+
+export const nextQueueAfterReviewError = (
+  queueKeys: readonly string[],
+  error: unknown
+): readonly string[] => error instanceof ReviewWordUnavailableError
+  ? queueKeys.slice(1)
+  : queueKeys
+
 export const formatReviewInterval = (now: Date, due: Date): string => {
   const milliseconds = Math.max(0, due.getTime() - now.getTime())
   if (milliseconds < 60_000) return '<1分钟'
@@ -193,7 +219,7 @@ export const buildDailyReviewQueue = (
     return key
   })
   return {
-    queueKeys: [...dueCards.map(card => card.key), ...newKeys],
+    queueKeys: Object.freeze([...dueCards.map(card => card.key), ...newKeys]),
     reviewCards: nextCards
   }
 }

@@ -2,6 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { BookOpen, ChevronDown, Loader2, Quote, Sparkles, Star } from 'lucide-react'
+import toast from 'react-hot-toast'
 import { filterLearningGrammar } from '@/lib/analysis-filters'
 import { isPersistableAnalysis } from '@/lib/jlpt-calibration'
 import { formatJLPTLevelRange, getJLPTLevelsForBand, groupVocabularyByTarget } from '@/lib/jlpt-target'
@@ -368,11 +369,16 @@ interface WordSaveButtonProps {
 function WordSaveButton({ word, sourceSentence, persistJLPT }: WordSaveButtonProps) {
   const saved = useWordBankStore(state => state.isSaved(word.word, word.reading))
   const toggleWord = useWordBankStore(state => state.toggleWord)
+  const handleToggle = () => {
+    void toggleWord(word, sourceSentence, persistJLPT).catch(() => {
+      toast.error('保存生词失败，请重试。')
+    })
+  }
 
   return (
     <button
       type="button"
-      onClick={() => toggleWord(word, sourceSentence, persistJLPT)}
+      onClick={handleToggle}
       aria-label={saved ? 'Remove from word bank' : 'Save to word bank'}
       aria-pressed={saved}
       className={`shrink-0 rounded-full p-1 transition-colors hover:bg-white/10 ${

@@ -5,8 +5,11 @@ import {
   formatReviewInterval,
   getReviewSummary,
   localDateKey,
+  nextQueueAfterReviewError,
   previewReviewIntervals,
+  ReviewWordUnavailableError,
   reviewActionForKey,
+  reviewSessionView,
   scheduleReview,
   type ReviewRating
 } from './srs'
@@ -131,6 +134,7 @@ describe('daily review queue', () => {
     const result = buildDailyReviewQueue([old, newest, middle], {}, NOW, 2)
 
     expect(result.queueKeys).toEqual([keyFor(newest), keyFor(middle)])
+    expect(Object.isFrozen(result.queueKeys)).toBe(true)
   })
 
   it('filters orphan cards and does not mutate inputs', () => {
@@ -150,6 +154,13 @@ describe('daily review queue', () => {
 })
 
 describe('review session controls', () => {
+  it('shows hydration errors instead of leaving the session loading', () => {
+    expect(reviewSessionView(true, true, null, 'storage failed')).toBe('error')
+    expect(reviewSessionView(true, false, null, null)).toBe('error')
+    expect(reviewSessionView(true, true, null, null)).toBe('loading')
+    expect(reviewSessionView(true, true, [], null)).toBe('ready')
+  })
+
   it('maps reveal and rating keys only when each action is available', () => {
     expect(reviewActionForKey(' ', false)).toBe('reveal')
     expect(reviewActionForKey('1', false)).toBeNull()
@@ -158,6 +169,12 @@ describe('review session controls', () => {
     expect(reviewActionForKey('3', true)).toBe('good')
     expect(reviewActionForKey('4', true)).toBe('easy')
     expect(reviewActionForKey(' ', true)).toBeNull()
+  })
+
+  it('drops an externally deleted card but keeps other review errors in place', () => {
+    const queue = ['first', 'second'] as const
+    expect(nextQueueAfterReviewError(queue, new ReviewWordUnavailableError())).toEqual(['second'])
+    expect(nextQueueAfterReviewError(queue, new Error('storage failed'))).toBe(queue)
   })
 
   it('formats preview intervals into compact Chinese labels', () => {

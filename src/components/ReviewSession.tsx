@@ -8,8 +8,11 @@ import JLPTBadge from '@/components/JLPTBadge'
 import { useHydrated } from '@/hooks/useHydrated'
 import {
   formatReviewInterval,
+  nextQueueAfterReviewError,
   previewReviewIntervals,
+  ReviewWordUnavailableError,
   reviewActionForKey,
+  reviewSessionView,
   type ReviewRating
 } from '@/lib/srs'
 import { savedWordKey } from '@/lib/word-bank'
@@ -39,23 +42,30 @@ export default function ReviewSession() {
   const startReviewSession = useWordBankStore(state => state.startReviewSession)
   const rateReview = useWordBankStore(state => state.rateReview)
   const startedRef = useRef(false)
-  const [queueKeys, setQueueKeys] = useState<string[] | null>(null)
+  const [queueKeys, setQueueKeys] = useState<readonly string[] | null>(null)
   const [initialTotal, setInitialTotal] = useState(0)
   const [answerVisible, setAnswerVisible] = useState(false)
   const [previewAt, setPreviewAt] = useState<Date | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const storageReady = useWordBankStore.persist?.hasHydrated?.() ?? false
 
   useEffect(() => {
     if (!hydrated || startedRef.current) return
     startedRef.current = true
     let cancelled = false
-    queueMicrotask(() => {
+    queueMicrotask(async () => {
       if (cancelled) return
       try {
-        const keys = startReviewSession(new Date())
+        if (!(useWordBankStore.persist?.hasHydrated?.() ?? false)) {
+          throw new Error('无法读取本地复习进度，请检查浏览器存储权限')
+        }
+        const keys = await startReviewSession(new Date())
+        if (cancelled) return
         setQueueKeys(keys)
         setInitialTotal(keys.length)
       } catch (error) {
+        if (cancelled) return
         const message = error instanceof Error ? error.message : '无法读取复习进度'
         setLoadError(message)
         toast.error(message)
@@ -77,6 +87,12 @@ export default function ReviewSession() {
   const remainingTotal = queueKeys?.length ?? 0
   const remainingDue = remainingTotal - remainingNew
   const completed = initialTotal - remainingTotal
+  const sessionView = reviewSessionView(
+    hydrated,
+    storageReady,
+    queueKeys,
+    loadError
+  )
 
   const previews = useMemo(() => {
     if (!answerVisible || !currentCard || !previewAt) return null
@@ -93,17 +109,27 @@ export default function ReviewSession() {
     setAnswerVisible(true)
   }, [currentCard])
 
-  const submitRating = useCallback((rating: ReviewRating) => {
-    if (!answerVisible || !currentKey) return
+  const submitRating = useCallback(async (rating: ReviewRating) => {
+    if (!answerVisible || !currentKey || isSubmitting) return
+    setIsSubmitting(true)
     try {
-      rateReview(currentKey, rating, new Date())
+      await rateReview(currentKey, rating, new Date())
       setQueueKeys(keys => keys?.slice(1) ?? [])
       setAnswerVisible(false)
       setPreviewAt(null)
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : '保存复习结果失败')
+      if (error instanceof ReviewWordUnavailableError) {
+        setQueueKeys(keys => keys ? nextQueueAfterReviewError(keys, error) : [])
+        setAnswerVisible(false)
+        setPreviewAt(null)
+        toast('该词已在其他标签页删除，已跳过。')
+      } else {
+        toast.error(error instanceof Error ? error.message : '保存复习结果失败')
+      }
+    } finally {
+      setIsSubmitting(false)
     }
-  }, [answerVisible, currentKey, rateReview])
+  }, [answerVisible, currentKey, isSubmitting, rateReview])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -112,13 +138,13 @@ export default function ReviewSession() {
       if (!action) return
       event.preventDefault()
       if (action === 'reveal') revealAnswer()
-      else submitRating(action)
+      else void submitRating(action)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [answerVisible, revealAnswer, submitRating])
 
-  if (!hydrated || queueKeys === null) {
+  if (sessionView === 'loading') {
     return (
       <div className="flex min-h-[420px] items-center justify-center text-sm text-gray-400">
         正在准备今日复习...
@@ -126,11 +152,12 @@ export default function ReviewSession() {
     )
   }
 
-  if (loadError) {
+  if (sessionView === 'error') {
+    const message = loadError ?? '无法读取本地复习进度，请检查浏览器存储权限'
     return (
       <div className="mx-auto max-w-xl py-20 text-center">
         <h1 className="text-xl font-semibold text-white">无法载入复习进度</h1>
-        <p className="mt-2 break-words text-sm text-red-300">{loadError}</p>
+        <p className="mt-2 break-words text-sm text-red-300">{message}</p>
         <Link href="/words" className="mt-6 inline-flex items-center gap-2 text-sm text-amber-300 hover:text-amber-200">
           <BookOpen size={16} /> 返回生词本
         </Link>
@@ -169,8 +196,8 @@ export default function ReviewSession() {
         </div>
       </header>
 
-      <section className="flex flex-1 flex-col justify-center py-8 sm:py-12" aria-live="polite">
-        <div className="min-h-[300px] border-y border-white/10 bg-black/15 px-5 py-8 sm:min-h-[340px] sm:px-10 sm:py-10">
+      <section className="flex min-h-0 flex-1 flex-col justify-center py-6 sm:py-10" aria-live="polite">
+        <div className="h-[320px] overflow-y-auto border-y border-white/10 bg-black/15 px-5 py-8 sm:h-[360px] sm:px-10 sm:py-10">
           <div className="flex items-start justify-between gap-3">
             <span className="text-xs uppercase text-gray-500">{currentCard.reps === 0 ? '新词' : '复习'}</span>
             {answerVisible ? <JLPTBadge classification={currentWord.jlpt} language="zh" /> : null}
@@ -210,8 +237,9 @@ export default function ReviewSession() {
               <button
                 key={option.rating}
                 type="button"
-                onClick={() => submitRating(option.rating)}
-                className={`flex h-16 flex-col items-center justify-center rounded-md border bg-black/20 text-sm transition-colors ${option.className}`}
+                onClick={() => void submitRating(option.rating)}
+                disabled={isSubmitting}
+                className={`flex h-16 flex-col items-center justify-center rounded-md border bg-black/20 text-sm transition-colors disabled:cursor-wait disabled:opacity-60 ${option.className}`}
               >
                 <span className="font-medium">{option.label}</span>
                 <span className="mt-1 text-xs opacity-70">

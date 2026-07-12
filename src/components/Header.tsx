@@ -3,7 +3,7 @@
 import { BookOpen, Brain, Github, Heart, Info } from 'lucide-react'
 import { motion } from 'framer-motion'
 import Link from 'next/link'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useWordBankStore } from '@/lib/word-bank-store'
 import { useHydrated } from '@/hooks/useHydrated'
 import { useWordBankJLPTCalibration } from '@/hooks/useWordBankJLPTCalibration'
@@ -18,15 +18,23 @@ export default function Header({ onOpenWordBank }: HeaderProps) {
   const words = useWordBankStore(state => state.words)
   const reviewCards = useWordBankStore(state => state.reviewCards)
   const hydrated = useHydrated()
+  const [summaryNow, setSummaryNow] = useState(() => new Date())
   const wordCount = words.length
-  const reviewCount = hydrated ? getReviewSummary(words, reviewCards, new Date()).total : 0
+  const reviewCount = hydrated ? getReviewSummary(words, reviewCards, summaryNow).total : 0
 
   useEffect(() => {
+    const timer = window.setInterval(() => setSummaryNow(new Date()), 30_000)
     const handleStorage = (event: StorageEvent) => {
-      if (event.key === 'word-bank-storage') void useWordBankStore.persist.rehydrate()
+      if (event.key === 'word-bank-storage') {
+        setSummaryNow(new Date())
+        void useWordBankStore.persist?.rehydrate?.()
+      }
     }
     window.addEventListener('storage', handleStorage)
-    return () => window.removeEventListener('storage', handleStorage)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('storage', handleStorage)
+    }
   }, [])
 
   return (

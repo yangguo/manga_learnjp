@@ -28,6 +28,7 @@ const UI_TEXT = {
     exportAnki: '导出 Anki',
     exportSuccess: '已导出',
     exportError: '导出失败，请重试。',
+    updateError: '生词本更新失败，请重试。',
     startReview: '开始复习',
     clearAll: '清空全部',
     clearConfirm: '确定要清空全部收藏的词吗?此操作不可撤销。',
@@ -46,6 +47,7 @@ const UI_TEXT = {
     exportAnki: 'Export Anki',
     exportSuccess: 'Exported',
     exportError: 'Export failed. Please try again.',
+    updateError: 'Could not update the word bank. Please try again.',
     startReview: 'Start review',
     clearAll: 'Clear all',
     clearConfirm: 'Clear all saved words? This cannot be undone.',
@@ -73,6 +75,9 @@ const relativeTime = (iso: string): string => {
 
 function WordCard({ word }: { word: SavedWord }) {
   const removeWord = useWordBankStore(state => state.removeWord)
+  const handleRemove = () => {
+    void removeWord(word.word, word.reading).catch(() => toast.error(t.updateError))
+  }
   return (
     <li className="rounded-lg border border-white/10 bg-gray-950/40 p-3">
       <div className="flex items-start justify-between gap-3">
@@ -84,7 +89,7 @@ function WordCard({ word }: { word: SavedWord }) {
           <JLPTBadge classification={word.jlpt} language="zh" />
           <button
             type="button"
-            onClick={() => removeWord(word.word, word.reading)}
+            onClick={handleRemove}
             aria-label="Remove from word bank"
             title="Remove from word bank"
             className="shrink-0 rounded-full p-1 text-gray-500 transition-colors hover:bg-white/10 hover:text-red-300"
@@ -117,7 +122,9 @@ export default function WordBank({ showBackHome = false }: WordBankProps) {
   const hydrated = useHydrated()
 
   const handleClear = () => {
-    if (window.confirm(t.clearConfirm)) clearAll()
+    if (window.confirm(t.clearConfirm)) {
+      void clearAll().catch(() => toast.error(t.updateError))
+    }
   }
 
   const handleExport = () => {
