@@ -8,9 +8,11 @@ import { isPersistableAnalysis } from '@/lib/jlpt-calibration'
 import { formatJLPTLevelRange, getJLPTLevelsForBand, groupVocabularyByTarget } from '@/lib/jlpt-target'
 import { useJLPTTargetStore } from '@/lib/jlpt-target-store'
 import { useWordBankStore } from '@/lib/word-bank-store'
+import { useGrammarBankStore } from '@/lib/grammar-bank-store'
+import { toSavedGrammar } from '@/lib/grammar-bank'
 import JLPTBadge from '@/components/JLPTBadge'
 import JLPTTargetSelector from '@/components/JLPTTargetSelector'
-import type { AnalysisLanguage, AnalysisResult, WordAnalysis } from '@/lib/types'
+import type { AnalysisLanguage, AnalysisResult, GrammarPattern, WordAnalysis } from '@/lib/types'
 
 interface MokuroAnalysisPanelProps {
   analysisResult: AnalysisResult | null
@@ -44,7 +46,8 @@ const UI_TEXT = {
     pattern: '个语法点',
     noGrammar: '没有需要特别学习的语法点。',
     example: '例句',
-    jlptUnavailable: 'JLPT 词表暂不可用，当前定级不会写入缓存。'
+    jlptUnavailable: 'JLPT 词表暂不可用，当前定级不会写入缓存。',
+    grammarSaveError: '保存语法失败，请重试。'
   },
   en: {
     selectedText: 'Selected text',
@@ -69,7 +72,8 @@ const UI_TEXT = {
     pattern: 'pattern',
     noGrammar: 'No grammar patterns need special focus in this selection.',
     example: 'Example',
-    jlptUnavailable: 'JLPT data is unavailable. Current classifications will not be saved.'
+    jlptUnavailable: 'JLPT data is unavailable. Current classifications will not be saved.',
+    grammarSaveError: 'Could not save grammar. Please try again.'
   }
 } satisfies Record<AnalysisLanguage, Record<string, string>>
 
@@ -238,18 +242,14 @@ export default function MokuroAnalysisPanel({
         {learningGrammar.length > 0 ? (
           <ul className="space-y-2">
             {learningGrammar.map((pattern, index) => (
-              <li
+              <GrammarCard
                 key={`${pattern.pattern}-${index}`}
-                className="rounded-lg border border-white/10 bg-gray-950/40 p-3"
-              >
-                <p className="font-japanese font-semibold text-white">
-                  {pattern.pattern}
-                </p>
-                <p className="mt-1 text-sm text-gray-100">{pattern.explanation}</p>
-                <p className="mt-1 text-xs italic text-gray-500">
-                  {t.example}: <span className="font-japanese text-gray-400">{pattern.example}</span>
-                </p>
-              </li>
+                pattern={pattern}
+                language={language}
+                sourceSentence={selectedText}
+                exampleLabel={t.example}
+                saveError={t.grammarSaveError}
+              />
             ))}
           </ul>
         ) : (
@@ -259,6 +259,52 @@ export default function MokuroAnalysisPanel({
         )}
       </section>
     </motion.div>
+  )
+}
+
+function GrammarCard({
+  pattern,
+  language,
+  sourceSentence,
+  exampleLabel,
+  saveError
+}: {
+  pattern: GrammarPattern
+  language: AnalysisLanguage
+  sourceSentence: string
+  exampleLabel: string
+  saveError: string
+}) {
+  const saved = useGrammarBankStore(state => state.isSaved(pattern.pattern))
+  const toggleGrammar = useGrammarBankStore(state => state.toggleGrammar)
+  const handleToggle = () => {
+    void toggleGrammar(toSavedGrammar(pattern, sourceSentence, language, new Date().toISOString()))
+      .catch(() => toast.error(saveError))
+  }
+
+  return (
+    <li className="rounded-lg border border-white/10 bg-gray-950/40 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="font-japanese font-semibold text-white">{pattern.pattern}</p>
+        <button
+          type="button"
+          onClick={handleToggle}
+          aria-label={saved ? 'Remove grammar from collection' : 'Save grammar to collection'}
+          aria-pressed={saved}
+          className={`shrink-0 rounded-full p-1 transition-colors hover:bg-white/10 ${
+            saved ? 'text-amber-300' : 'text-gray-500'
+          }`}
+        >
+          <Star size={16} className={saved ? 'fill-current' : ''} />
+        </button>
+      </div>
+      <p className="mt-1 text-sm text-gray-100">{pattern.explanation}</p>
+      {pattern.example ? (
+        <p className="mt-1 text-xs italic text-gray-500">
+          {exampleLabel}: <span className="font-japanese text-gray-400">{pattern.example}</span>
+        </p>
+      ) : null}
+    </li>
   )
 }
 
