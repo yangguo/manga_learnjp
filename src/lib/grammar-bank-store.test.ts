@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { useGrammarBankStore } from './grammar-bank-store'
+import { migrateGrammarBankState, useGrammarBankStore } from './grammar-bank-store'
 import { savedGrammarKey, toSavedGrammar } from './grammar-bank'
 import type { GrammarPattern } from './types'
 
@@ -19,6 +19,16 @@ describe('grammar bank store', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('drops malformed persisted grammar while preserving valid entries', () => {
+    expect(migrateGrammarBankState({
+      grammars: [
+        entry,
+        { ...entry, pattern: '  ', savedAt: 'not-a-date' },
+        { ...entry, pattern: '〜はずだ', language: 'fr' }
+      ]
+    })).toEqual({ grammars: [entry] })
   })
 
   it('persists grammar independently from the word bank state', async () => {

@@ -1,12 +1,34 @@
 import { create } from 'zustand'
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware'
 import type { SavedGrammar } from './types'
-import { addGrammar, isSavedGrammar, removeGrammar, toggleGrammar } from './grammar-bank'
+import { addGrammar, isSavedGrammar, normalizeGrammarPattern, removeGrammar, toggleGrammar } from './grammar-bank'
 
 const STORAGE_KEY = 'grammar-bank-storage'
 
 interface GrammarBankSnapshot {
   grammars: SavedGrammar[]
+}
+
+const isValidSavedGrammar = (value: unknown): value is SavedGrammar => {
+  if (!value || typeof value !== 'object') return false
+  const grammar = value as Partial<SavedGrammar>
+  return typeof grammar.pattern === 'string'
+    && normalizeGrammarPattern(grammar.pattern).length > 0
+    && typeof grammar.explanation === 'string'
+    && typeof grammar.example === 'string'
+    && (grammar.sourceSentence === null || typeof grammar.sourceSentence === 'string')
+    && (grammar.language === 'zh' || grammar.language === 'en')
+    && typeof grammar.savedAt === 'string'
+    && Number.isFinite(Date.parse(grammar.savedAt))
+}
+
+export const migrateGrammarBankState = (persisted: unknown): GrammarBankSnapshot => {
+  const state = persisted as { grammars?: unknown }
+  return {
+    grammars: Array.isArray(state?.grammars)
+      ? state.grammars.filter(isValidSavedGrammar)
+      : []
+  }
 }
 
 const getBrowserStorage = (): Storage | null => {
@@ -20,7 +42,7 @@ const readSnapshot = (fallback: GrammarBankSnapshot): GrammarBankSnapshot => {
   const raw = storage.getItem(STORAGE_KEY)
   if (raw === null) return fallback
   const parsed = JSON.parse(raw) as { state?: { grammars?: unknown } }
-  return { grammars: Array.isArray(parsed.state?.grammars) ? parsed.state.grammars as SavedGrammar[] : [] }
+  return migrateGrammarBankState(parsed.state)
 }
 
 const writeSnapshot = (snapshot: GrammarBankSnapshot): void => {
@@ -102,6 +124,11 @@ export const useGrammarBankStore = create<GrammarBankState>()(persist(
     name: STORAGE_KEY,
     storage: persistStorage,
     version: 1,
+    migrate: persisted => migrateGrammarBankState(persisted),
+    merge: (persisted, current) => ({
+      ...current,
+      ...migrateGrammarBankState(persisted)
+    }),
     partialize: state => ({ grammars: state.grammars })
   }
 ))
