@@ -87,7 +87,10 @@ export async function loadJLPTDictionary(
       datasetVersion?: unknown
       checksums?: { dataSha256?: unknown }
     }
-    const dataText = await dataResponse.text()
+    // Normalize CRLF -> LF before digesting: the manifest stores the LF hash, but
+    // a Windows checkout (core.autocrlf) serves CRLF. Lone CR is left untouched so
+    // the digest matches the generated LF content exactly.
+    const dataText = (await dataResponse.text()).replace(/\r\n/g, '\n')
     const data = JSON.parse(dataText) as Partial<DataFile>
     if (manifest.schemaVersion !== 1) {
       throw new Error('JLPT manifest schema is invalid')
