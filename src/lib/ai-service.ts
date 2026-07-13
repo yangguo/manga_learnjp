@@ -1145,10 +1145,19 @@ function validateMangaAnalysisResult(result: any, source: string): boolean {
 export class OpenAIService {
   private apiKey: string
   private model: string
+  readonly chatCompletionsUrl: string
 
   constructor(apiKey: string, model?: string) {
     this.apiKey = apiKey
     this.model = model || process.env.OPENAI_MODEL || 'gpt-4-vision-preview'
+    // Honor OPENAI_BASE_URL (the OpenAI SDK's standard env var) so compatible
+    // endpoints like Volcengine ARK (https://…/api/v3) or proxies work. A base
+    // URL that already carries a version segment (/v1, /api/v3, …) is used as-is;
+    // a bare host gets /v1 appended. Trailing slashes are stripped.
+    const base = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/+$/, '')
+    this.chatCompletionsUrl = /\/v\d+(\/|$)/.test(base)
+      ? `${base}/chat/completions`
+      : `${base}/v1/chat/completions`
   }
 
   async analyzeText(text: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
@@ -1198,7 +1207,7 @@ export class OpenAIService {
   }
 
   private async analyzeSingleBatch(text: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout(this.chatCompletionsUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -1255,7 +1264,7 @@ export class OpenAIService {
   }
 
   async analyzeImage(imageBase64: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout(this.chatCompletionsUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -1323,7 +1332,7 @@ export class OpenAIService {
   }
 
   async analyzeMangaImage(imageBase64: string): Promise<MangaAnalysisResult> {
-    const response = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const response = await fetchWithTimeout(this.chatCompletionsUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -1428,7 +1437,7 @@ IMPORTANT:
 `
 
     console.log('🔍 Step 1: Detecting text and locations...')
-    const detectionResponse = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+    const detectionResponse = await fetchWithTimeout(this.chatCompletionsUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${this.apiKey}`,
@@ -1519,7 +1528,7 @@ IMPORTANT:
 `
 
         try {
-          const analysisResponse = await fetchWithTimeout('https://api.openai.com/v1/chat/completions', {
+          const analysisResponse = await fetchWithTimeout(this.chatCompletionsUrl, {
             method: 'POST',
             headers: {
               'Authorization': `Bearer ${this.apiKey}`,

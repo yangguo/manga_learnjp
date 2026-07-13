@@ -92,7 +92,11 @@ export const combineBatchResults = (batches: BatchResult[]): Omit<AnalysisResult
   }
 
   if (batches.every(b => b.status === 'failed')) {
-    throw new Error('All batches failed to process')
+    // Surface the first real failure cause instead of a generic message, so the
+    // caller (and ultimately the user) sees e.g. "OpenAI API error: 401" rather
+    // than an unhelpful "All batches failed to process".
+    const firstError = batches.find(b => b.error)?.error ?? 'unknown error'
+    throw new Error(`All batches failed to process: ${firstError}`)
   }
 
   if (batches.length === 1 && batches[0].status === 'ok') {

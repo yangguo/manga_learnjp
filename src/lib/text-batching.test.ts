@@ -99,8 +99,11 @@ describe('combineBatchResults', () => {
     expect(result.sentences[1].words).toEqual([])
   })
 
-  it('throws when every batch failed', () => {
-    const failed: BatchResult = { sentences: [], translation: '', extractedText: '', summary: '', status: 'failed', error: 'x' }
+  it('throws when every batch failed, surfacing the first real error', () => {
+    const failed: BatchResult = { sentences: [], translation: '', extractedText: '', summary: '', status: 'failed', error: 'OpenAI API error: 401' }
+    // The generic prefix is preserved for callers matching on it...
     expect(() => combineBatchResults([failed])).toThrow('All batches failed to process')
+    // ...but the real cause must be visible too, not just the generic prefix.
+    expect(() => combineBatchResults([failed])).toThrow('OpenAI API error: 401')
   })
 })
