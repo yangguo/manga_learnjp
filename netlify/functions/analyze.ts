@@ -1,6 +1,6 @@
 import { Handler, HandlerEvent, HandlerContext } from '@netlify/functions'
-import { AIAnalysisService, type AnalysisResult } from '../src/lib/ai-service'
-import { type AIProvider, type AnalysisLanguage, type OpenAIFormatSettings, type ModelSettings, type APIKeySettings, type MangaAnalysisResult, type ReadingModeResult } from '../src/lib/types'
+import { AIAnalysisService } from '../src/lib/ai-service'
+import { type AIProvider, type AnalysisLanguage, type AnalysisResult, type OpenAIFormatSettings, type ModelSettings, type APIKeySettings, type MangaAnalysisResult, type ReadingModeResult } from '../src/lib/types'
 import { runWithTransientAnalysisRetry } from '../src/lib/transient-analysis'
 
 // Simple in-memory cache to track failed endpoints (resets on function restart)
