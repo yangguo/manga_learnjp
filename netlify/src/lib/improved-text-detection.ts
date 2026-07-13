@@ -235,7 +235,7 @@ Use the same JSON format as before.`
    * Call OpenAI with custom prompt
    */
   private async callOpenAIWithCustomPrompt(openaiService: any, imageBase64: string, customPrompt: string): Promise<any> {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch(openaiService.chatCompletionsUrl ?? 'https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${openaiService.apiKey}`,

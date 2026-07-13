@@ -18,11 +18,6 @@ export async function GET() {
 
     const aiService = new AIAnalysisService(openaiApiKey, openaiFormatSettings)
     const availableProviders = aiService.getAvailableProviders()
-    
-    // OpenAI-format is always available as it can be configured via env
-    if (!availableProviders.includes('openai-format')) {
-      availableProviders.push('openai-format')
-    }
 
     // Smart default: prefer openai if available, otherwise openai-format
     const smartDefault: string = availableProviders.includes('openai') ? 'openai' : 'openai-format'
