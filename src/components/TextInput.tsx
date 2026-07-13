@@ -59,6 +59,10 @@ export default function TextInput({
       onError('请输入或上传日文文本。')
       return
     }
+    if (new TextEncoder().encode(trimmed).length > MAX_TEXT_BYTES) {
+      onError('文本过大(超过 100KB),请截取后再试。')
+      return
+    }
     setIsLoading(true)
     try {
       const result = await analyzeText(trimmed, { language: analysisLanguage })
