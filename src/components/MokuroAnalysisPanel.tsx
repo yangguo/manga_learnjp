@@ -75,7 +75,10 @@ export default function MokuroAnalysisPanel({
     </div>
   ) : null
 
-  if (!selectedText) {
+  // When hideSelectedText is set, the caller (e.g. TextViewer) wants the full
+  // analysis rendered directly with no "select a block" interaction, so the
+  // empty-state prompt below does not apply even without a selectedText.
+  if (!selectedText && !hideSelectedText) {
     return (
       <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
         <Quote className="mx-auto mb-3 h-8 w-8 text-gray-500" />
@@ -224,7 +227,7 @@ function GrammarCard({
 }: {
   pattern: GrammarPattern
   language: AnalysisLanguage
-  sourceSentence: string
+  sourceSentence: string | null
   exampleLabel: string
   saveError: string
 }) {
@@ -267,7 +270,7 @@ function GrammarCard({
 interface VocabularyCardProps {
   word: WordAnalysis
   language: AnalysisLanguage
-  sourceSentence: string
+  sourceSentence: string | null
   persistJLPT: boolean
 }
 
