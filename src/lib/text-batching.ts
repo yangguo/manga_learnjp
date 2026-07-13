@@ -75,16 +75,16 @@ export const createTextBatches = (
   return batches
 }
 
-const PLACEHOLDER_VOCABULARY: SentenceAnalysis['vocabulary'] = []
+const PLACEHOLDER_WORDS: SentenceAnalysis['words'] = []
 const PLACEHOLDER_GRAMMAR: SentenceAnalysis['grammar'] = []
 
 const failedPlaceholderSentence = (batchIndex: number, error: string): SentenceAnalysis => ({
   sentence: `[第${batchIndex + 1}段分析失败: ${error}]`,
   translation: '',
-  vocabulary: PLACEHOLDER_VOCABULARY,
+  words: PLACEHOLDER_WORDS,
   grammar: PLACEHOLDER_GRAMMAR,
   context: ''
-} as unknown as SentenceAnalysis)
+})
 
 export const combineBatchResults = (batches: BatchResult[]): Omit<AnalysisResult, 'provider'> => {
   if (batches.length === 0) {
@@ -101,8 +101,7 @@ export const combineBatchResults = (batches: BatchResult[]): Omit<AnalysisResult
       extractedText: b.extractedText,
       sentences: b.sentences,
       translation: b.translation,
-      summary: b.summary,
-      context: ''
+      summary: b.summary
     }
   }
 
@@ -126,7 +125,6 @@ export const combineBatchResults = (batches: BatchResult[]): Omit<AnalysisResult
     extractedText: extractedTexts.join(''),
     sentences: allSentences,
     translation: translations.join(' '),
-    summary: `已合并 ${batches.length} 段分析结果(成功 ${okCount} 段,共 ${allSentences.length} 句)。整体总结见各段翻译与语法标注。`,
-    context: ''
+    summary: `已合并 ${batches.length} 段分析结果(成功 ${okCount} 段,共 ${allSentences.length} 句)。整体总结见各段翻译与语法标注。`
   }
 }

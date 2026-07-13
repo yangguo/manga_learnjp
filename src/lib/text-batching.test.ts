@@ -66,15 +66,15 @@ describe('combineBatchResults', () => {
   })
 
   it('returns the single batch directly when only one batch is provided', () => {
-    const batch = okBatch([{ sentence: 'テスト。', translation: '', vocabulary: [], grammar: [], context: '' } as unknown as SentenceAnalysis], '翻訳')
+    const batch = okBatch([{ sentence: 'テスト。', translation: '', words: [], grammar: [], context: '' }], '翻訳')
     const result = combineBatchResults([batch])
     expect(result.summary).toBe('single summary')
     expect(result.sentences).toHaveLength(1)
   })
 
   it('merges sentences translations and extractedText across batches', () => {
-    const b1 = okBatch([{ sentence: 'あ。', translation: '', vocabulary: [], grammar: [], context: '' } as unknown as SentenceAnalysis], 'A')
-    const b2 = okBatch([{ sentence: 'い。', translation: '', vocabulary: [], grammar: [], context: '' } as unknown as SentenceAnalysis], 'B')
+    const b1 = okBatch([{ sentence: 'あ。', translation: '', words: [], grammar: [], context: '' }], 'A')
+    const b2 = okBatch([{ sentence: 'い。', translation: '', words: [], grammar: [], context: '' }], 'B')
     const result = combineBatchResults([b1, b2])
     expect(result.sentences.map(s => s.sentence)).toEqual(['あ。', 'い。'])
     expect(result.translation).toBe('A B')
@@ -82,21 +82,21 @@ describe('combineBatchResults', () => {
   })
 
   it('marks the summary as multi-batch combined instead of faking an overall summary', () => {
-    const b1 = okBatch([{ sentence: 'あ。', translation: '', vocabulary: [], grammar: [], context: '' } as unknown as SentenceAnalysis], 'A')
-    const b2 = okBatch([{ sentence: 'い。', translation: '', vocabulary: [], grammar: [], context: '' } as unknown as SentenceAnalysis], 'B')
+    const b1 = okBatch([{ sentence: 'あ。', translation: '', words: [], grammar: [], context: '' }], 'A')
+    const b2 = okBatch([{ sentence: 'い。', translation: '', words: [], grammar: [], context: '' }], 'B')
     const result = combineBatchResults([b1, b2])
     expect(result.summary).toContain('2')
     expect(result.summary).not.toBe('single summary')
   })
 
   it('inserts a placeholder sentence for a failed batch so content does not silently vanish', () => {
-    const ok = okBatch([{ sentence: 'あ。', translation: '', vocabulary: [], grammar: [], context: '' } as unknown as SentenceAnalysis], 'A')
+    const ok = okBatch([{ sentence: 'あ。', translation: '', words: [], grammar: [], context: '' }], 'A')
     const failed: BatchResult = { sentences: [], translation: '', extractedText: '', summary: '', status: 'failed', error: 'timeout' }
     const result = combineBatchResults([ok, failed])
     expect(result.sentences).toHaveLength(2)
     expect(result.sentences[1].sentence).toContain('失败')
     expect(result.sentences[1].grammar).toEqual([])
-    expect(result.sentences[1].vocabulary).toEqual([])
+    expect(result.sentences[1].words).toEqual([])
   })
 
   it('throws when every batch failed', () => {
