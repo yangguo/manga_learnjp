@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { AIAnalysisService, type AnalysisResult } from '@/lib/ai-service'
+import { AIAnalysisService } from '@/lib/ai-service'
 import { runWithTransientAnalysisRetry } from '@/lib/transient-analysis'
-import { type AIProvider, type AnalysisLanguage, type OpenAIFormatSettings, type MangaAnalysisResult, type ReadingModeResult } from '@/lib/types'
+import { type AIProvider, type AnalysisLanguage, type AnalysisResult, type OpenAIFormatSettings, type MangaAnalysisResult, type ReadingModeResult } from '@/lib/types'
 
 interface AnalysisRequest {
   text?: string

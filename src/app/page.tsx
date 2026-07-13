@@ -5,6 +5,8 @@ import ImageUploader from '@/components/ImageUploader'
 import MokuroReader from '@/components/MokuroReader'
 import ReadingModeViewer from '@/components/ReadingModeViewer'
 import ImagePageAnalysisViewer from '@/components/ImagePageAnalysisViewer'
+import TextInput from '@/components/TextInput'
+import TextViewer from '@/components/TextViewer'
 import Header from '@/components/Header'
 import WordBankDrawer from '@/components/WordBankDrawer'
 import ReaderReviewOverlay from '@/components/ReaderReviewOverlay'
@@ -118,16 +120,27 @@ export default function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.2 }}
           >
-            <ImageUploader
-              onAnalysisComplete={handleAnalysisComplete}
-              onReadingModeComplete={handleReadingModeComplete}
-              onOriginalImageChange={handleOriginalImageChange}
-              onError={handleError}
-              analysisMode={analysisMode}
-              onModeChange={setMode}
-              analysisLanguage={imageAnalysisLanguage}
-              onAnalysisLanguageChange={setImageAnalysisLanguage}
-            />
+            {analysisMode === 'text' ? (
+              <TextInput
+                onAnalysisComplete={handleAnalysisComplete}
+                onError={handleError}
+                analysisLanguage={imageAnalysisLanguage}
+                onAnalysisLanguageChange={setImageAnalysisLanguage}
+                analysisMode={analysisMode}
+                onModeChange={setMode}
+              />
+            ) : (
+              <ImageUploader
+                onAnalysisComplete={handleAnalysisComplete}
+                onReadingModeComplete={handleReadingModeComplete}
+                onOriginalImageChange={handleOriginalImageChange}
+                onError={handleError}
+                analysisMode={analysisMode}
+                onModeChange={setMode}
+                analysisLanguage={imageAnalysisLanguage}
+                onAnalysisLanguageChange={setImageAnalysisLanguage}
+              />
+            )}
           </motion.div>
 
           <motion.div
@@ -137,6 +150,10 @@ export default function Home() {
           >
             {analysisMode === 'mokuro' ? (
               <MokuroReader />
+            ) : analysisMode === 'text' ? (
+              analysisResult ? (
+                <TextViewer analysisResult={analysisResult} language={imageAnalysisLanguage} />
+              ) : null
             ) : readingModeResult ? (
               <ReadingModeViewer
                 key={readingModeResult.imageData}

@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Upload, FileImage, Loader2, CheckCircle, X, FileJson, Languages, type LucideIcon } from 'lucide-react'
+import { Upload, FileImage, Loader2, CheckCircle, X, FileJson, FileText, Languages, type LucideIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ANALYSIS_MODE_OPTIONS, IMAGE_ANALYSIS_LANGUAGE_OPTIONS } from '@/lib/analysis-modes'
 import { SUPPORTED_IMAGE_TYPES, type AnalysisLanguage, type AnalysisResult, type ReadingModeResult, type AnalysisMode } from '@/lib/types'
@@ -19,6 +19,10 @@ const MODE_VISUALS: Record<AnalysisMode, { icon: LucideIcon; accent: string }> =
   mokuro: {
     icon: FileJson,
     accent: 'from-amber-500 to-orange-500'
+  },
+  text: {
+    icon: FileText,
+    accent: 'from-purple-500 to-pink-500'
   }
 }
 
