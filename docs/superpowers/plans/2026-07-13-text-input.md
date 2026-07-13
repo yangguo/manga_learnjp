@@ -1,6 +1,8 @@
 # 纯文本输入 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Status:** Complete. All 8 tasks shipped on `feat/text-input` (PR #17). Verification: `npm test` 238/238, `npm run lint` clean, `npm run build` green. Follow-up: paste-box 100KB guard added (commit 0cd4ff6). Netlify mirror synced.
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** 让用户粘贴日文文本或上传 `.txt` 文件进行分析,复用现有 AI 讲解/JLPT/生词本/SRS 闭环,并修复 `analyzeText` 共享路径的三个分批债务。
 
@@ -64,7 +66,7 @@ export interface BatchResult {
 
 `SentenceAnalysis` 与 `AnalysisResult` 从 `./types` 导入。`combineBatchResults` 返回 `AnalysisResult`(不含 provider,由调用方补)。
 
-- [ ] **Step 1: Write the failing test (splitTextIntoSentences)**
+- [x] **Step 1: Write the failing test (splitTextIntoSentences)**
 
 Create `src/lib/text-batching.test.ts`:
 
@@ -92,12 +94,12 @@ describe('splitTextIntoSentences', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- src/lib/text-batching.test.ts`
 Expected: FAIL — module `./text-batching` not found.
 
-- [ ] **Step 3: Write minimal implementation for splitTextIntoSentences**
+- [x] **Step 3: Write minimal implementation for splitTextIntoSentences**
 
 Create `src/lib/text-batching.ts`:
 
@@ -143,12 +145,12 @@ export const splitTextIntoSentences = (text: string): string[] => {
 
 (Leave `createTextBatches` and `combineBatchResults` for Steps 5/9 — but to satisfy imports in the test file header, add stub exports now that throw, OR write tests incrementally. We add real exports in later steps; to keep this step's test compiling, only import `splitTextIntoSentences` and `MAX_BATCH_CHARS` in this step's test. Adjust the test import line to: `import { splitTextIntoSentences, MAX_BATCH_CHARS } from './text-batching'`.)
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `npm test -- src/lib/text-batching.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing test (createTextBatches)**
+- [x] **Step 5: Write the failing test (createTextBatches)**
 
 Append to `src/lib/text-batching.test.ts`:
 
@@ -184,12 +186,12 @@ describe('createTextBatches', () => {
 })
 ```
 
-- [ ] **Step 6: Run test to verify it fails**
+- [x] **Step 6: Run test to verify it fails**
 
 Run: `npm test -- src/lib/text-batching.test.ts`
 Expected: FAIL — `createTextBatches` not exported.
 
-- [ ] **Step 7: Write minimal implementation for createTextBatches**
+- [x] **Step 7: Write minimal implementation for createTextBatches**
 
 Append to `src/lib/text-batching.ts`:
 
@@ -234,12 +236,12 @@ export const createTextBatches = (
 }
 ```
 
-- [ ] **Step 8: Run test to verify it passes**
+- [x] **Step 8: Run test to verify it passes**
 
 Run: `npm test -- src/lib/text-batching.test.ts`
 Expected: PASS.
 
-- [ ] **Step 9: Write the failing test (combineBatchResults)**
+- [x] **Step 9: Write the failing test (combineBatchResults)**
 
 Append to `src/lib/text-batching.test.ts`:
 
@@ -303,12 +305,12 @@ describe('combineBatchResults', () => {
 
 Add `import type { SentenceAnalysis } from './types'` to the test file top.
 
-- [ ] **Step 10: Run test to verify it fails**
+- [x] **Step 10: Run test to verify it fails**
 
 Run: `npm test -- src/lib/text-batching.test.ts`
 Expected: FAIL — `combineBatchResults`/`BatchResult` not exported.
 
-- [ ] **Step 11: Write minimal implementation for combineBatchResults**
+- [x] **Step 11: Write minimal implementation for combineBatchResults**
 
 Append to `src/lib/text-batching.ts`:
 
@@ -372,12 +374,12 @@ export const combineBatchResults = (batches: BatchResult[]): Omit<AnalysisResult
 
 Note: `SentenceAnalysis` exact field set is verified in `types.ts`; the `as unknown as SentenceAnalysis` cast is used only in tests for brevity. Production `analyzeText` (Task 3) builds real `BatchResult` from real `AnalysisResult`.
 
-- [ ] **Step 12: Run test to verify it passes**
+- [x] **Step 12: Run test to verify it passes**
 
 Run: `npm test -- src/lib/text-batching.test.ts`
 Expected: PASS (all tests).
 
-- [ ] **Step 13: Commit**
+- [x] **Step 13: Commit**
 
 ```bash
 git add src/lib/text-batching.ts src/lib/text-batching.test.ts
@@ -395,7 +397,7 @@ git commit -m "feat(text): extract tested text-batching helpers"
 - Consumes: `splitTextIntoSentences`, `createTextBatches`, `combineBatchResults`, `BatchResult`, `MAX_BATCH_CHARS` from `./text-batching`(Task 1 产出)。
 - Produces: 不变(对外 `analyzeText` 签名不变)。
 
-- [ ] **Step 1: Add the import**
+- [x] **Step 1: Add the import**
 
 In `src/lib/ai-service.ts`, after the existing `import { fetchWithTimeout } from './fetch-timeout'` line (line 6), add:
 
@@ -409,11 +411,11 @@ import {
 } from './text-batching'
 ```
 
-- [ ] **Step 2: Delete the three internal functions**
+- [x] **Step 2: Delete the three internal functions**
 
 Delete the block from `// Utility functions for text batching and sentence splitting` through the end of `combineBatchResults` (the function ending with `provider: batchResults[0]?.provider || 'unknown' }` and its closing `}`). This is approximately lines 230-300. Verify by searching: `grep -n "function splitTextIntoSentences\|function createTextBatches\|function combineBatchResults" src/lib/ai-service.ts` returns nothing after deletion.
 
-- [ ] **Step 3: Verify it still typechecks (references not yet updated will error here — that's expected, fixed in Task 3)**
+- [x] **Step 3: Verify it still typechecks (references not yet updated will error here — that's expected, fixed in Task 3)**
 
 Run: `npx tsc --noEmit`
 Expected: errors in the two `analyzeText` bodies (references to deleted `createTextBatches(sentences, 3)` etc.) — these are fixed in Task 3. Do not commit yet.
@@ -429,7 +431,7 @@ Expected: errors in the two `analyzeText` bodies (references to deleted `createT
 - Consumes: Task 1 helpers + `BatchResult`.
 - Produces: `analyzeText` still returns `Promise<AnalysisResult>`; behavior change is internal (char-budget batching, failed-batch placeholders, honest multi-batch summary).
 
-- [ ] **Step 1: Rewrite OpenAI analyzeText body**
+- [x] **Step 1: Rewrite OpenAI analyzeText body**
 
 Replace the body of `OpenDIAIService.analyzeText` (from `const sentences = splitTextIntoSentences(text)` through the final `return { ...combinedResult, provider: 'openai' as AIProvider }`) with:
 
@@ -481,31 +483,31 @@ Replace the body of `OpenDIAIService.analyzeText` (from `const sentences = split
 
 Note: the old `if (sentences.length <= 3) return this.analyzeSingleBatch(text, ...)` single-batch fast path is removed — `createTextBatches` naturally produces one batch for short text, and `combineBatchResults` returns the single batch's summary directly (verified by Task 1 test). The `sentences.length === 0` guard keeps a direct call for input that splits to nothing (e.g. text with no Japanese endings still yields ≥1 sentence, so this is a safety net).
 
-- [ ] **Step 2: Rewrite OpenAI-format analyzeText body**
+- [x] **Step 2: Rewrite OpenAI-format analyzeText body**
 
 Apply the identical rewrite to `OpenAIFormatService.analyzeText` (line ~1700), changing only the log prefix to `OpenAI-format analyzeText` and the provider to `'openai-format' as AIProvider`. Remove the old `<= 2` sentence threshold and `createTextBatches(sentences, 2)` — both now use char-budget batching uniformly.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: PASS (no errors).
 
-- [ ] **Step 4: Run existing client-api tests (regression)**
+- [x] **Step 4: Run existing client-api tests (regression)**
 
 Run: `npm test -- src/lib/client-api.test.ts`
 Expected: PASS (analyzeText contract unchanged).
 
-- [ ] **Step 5: Run full lib test suite**
+- [x] **Step 5: Run full lib test suite**
 
 Run: `npm test`
 Expected: PASS.
 
-- [ ] **Step 6: Lint**
+- [x] **Step 6: Lint**
 
 Run: `npm run lint -- --quiet`
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/lib/ai-service.ts
@@ -524,7 +526,7 @@ git commit -m "fix(ai-service): char-budget batching and visible failed-batch pl
 **Interfaces:**
 - Produces: `AnalysisMode = 'image' | 'mokuro' | 'text'`; `ANALYSIS_MODE_OPTIONS` includes a `text` entry.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 In `src/lib/analysis-modes.test.ts`, add (or extend the existing "options" test) an assertion that a `text` option exists:
 
@@ -538,12 +540,12 @@ it('includes a text analyzer option', () => {
 
 (If the file already imports `ANALYSIS_MODE_OPTIONS`, just add the `it` block. Match the existing test style in the file.)
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- src/lib/analysis-modes.test.ts`
 Expected: FAIL — no `text` option.
 
-- [ ] **Step 3: Add the type and option**
+- [x] **Step 3: Add the type and option**
 
 In `src/lib/types.ts:245`, change:
 
@@ -579,7 +581,7 @@ export const ANALYSIS_MODE_OPTIONS = [
 ] as const satisfies readonly AnalysisModeOption[]
 ```
 
-- [ ] **Step 4: Add text visual to ImageUploader's MODE_VISUALS**
+- [x] **Step 4: Add text visual to ImageUploader's MODE_VISUALS**
 
 `src/components/ImageUploader.tsx` has `MODE_VISUALS: Record<AnalysisMode, { icon; accent }>` (lines 18-27) which is a `Record<AnalysisMode,...>` - adding `'text'` to the union makes this a type error until a `text` entry is added. Add it:
 
@@ -602,17 +604,17 @@ const MODE_VISUALS: Record<AnalysisMode, { icon: LucideIcon; accent: string }> =
 
 Add `FileText` to the existing `lucide-react` import on line 4 (it already imports `Upload, FileImage, Loader2, ...`).
 
-- [ ] **Step 5: Run test to verify it passes**
+- [x] **Step 5: Run test to verify it passes**
 
 Run: `npm test -- src/lib/analysis-modes.test.ts`
 Expected: PASS.
 
-- [ ] **Step 6: Typecheck (CLAUDE.md: update types before response shapes)**
+- [x] **Step 6: Typecheck (CLAUDE.md: update types before response shapes)**
 
 Run: `npx tsc --noEmit`
 Expected: PASS (MODE_VISUALS now covers all AnalysisMode values).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/lib/types.ts src/lib/analysis-modes.ts src/lib/analysis-modes.test.ts src/components/ImageUploader.tsx
@@ -641,11 +643,11 @@ git commit -m "feat(modes): add text analyzer mode"
   ```
   This mirrors `ImageUploader`'s mode/language chrome so the mode switcher stays consistent. (If `ImageUploader` exposes a shared `ModeSwitcher`/language control, reuse it; otherwise replicate the minimal controls. Verify by reading `ImageUploader.tsx` header during implementation — the exact shared-control name, if any, is not locked here to avoid coupling the plan to a refactor.)
 
-- [ ] **Step 1: Read ImageUploader to match mode/language control pattern**
+- [x] **Step 1: Read ImageUploader to match mode/language control pattern**
 
 Read `src/components/ImageUploader.tsx` top section to see how it renders the `analysisMode`/`onModeChange`/`analysisLanguage`/`onAnalysisLanguageChange` controls (the mode tabs and language toggle). `TextInput` should render the same controls so the header chrome is identical across modes. Note any shared subcomponent name; if none, inline the same markup.
 
-- [ ] **Step 2: Create TextInput**
+- [x] **Step 2: Create TextInput**
 
 Create `src/components/TextInput.tsx`:
 
@@ -753,17 +755,17 @@ export default function TextInput({
 
 Note: the `analysisMode`/`onModeChange`/`onAnalysisLanguageChange` props are accepted to match `ImageUploader`'s interface but the mode/language chrome rendering is deferred to Step 1's investigation — if `ImageUploader` uses a shared `ModeSwitcher` component, render it here the same way; if it inlines controls, inline the same. The core textarea/upload/analyze logic above is the locked deliverable. If matching the chrome reveals `ImageUploader` has a reusable header, import and render it; the plan does not forbid extracting a shared component if that is the cleanest match to existing patterns.
 
-- [ ] **Step 3: Typecheck**
+- [x] **Step 3: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 4: Lint**
+- [x] **Step 4: Lint**
 
 Run: `npm run lint -- --quiet`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/components/TextInput.tsx
@@ -782,18 +784,18 @@ git commit -m "feat(text): add TextInput component"
 - Consumes: `MokuroAnalysisPanel` from `@/components/MokuroAnalysisPanel`, `AnalysisResult`/`AnalysisLanguage` from `@/lib/types`.
 - Produces: `TextViewer` with props `{ analysisResult: AnalysisResult; language: AnalysisLanguage }`.
 
-- [ ] **Step 1: Verify TextAnalyzer is dead code**
+- [x] **Step 1: Verify TextAnalyzer is dead code**
 
 Run: `grep -rn "TextAnalyzer" src/ --include="*.tsx" --include="*.ts" | grep -v "TextAnalyzer.tsx:"`
 Expected: no output (confirming it is imported nowhere). If output appears, stop and reconcile before deleting.
 
-- [ ] **Step 2: Delete TextAnalyzer**
+- [x] **Step 2: Delete TextAnalyzer**
 
 ```bash
 git rm src/components/TextAnalyzer.tsx
 ```
 
-- [ ] **Step 3: Create TextViewer**
+- [x] **Step 3: Create TextViewer**
 
 Create `src/components/TextViewer.tsx`:
 
@@ -845,17 +847,17 @@ export default function TextViewer({ analysisResult, language }: TextViewerProps
 
 Note: verify `MokuroAnalysisPanel`'s exact props during implementation — the spec and `ImagePageAnalysisViewer` (which wraps it with `analysisResult` + `language`) confirm this signature, but read `MokuroAnalysisPanel.tsx` lines 12-20 to confirm before finalizing. If it requires additional props (e.g. a block index), pass sensible defaults. (Props already verified: `{ analysisResult, isAnalyzing, selectedText, language, hideSelectedText? }` - the JSX above passes all of them. Text mode uses `isAnalyzing={false}`, `selectedText={null}`, `hideSelectedText`.)
 
-- [ ] **Step 4: Typecheck**
+- [x] **Step 4: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 5: Lint**
+- [x] **Step 5: Lint**
 
 Run: `npm run lint -- --quiet`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/components/TextViewer.tsx
@@ -872,7 +874,7 @@ git commit -m "feat(text): add TextViewer, remove dead TextAnalyzer"
 **Interfaces:**
 - Consumes: `TextInput`, `TextViewer`, `AnalysisMode` now including `'text'`.
 
-- [ ] **Step 1: Add imports**
+- [x] **Step 1: Add imports**
 
 In `src/app/page.tsx`, add to the existing imports:
 
@@ -881,7 +883,7 @@ import TextInput from '@/components/TextInput'
 import TextViewer from '@/components/TextViewer'
 ```
 
-- [ ] **Step 2: Render the input chrome per mode**
+- [x] **Step 2: Render the input chrome per mode**
 
 Replace the `<ImageUploader ... />` block (the `motion.div` wrapping it, around line 130) with a conditional that renders `TextInput` for text mode and `ImageUploader` otherwise:
 
@@ -909,7 +911,7 @@ Replace the `<ImageUploader ... />` block (the `motion.div` wrapping it, around 
             )}
 ```
 
-- [ ] **Step 3: Render the result viewer per mode**
+- [x] **Step 3: Render the result viewer per mode**
 
 In the results `motion.div` (around line 150), add a `text` branch. The existing chain is `mokuro ? MokuroReader : readingModeResult ? ReadingModeViewer : analysisResult ? ImagePageAnalysisViewer : null`. Change to:
 
@@ -935,26 +937,26 @@ In the results `motion.div` (around line 150), add a `text` branch. The existing
             ) : null}
 ```
 
-- [ ] **Step 4: Ensure mode switch clears text result**
+- [x] **Step 4: Ensure mode switch clears text result**
 
 The existing `setMode` already clears `analysisResult`/`readingModeResult`/`error` (verified in page.tsx lines 56-62). No change needed — confirm by reading. If `setMode` does not clear, add `setAnalysisResult(null)` to it.
 
-- [ ] **Step 5: Typecheck**
+- [x] **Step 5: Typecheck**
 
 Run: `npx tsc --noEmit`
 Expected: PASS.
 
-- [ ] **Step 6: Lint**
+- [x] **Step 6: Lint**
 
 Run: `npm run lint -- --quiet`
 Expected: PASS.
 
-- [ ] **Step 7: Build**
+- [x] **Step 7: Build**
 
 Run: `npm run build`
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/app/page.tsx
@@ -969,21 +971,21 @@ git commit -m "feat(text): wire text analyzer mode into the page"
 - Check: `netlify/src/lib/` for an `ai-service` or `text-batching` mirror.
 - Modify: only if a mirror exists that needs the same batching fix.
 
-- [ ] **Step 1: Check for Netlify mirror of ai-service**
+- [x] **Step 1: Check for Netlify mirror of ai-service**
 
 Run: `ls netlify/src/lib/ 2>/dev/null && grep -rln "splitTextIntoSentences\|createTextBatches\|combineBatchResults\|analyzeText" netlify/ 2>/dev/null`
 Expected: lists any mirrored files referencing the batching functions.
 
-- [ ] **Step 2: Sync mirror if it exists**
+- [x] **Step 2: Sync mirror if it exists**
 
 If `netlify/src/lib/ai-service.ts` (or equivalent) mirrors the old internal functions, apply the same change as Tasks 2-3: import from a mirrored `text-batching.ts` (create `netlify/src/lib/text-batching.ts` as a copy if the Netlify runtime needs it standalone) and rewrite both `analyzeText` bodies identically. If no mirror references these functions, skip — record that in the commit message.
 
-- [ ] **Step 3: Full verification**
+- [x] **Step 3: Full verification**
 
 Run: `npm test && npm run lint -- --quiet && npm run build`
 Expected: all exit 0.
 
-- [ ] **Step 4: Manual verification checklist**
+- [x] **Step 4: Manual verification checklist**
 
 - 短文本(≤几句):粘贴 -> 分析 -> 结果展示,summary 正常。
 - 长文本(多段):粘贴长文本 -> 分析 -> 合并展示,无静默丢句;summary 标注多段合并。
@@ -992,14 +994,14 @@ Expected: all exit 0.
 - 中文语言默认;收藏一个纯文本来源的词 -> 进生词本 -> SRS 复习可见 -> Anki 导出含该词。
 - 三模式切换:image/mokuro/text 互相切换清空旧结果。
 
-- [ ] **Step 5: Commit any mirror sync**
+- [x] **Step 5: Commit any mirror sync**
 
 ```bash
 git add netlify/
 git commit -m "fix(netlify): mirror text-batching fix" || echo "No netlify mirror to sync"
 ```
 
-- [ ] **Step 6: Push**
+- [x] **Step 6: Push**
 
 ```bash
 git push origin main
