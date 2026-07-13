@@ -1,36 +1,20 @@
-import type { AIProvider, AnalysisLanguage, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel, ReadingModeResult, SentenceLocation } from './types'
+import type { AIProvider, AnalysisLanguage, AnalysisResult, OpenAIFormatSettings, ModelSettings, MangaAnalysisResult, PanelSegmentationResult, SegmentedPanel, MangaPanel, ReadingModeResult, SentenceLocation } from './types'
 import { ClientPanelSegmentationService } from './client-panel-segmentation'
 import { ImprovedTextDetectionService } from './improved-text-detection'
 import { createImageDataURL, getImageMimeType, extractBase64FromDataURL } from './image-utils'
 import { compressImageForAPI, isImageTooLarge } from './image-compression'
 import { fetchWithTimeout } from './fetch-timeout'
+import {
+  splitTextIntoSentences,
+  createTextBatches,
+  combineBatchResults,
+  MAX_BATCH_CHARS,
+  type BatchResult
+} from './text-batching'
 
 export interface AnalysisRequest {
   text: string
   provider?: AIProvider
-}
-
-export interface WordAnalysis {
-  word: string
-  reading: string
-  meaning: string
-  partOfSpeech: string
-  difficulty: 'beginner' | 'intermediate' | 'advanced' | 'N5' | 'N4' | 'N3' | 'N2' | 'N1'
-}
-
-export interface GrammarPattern {
-  pattern: string
-  explanation: string
-  example: string
-}
-
-export interface AnalysisResult {
-  extractedText: string
-  words: WordAnalysis[]
-  grammar: GrammarPattern[]
-  translation: string
-  summary: string
-  provider: AIProvider
 }
 
 const getAnalysisLanguageInstruction = (language: AnalysisLanguage = 'en'): string => {
@@ -230,86 +214,6 @@ Provide concise JSON:
 }
 
 IMPORTANT: Keep under 5000 characters. Be concise but accurate.`
-
-// Utility functions for text batching and sentence splitting
-function splitTextIntoSentences(text: string): string[] {
-  if (!text || text.trim().length === 0) {
-    return []
-  }
-  
-  // Japanese sentence endings: period, exclamation, question mark
-  // Also handle special cases like ellipsis, tilde, etc.
-  const sentenceEndings = /[。！？…～♪♫]/
-  
-  // Split by sentence endings but keep the ending character
-  const sentences: string[] = []
-  let currentSentence = ''
-  
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]
-    currentSentence += char
-    
-    if (sentenceEndings.test(char)) {
-      // Found sentence ending
-      sentences.push(currentSentence.trim())
-      currentSentence = ''
-    }
-  }
-  
-  // Add remaining text as a sentence if it exists
-  if (currentSentence.trim().length > 0) {
-    sentences.push(currentSentence.trim())
-  }
-  
-  // Filter out empty sentences and very short ones (likely artifacts)
-  return sentences.filter(s => s.trim().length > 0)
-}
-
-function createTextBatches(sentences: string[], maxBatchSize: number = 3): string[][] {
-  const batches: string[][] = []
-  
-  for (let i = 0; i < sentences.length; i += maxBatchSize) {
-    const batch = sentences.slice(i, i + maxBatchSize)
-    batches.push(batch)
-  }
-  
-  return batches
-}
-
-function combineBatchResults(batchResults: any[]): any {
-  if (batchResults.length === 0) {
-    throw new Error('No batch results to combine')
-  }
-  
-  if (batchResults.length === 1) {
-    return batchResults[0]
-  }
-  
-  // Combine all sentences from all batches
-  const allSentences: any[] = []
-  const translations: string[] = []
-  const extractedTexts: string[] = []
-  
-  for (const result of batchResults) {
-    if (result.sentences && Array.isArray(result.sentences)) {
-      allSentences.push(...result.sentences)
-    }
-    if (result.translation) {
-      translations.push(result.translation)
-    }
-    if (result.extractedText) {
-      extractedTexts.push(result.extractedText)
-    }
-  }
-  
-  return {
-    extractedText: extractedTexts.join(''),
-    sentences: allSentences,
-    translation: translations.join(' '),
-    summary: `Combined analysis of ${allSentences.length} sentences from ${batchResults.length} batches.`,
-    provider: batchResults[0]?.provider || 'unknown'
-  }
-}
 
 // Helper function to clean JSON responses that might be wrapped in markdown
 function cleanJsonResponse(content: string): string {
@@ -1248,44 +1152,45 @@ export class OpenAIService {
   }
 
   async analyzeText(text: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
-    // Split text into sentences for batching
     const sentences = splitTextIntoSentences(text)
     console.log(`OpenAI analyzeText: Split text into ${sentences.length} sentences`)
-    
-    // If we have few sentences, analyze all at once
-    if (sentences.length <= 3) {
+
+    if (sentences.length === 0) {
       return this.analyzeSingleBatch(text, language, excludeN5)
     }
-    
-    // Create batches for longer texts
-    const batches = createTextBatches(sentences, 3) // 3 sentences per batch
-    console.log(`OpenAI analyzeText: Created ${batches.length} batches`)
-    
-    const batchResults: any[] = []
-    
-    // Process each batch
+
+    const batches = createTextBatches(sentences)
+    console.log(`OpenAI analyzeText: Created ${batches.length} batches (max ${MAX_BATCH_CHARS} chars each)`)
+
+    const batchResults: BatchResult[] = []
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i]
       const batchText = batch.join('')
       console.log(`OpenAI analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
-      
       try {
         const batchResult = await this.analyzeSingleBatch(batchText, language, excludeN5)
-        batchResults.push(batchResult)
+        batchResults.push({
+          sentences: batchResult.sentences,
+          translation: batchResult.translation,
+          extractedText: batchResult.extractedText,
+          summary: batchResult.summary,
+          status: 'ok'
+        })
       } catch (error) {
         console.error(`OpenAI analyzeText: Error processing batch ${i + 1}:`, error)
-        // Continue with other batches rather than failing completely
+        batchResults.push({
+          sentences: [],
+          translation: '',
+          extractedText: batch.join(''),
+          summary: '',
+          status: 'failed',
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
     }
-    
-    if (batchResults.length === 0) {
-      throw new Error('All batches failed to process')
-    }
-    
-    // Combine results from all batches
+
     const combinedResult = combineBatchResults(batchResults)
-    console.log(`OpenAI analyzeText: Combined ${batchResults.length} batch results into final result`)
-    
+    console.log(`OpenAI analyzeText: Combined ${batchResults.length} batch results`)
     return {
       ...combinedResult,
       provider: 'openai' as AIProvider
@@ -1700,44 +1605,45 @@ export class OpenAIFormatService {
   }
 
   async analyzeText(text: string, language: AnalysisLanguage = 'en', excludeN5 = false): Promise<AnalysisResult> {
-    // Split text into sentences for batching
     const sentences = splitTextIntoSentences(text)
     console.log(`OpenAI-format analyzeText: Split text into ${sentences.length} sentences`)
-    
-    // If we have few sentences, analyze all at once
-    if (sentences.length <= 2) { // Use smaller batch size for OpenAI-format due to stricter limits
+
+    if (sentences.length === 0) {
       return this.analyzeSingleBatch(text, language, excludeN5)
     }
-    
-    // Create batches for longer texts
-    const batches = createTextBatches(sentences, 2) // 2 sentences per batch for OpenAI-format
-    console.log(`OpenAI-format analyzeText: Created ${batches.length} batches`)
-    
-    const batchResults: any[] = []
-    
-    // Process each batch
+
+    const batches = createTextBatches(sentences)
+    console.log(`OpenAI-format analyzeText: Created ${batches.length} batches (max ${MAX_BATCH_CHARS} chars each)`)
+
+    const batchResults: BatchResult[] = []
     for (let i = 0; i < batches.length; i++) {
       const batch = batches[i]
       const batchText = batch.join('')
       console.log(`OpenAI-format analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
-      
       try {
         const batchResult = await this.analyzeSingleBatch(batchText, language, excludeN5)
-        batchResults.push(batchResult)
+        batchResults.push({
+          sentences: batchResult.sentences,
+          translation: batchResult.translation,
+          extractedText: batchResult.extractedText,
+          summary: batchResult.summary,
+          status: 'ok'
+        })
       } catch (error) {
         console.error(`OpenAI-format analyzeText: Error processing batch ${i + 1}:`, error)
-        // Continue with other batches rather than failing completely
+        batchResults.push({
+          sentences: [],
+          translation: '',
+          extractedText: batch.join(''),
+          summary: '',
+          status: 'failed',
+          error: error instanceof Error ? error.message : String(error)
+        })
       }
     }
-    
-    if (batchResults.length === 0) {
-      throw new Error('All batches failed to process')
-    }
-    
-    // Combine results from all batches
+
     const combinedResult = combineBatchResults(batchResults)
-    console.log(`OpenAI-format analyzeText: Combined ${batchResults.length} batch results into final result`)
-    
+    console.log(`OpenAI-format analyzeText: Combined ${batchResults.length} batch results`)
     return {
       ...combinedResult,
       provider: 'openai-format' as AIProvider
