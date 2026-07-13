@@ -242,7 +242,7 @@ export interface MokuroAnalysisCacheFile {
   analyses: Record<string, AnalysisResult>
 }
 
-export type AnalysisMode = 'image' | 'mokuro'
+export type AnalysisMode = 'image' | 'mokuro' | 'text'
 
 export interface PanelBoundingBox {
   x: number

@@ -16,6 +16,11 @@ export const ANALYSIS_MODE_OPTIONS = [
     mode: 'mokuro',
     label: 'Mokuro Reader',
     shortLabel: 'Mokuro'
+  },
+  {
+    mode: 'text',
+    label: 'Text Analyzer',
+    shortLabel: 'Text'
   }
 ] as const satisfies readonly AnalysisModeOption[]
 
