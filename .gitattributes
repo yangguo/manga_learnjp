@@ -1,0 +1,5 @@
+# JLPT dataset files are checksummed against their LF representation (the
+# generator writes LF and stores the LF hash in the manifest). Force LF in the
+# working tree so core.autocrlf on Windows can't serve CRLF and break checksum
+# verification. See src/lib/jlpt-dictionary.ts and src/lib/jlpt-grammar-dictionary.ts.
+public/data/** eol=lf

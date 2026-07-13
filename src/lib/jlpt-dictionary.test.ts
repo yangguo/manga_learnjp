@@ -54,6 +54,21 @@ describe('loadJLPTDictionary', () => {
     await expect(loadJLPTDictionary(fetchMock)).resolves.toMatchObject({ status: 'error' })
   })
 
+  it('verifies the checksum even when the served data has CRLF line endings', async () => {
+    // The generator writes LF and stores the LF hash in the manifest. A Windows
+    // checkout with core.autocrlf serves CRLF; the loader must normalize before
+    // digesting or every Windows dev/CI sees "JLPT data checksum mismatch".
+    const fixtures = await responseSet()
+    const crlfDataText = fixtures.dataText.replace(/\n/g, '\r\n')
+    const fetchMock = async (input: RequestInfo | URL) => new Response(
+      String(input).includes('manifest') ? fixtures.manifestText : crlfDataText
+    )
+    const result = await loadJLPTDictionary(fetchMock)
+    expect(result.status).toBe('ready')
+    if (result.status !== 'ready') throw result.error
+    expect(result.dictionary.classify('猫', 'ねこ').match).toBe('exact')
+  })
+
   it('fails closed on dataset version mismatch', async () => {
     const fixtures = await responseSet({ datasetVersion: 'wrong-version' })
     const fetchMock = async (input: RequestInfo | URL) => new Response(

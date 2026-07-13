@@ -62,4 +62,19 @@ describe('loadJLPTGrammarDictionary', () => {
     )
     await expect(loadJLPTGrammarDictionary(levelFetch)).resolves.toMatchObject({ status: 'error' })
   })
+
+  it('verifies the checksum even when the served data has CRLF line endings', async () => {
+    // The generator writes LF and stores the LF hash in the manifest. A Windows
+    // checkout with core.autocrlf serves CRLF; the loader must normalize before
+    // digesting or every Windows dev/CI sees "JLPT grammar data checksum mismatch".
+    const fixtures = await responseSet()
+    const crlfDataText = fixtures.dataText.replace(/\n/g, '\r\n')
+    const fetchMock = async (input: RequestInfo | URL) => new Response(
+      String(input).includes('manifest') ? fixtures.manifestText : crlfDataText
+    )
+    const result = await loadJLPTGrammarDictionary(fetchMock)
+    expect(result.status).toBe('ready')
+    if (result.status !== 'ready') throw result.error
+    expect(result.dictionary.classify('〜ことにする')).toMatchObject({ level: 'N3', match: 'exact' })
+  })
 })
