@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SentenceAnalysis } from './types'
-import { splitTextIntoSentences, MAX_BATCH_CHARS } from './text-batching'
+import { splitTextIntoSentences, MAX_BATCH_CHARS, getTextBatchConcurrency } from './text-batching'
 import { createTextBatches } from './text-batching'
 import type { BatchResult } from './text-batching'
 import { combineBatchResults } from './text-batching'
@@ -105,5 +105,26 @@ describe('combineBatchResults', () => {
     expect(() => combineBatchResults([failed])).toThrow('All batches failed to process')
     // ...but the real cause must be visible too, not just the generic prefix.
     expect(() => combineBatchResults([failed])).toThrow('OpenAI API error: 401')
+  })
+})
+
+describe('getTextBatchConcurrency', () => {
+  it('uses the batch count up to the cap', () => {
+    expect(getTextBatchConcurrency(1)).toBe(1)
+    expect(getTextBatchConcurrency(3)).toBe(3)
+  })
+
+  it('caps concurrency to avoid overwhelming the provider', () => {
+    expect(getTextBatchConcurrency(4)).toBe(3)
+    expect(getTextBatchConcurrency(30)).toBe(3)
+  })
+
+  it('returns zero when there are no batches', () => {
+    expect(getTextBatchConcurrency(0)).toBe(0)
+  })
+
+  it('treats non-finite or negative input as zero', () => {
+    expect(getTextBatchConcurrency(Number.NaN)).toBe(0)
+    expect(getTextBatchConcurrency(-3)).toBe(0)
   })
 })

@@ -2,6 +2,17 @@ import type { AnalysisResult, SentenceAnalysis } from './types'
 
 export const MAX_BATCH_CHARS = 800
 
+// Cap concurrent batch analyses so a long text (many batches) does not fire
+// many simultaneous requests at the AI provider (rate limits, local Ollama
+// overload, retry thundering-herd). 3 (vs 4 for Mokuro blocks) because text
+// batches can be heavier per call. Mirrors getMokuroPageAnalysisConcurrency.
+export const MAX_TEXT_BATCH_CONCURRENCY = 3
+
+export const getTextBatchConcurrency = (batchCount: number): number => {
+  const count = Math.max(0, Math.floor(Number.isFinite(batchCount) ? batchCount : 0))
+  return Math.min(count, MAX_TEXT_BATCH_CONCURRENCY)
+}
+
 export interface BatchResult {
   sentences: SentenceAnalysis[]
   translation: string
