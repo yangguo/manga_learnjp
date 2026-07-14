@@ -136,4 +136,18 @@ describe('isTransientAnalysisError', () => {
     expect(isTransientAnalysisError('OpenAI API error: 429')).toBe(true)
     expect(isTransientAnalysisError('OpenAI-format API error: 503 - overloaded')).toBe(true)
   })
+
+  it('does not classify our own wall-clock timeout as transient', () => {
+    expect(isTransientAnalysisError('Analysis request timed out after 90000ms')).toBe(false)
+    expect(isTransientAnalysisError('Analysis request timed out after 120000ms')).toBe(false)
+  })
+
+  it('still classifies a bare timeout (no "after Nms") as transient', () => {
+    expect(isTransientAnalysisError('timeout')).toBe(true)
+    expect(isTransientAnalysisError('The operation timed out')).toBe(true)
+  })
+
+  it('excludes the Netlify withTimeout wall-clock message too', () => {
+    expect(isTransientAnalysisError('analyzeText timed out after 25000ms')).toBe(false)
+  })
 })

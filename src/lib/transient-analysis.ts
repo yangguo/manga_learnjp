@@ -27,6 +27,17 @@ export const isTransientAnalysisError = (message: string, status?: number): bool
     return true
   }
 
+  // Our own wall-clock abort (fetchWithTimeout's "Analysis request timed out
+  // after Nms" and Netlify's "<label> timed out after Nms") means the model is
+  // slow or our budget expired - retrying immediately won't help and only burns
+  // time toward the route's maxDuration. Exclude it BEFORE the generic
+  // `timed out` alternation, which would otherwise catch it. Upstream timeouts
+  // with a retryable HTTP status are already handled above; a bare "timed out"
+  // (no "after Nms") stays transient.
+  if (/timed out after \d+ms/i.test(message)) {
+    return false
+  }
+
   return /fetch failed|failed to fetch|network|timeout|timed out|econnreset|econnrefused|temporarily unavailable/i.test(message)
 }
 
