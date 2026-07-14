@@ -1,8 +1,18 @@
-export const DEFAULT_ANALYSIS_FETCH_TIMEOUT_MS = 90_000
+// Per-batch analysis fetch timeout. Tunable via ANALYSIS_FETCH_TIMEOUT_MS so
+// different endpoints (fast OpenAI vs slow ARK vs local Ollama) can adjust
+// without code edits. Default 120s: with bounded batch concurrency (3) and the
+// common ≤6-batch case, worst case = 2 waves × 120s = 240s, under both the
+// 280s client timeout (CLIENT_ANALYSIS_FETCH_TIMEOUT_MS) and the 300s route
+// maxDuration. Raise this for very slow endpoints, lower it to fail faster.
+const resolveDefaultTimeoutMs = (): number => {
+  const fromEnv = Number(process.env.ANALYSIS_FETCH_TIMEOUT_MS)
+  return Number.isFinite(fromEnv) && fromEnv > 0 ? Math.floor(fromEnv) : 120_000
+}
+export const DEFAULT_ANALYSIS_FETCH_TIMEOUT_MS = resolveDefaultTimeoutMs()
 // Stay below the Next.js route `maxDuration` (300s in route.ts). If the client
 // waits longer than the platform allows, the function is killed mid-flight and
 // the client sees a network error (classified transient) instead of a clean
-// timeout — which then retriggers work the server already started. 280s lets
+// timeout - which then retriggers work the server already started. 280s lets
 // the client time out cleanly before the platform kills the function.
 export const CLIENT_ANALYSIS_FETCH_TIMEOUT_MS = 280_000
 

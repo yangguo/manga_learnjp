@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchWithTimeout } from './fetch-timeout'
+import { fetchWithTimeout, DEFAULT_ANALYSIS_FETCH_TIMEOUT_MS } from './fetch-timeout'
 
 describe('fetchWithTimeout', () => {
   afterEach(() => {
@@ -74,5 +74,9 @@ describe('fetchWithTimeout', () => {
     expect(error).toBeInstanceOf(DOMException)
     expect(error.name).toBe('AbortError')
     expect(capturedSignal?.aborted).toBe(true)
+  })
+
+  it('defaults the timeout to 120s', () => {
+    expect(DEFAULT_ANALYSIS_FETCH_TIMEOUT_MS).toBe(120_000)
   })
 })
