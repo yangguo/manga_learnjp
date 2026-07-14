@@ -59,14 +59,20 @@ streaming (fragile JSON parsing, large change, out of scope for a timeout fix).
 **File:** `src/lib/transient-analysis.ts` — `isTransientAnalysisError`.
 
 Add an exclusion that short-circuits **before** the generic `timed out` regex:
-if the message matches our own timeout format
-(`/Analysis request timed out after \d+ms/`), return `false`. Our message
+if the message matches `/timed out after \d+ms/`, return `false`. Our message
 contains the substring `timed out`, so without ordering the exclusion first it
 would be caught by the existing generic alternation. The status-code path at the
 top of the function runs first and is unaffected - upstream timeouts that arrive
-with a retryable HTTP status (408/504) still return `true` and retry. The
-exclusion is precise: an upstream body message like "request timed out" does not
-match our `Analysis request timed out after …ms` pattern, so it is unaffected.
+with a retryable HTTP status (408/504) still return `true` and retry.
+
+The `after \d+ms` suffix (rather than the literal `Analysis request timed out`)
+is chosen deliberately: it also matches the Netlify `withTimeout` wrapper's
+messages (`<label> timed out after <ms>ms`, e.g. `analyzeText timed out after
+25000ms`), discovered when reading the Netlify mirror during planning. The
+"after Nms" signature is characteristic of a wall-clock abort, as opposed to a
+bare "timed out" (which may be a fast upstream refusal) - bare `timed out`
+without the suffix stays transient, so existing tests that throw `'timeout'`
+remain green.
 
 This makes the "all batches failed" timeout cascade retry **once**, not 3×,
 which alone eliminates the `maxDuration` blowup. Both the batch-level and
