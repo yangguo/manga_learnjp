@@ -415,7 +415,7 @@ In `src/lib/ai-service.ts`, replace the body of `OpenAIService.analyzeText` (lin
     // timeout is NOT retried (see transient-analysis.ts); only genuine network
     // blips are. Results land in original batch index so combineBatchResults
     // order is preserved.
-    const results = await runConcurrentTasks<string[][], BatchResult>({
+    const results = await runConcurrentTasks<string[], BatchResult>({
       items: batches,
       concurrency: getTextBatchConcurrency(batches.length),
       task: async (batch) => {
@@ -527,7 +527,7 @@ In `src/lib/ai-service.ts`, replace the body of `OpenAIFormatService.analyzeText
     // timeout is NOT retried (see transient-analysis.ts); only genuine network
     // blips are. Results land in original batch index so combineBatchResults
     // order is preserved.
-    const results = await runConcurrentTasks<string[][], BatchResult>({
+    const results = await runConcurrentTasks<string[], BatchResult>({
       items: batches,
       concurrency: getTextBatchConcurrency(batches.length),
       task: async (batch) => {
@@ -664,6 +664,6 @@ This step is manual; report the observed result rather than asserting success au
 
 **Placeholder scan:** none - every code step shows complete code, every command shows expected output.
 
-**Type consistency:** `getTextBatchConcurrency(batchCount: number): number` (Task 3) is consumed identically in Tasks 5 and 6. `runConcurrentTasks<string[][], BatchResult>` matches `runConcurrentTasks`'s generic `<T, R>` signature (items `string[][]`, returns `BatchResult`), and `BatchResult` is imported from `./text-batching`. The `results.map` handles the `ConcurrentTaskResult` union (`'fulfilled' | 'rejected'`) per `concurrency.ts:1-13`.
+**Type consistency:** `getTextBatchConcurrency(batchCount: number): number` (Task 3) is consumed identically in Tasks 5 and 6. `runConcurrentTasks<string[], BatchResult>` matches `runConcurrentTasks`'s generic `<T, R>` signature where `T` is one batch (`string[]`) and `R` is `BatchResult`; `items: batches` is `string[][]` = `readonly T[]`. `BatchResult` is imported from `./text-batching`. The `results.map` handles the `ConcurrentTaskResult` union (`'fulfilled' | 'rejected'`) per `concurrency.ts:1-13`.
 
 **Risk noted:** Task 5/6 replace the sequential loop with concurrency. `combineBatchResults` relies on batch *order* (it emits placeholder sentences indexed by position, `text-batching.ts:124`); `runConcurrentTasks` preserves index order in its returned array (`concurrency.ts:36,50,62`), so order is preserved. No change to `combineBatchResults` needed.

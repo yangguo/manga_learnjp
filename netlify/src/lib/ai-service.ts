@@ -4,10 +4,13 @@ import { ImprovedTextDetectionService } from './improved-text-detection'
 import { createImageDataURL, getImageMimeType, extractBase64FromDataURL } from './image-utils'
 import { compressImageForAPI, isImageTooLarge } from './image-compression'
 import { fetchWithTimeout } from './fetch-timeout'
+import { runConcurrentTasks } from './concurrency'
+import { runWithTransientAnalysisRetry } from './transient-analysis'
 import {
   splitTextIntoSentences,
   createTextBatches,
   combineBatchResults,
+  getTextBatchConcurrency,
   MAX_BATCH_CHARS,
   type BatchResult
 } from './text-batching'
@@ -1171,32 +1174,51 @@ export class OpenAIService {
     const batches = createTextBatches(sentences)
     console.log(`OpenAI analyzeText: Created ${batches.length} batches (max ${MAX_BATCH_CHARS} chars each)`)
 
-    const batchResults: BatchResult[] = []
-    for (let i = 0; i < batches.length; i++) {
-      const batch = batches[i]
-      const batchText = batch.join('')
-      console.log(`OpenAI analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
-      try {
-        const batchResult = await this.analyzeSingleBatch(batchText, language, excludeN5)
-        batchResults.push({
-          sentences: batchResult.sentences,
-          translation: batchResult.translation,
-          extractedText: batchResult.extractedText,
-          summary: batchResult.summary,
-          status: 'ok'
-        })
-      } catch (error) {
-        console.error(`OpenAI analyzeText: Error processing batch ${i + 1}:`, error)
-        batchResults.push({
-          sentences: [],
-          translation: '',
-          extractedText: batch.join(''),
-          summary: '',
-          status: 'failed',
-          error: error instanceof Error ? error.message : String(error)
-        })
+    // Run batches with bounded concurrency (mirrors Mokuro block analysis) and
+    // retry each batch transiently on its own (maxAttempts: 2). A wall-clock
+    // timeout is NOT retried (see transient-analysis.ts); only genuine network
+    // blips are. Results land in original batch index so combineBatchResults
+    // order is preserved.
+    const results = await runConcurrentTasks<string[], BatchResult>({
+      items: batches,
+      concurrency: getTextBatchConcurrency(batches.length),
+      task: async (batch) => {
+        const batchText = batch.join('')
+        try {
+          const batchResult = await runWithTransientAnalysisRetry(
+            () => this.analyzeSingleBatch(batchText, language, excludeN5),
+            { maxAttempts: 2 }
+          )
+          return {
+            sentences: batchResult.sentences,
+            translation: batchResult.translation,
+            extractedText: batchResult.extractedText,
+            summary: batchResult.summary,
+            status: 'ok'
+          }
+        } catch (error) {
+          console.error(`OpenAI analyzeText: Error processing batch:`, error)
+          return {
+            sentences: [],
+            translation: '',
+            extractedText: batchText,
+            summary: '',
+            status: 'failed',
+            error: error instanceof Error ? error.message : String(error)
+          }
+        }
       }
-    }
+    })
+
+    // runConcurrentTasks preserves index order in its returned array.
+    const batchResults = results.map(r => r.status === 'fulfilled' ? r.value : {
+      sentences: [],
+      translation: '',
+      extractedText: '',
+      summary: '',
+      status: 'failed' as const,
+      error: r.reason instanceof Error ? r.reason.message : String(r.reason)
+    })
 
     const combinedResult = combineBatchResults(batchResults)
     console.log(`OpenAI analyzeText: Combined ${batchResults.length} batch results`)
