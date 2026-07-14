@@ -1646,32 +1646,50 @@ export class OpenAIFormatService {
     const batches = createTextBatches(sentences)
     console.log(`OpenAI-format analyzeText: Created ${batches.length} batches (max ${MAX_BATCH_CHARS} chars each)`)
 
-    const batchResults: BatchResult[] = []
-    for (let i = 0; i < batches.length; i++) {
-      const batch = batches[i]
-      const batchText = batch.join('')
-      console.log(`OpenAI-format analyzeText: Processing batch ${i + 1}/${batches.length} with ${batch.length} sentences`)
-      try {
-        const batchResult = await this.analyzeSingleBatch(batchText, language, excludeN5)
-        batchResults.push({
-          sentences: batchResult.sentences,
-          translation: batchResult.translation,
-          extractedText: batchResult.extractedText,
-          summary: batchResult.summary,
-          status: 'ok'
-        })
-      } catch (error) {
-        console.error(`OpenAI-format analyzeText: Error processing batch ${i + 1}:`, error)
-        batchResults.push({
-          sentences: [],
-          translation: '',
-          extractedText: batch.join(''),
-          summary: '',
-          status: 'failed',
-          error: error instanceof Error ? error.message : String(error)
-        })
+    // Run batches with bounded concurrency (mirrors Mokuro block analysis) and
+    // retry each batch transiently on its own (maxAttempts: 2). A wall-clock
+    // timeout is NOT retried (see transient-analysis.ts); only genuine network
+    // blips are. Results land in original batch index so combineBatchResults
+    // order is preserved.
+    const results = await runConcurrentTasks<string[], BatchResult>({
+      items: batches,
+      concurrency: getTextBatchConcurrency(batches.length),
+      task: async (batch) => {
+        const batchText = batch.join('')
+        try {
+          const batchResult = await runWithTransientAnalysisRetry(
+            () => this.analyzeSingleBatch(batchText, language, excludeN5),
+            { maxAttempts: 2 }
+          )
+          return {
+            sentences: batchResult.sentences,
+            translation: batchResult.translation,
+            extractedText: batchResult.extractedText,
+            summary: batchResult.summary,
+            status: 'ok'
+          }
+        } catch (error) {
+          console.error(`OpenAI-format analyzeText: Error processing batch:`, error)
+          return {
+            sentences: [],
+            translation: '',
+            extractedText: batchText,
+            summary: '',
+            status: 'failed',
+            error: error instanceof Error ? error.message : String(error)
+          }
+        }
       }
-    }
+    })
+
+    const batchResults = results.map(r => r.status === 'fulfilled' ? r.value : {
+      sentences: [],
+      translation: '',
+      extractedText: '',
+      summary: '',
+      status: 'failed' as const,
+      error: r.reason instanceof Error ? r.reason.message : String(r.reason)
+    })
 
     const combinedResult = combineBatchResults(batchResults)
     console.log(`OpenAI-format analyzeText: Combined ${batchResults.length} batch results`)
