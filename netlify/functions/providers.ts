@@ -29,7 +29,6 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
 
   try {
     const openaiApiKey = process.env.OPENAI_API_KEY
-    const geminiApiKey = process.env.GEMINI_API_KEY
 
     // Check for OpenAI-format configuration in environment variables
     let openaiFormatSettings: OpenAIFormatSettings | undefined
@@ -41,18 +40,11 @@ export const handler: Handler = async (event: HandlerEvent, context: HandlerCont
       }
     }
 
-    const aiService = new AIAnalysisService(openaiApiKey, geminiApiKey, openaiFormatSettings)
+    const aiService = new AIAnalysisService(openaiApiKey, openaiFormatSettings)
     const availableProviders = aiService.getAvailableProviders()
 
-    // Smart default selection: prefer the first actually available provider
-    // Priority order: openai -> gemini -> openai-format
-    let smartDefault: string = 'openai-format' // fallback if nothing else is available
-
-    if (availableProviders.includes('openai')) {
-      smartDefault = 'openai'
-    } else if (availableProviders.includes('gemini')) {
-      smartDefault = 'gemini'
-    }
+    // Smart default: prefer openai if available, otherwise openai-format
+    const smartDefault: string = availableProviders.includes('openai') ? 'openai' : 'openai-format'
 
     return {
       statusCode: 200,

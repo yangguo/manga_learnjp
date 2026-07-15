@@ -223,8 +223,6 @@ Use the same JSON format as before.`
     
     if (provider === 'openai' && aiService.openaiService) {
       return await this.callOpenAIWithCustomPrompt(aiService.openaiService, imageBase64, customPrompt)
-    } else if (provider === 'gemini' && aiService.geminiService) {
-      return await this.callGeminiWithCustomPrompt(aiService.geminiService, imageBase64, customPrompt)
     } else {
       // Fallback to regular analysis
       return await aiService.analyzeImage(imageBase64, provider)
@@ -281,35 +279,6 @@ Use the same JSON format as before.`
     }
 
     // Clean and parse JSON response
-    const cleanContent = content.replace(/```json\n?|```\n?/g, '').trim()
-    return JSON.parse(cleanContent)
-  }
-
-  /**
-   * Call Gemini with custom prompt
-   */
-  private async callGeminiWithCustomPrompt(geminiService: any, imageBase64: string, customPrompt: string): Promise<any> {
-    // Convert base64 to format Gemini expects
-    const imagePart = {
-      inlineData: {
-        data: imageBase64,
-        mimeType: getImageMimeType(imageBase64)
-      }
-    }
-
-    const result = await geminiService.model.generateContent([
-      customPrompt,
-      imagePart
-    ])
-
-    const response = await result.response
-    const content = response.text()
-
-    if (!content) {
-      throw new Error('No content received from Gemini')
-    }
-
-    // Parse JSON response, handling potential markdown formatting
     const cleanContent = content.replace(/```json\n?|```\n?/g, '').trim()
     return JSON.parse(cleanContent)
   }

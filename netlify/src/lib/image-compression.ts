@@ -11,25 +11,26 @@ export async function compressImageForAPI(base64Data: string, maxSizeKB: number 
     try {
       // Check current size
       const currentSizeKB = Math.round(base64Data.length * 3 / 4 / 1024)
+      const hasBrowserAPIs = typeof window !== 'undefined' && typeof document !== 'undefined' && typeof Image !== 'undefined'
       
-      // If already small enough, return as is
-      if (currentSizeKB <= maxSizeKB) {
-        console.log(`📏 Image size ${currentSizeKB}KB is within limit ${maxSizeKB}KB, no compression needed`)
+      if (!hasBrowserAPIs) {
         resolve(base64Data)
         return
       }
       
-      console.log(`🗜️ Compressing image from ${currentSizeKB}KB to target ${maxSizeKB}KB...`)
+      // If already small enough, return as is
+      if (currentSizeKB <= maxSizeKB) {
+        resolve(base64Data)
+        return
+      }
       
       // Create image element for processing
       const img = new Image()
       img.onload = () => {
         // Calculate compression ratio
         const compressionRatio = Math.sqrt(maxSizeKB / currentSizeKB)
-        const maxWidth = Math.floor(img.width * compressionRatio)
-        const maxHeight = Math.floor(img.height * compressionRatio)
-        
-        console.log(`📐 Resizing from ${img.width}x${img.height} to ${maxWidth}x${maxHeight}`)
+        const maxWidth = img.width * compressionRatio
+        const maxHeight = img.height * compressionRatio
         
         // Create canvas for resizing
         const canvas = document.createElement('canvas')
@@ -38,7 +39,6 @@ export async function compressImageForAPI(base64Data: string, maxSizeKB: number 
         
         const ctx = canvas.getContext('2d')
         if (!ctx) {
-          console.warn('⚠️ Canvas context not available, using original image')
           resolve(base64Data) // Fallback to original if canvas not available
           return
         }
@@ -52,14 +52,11 @@ export async function compressImageForAPI(base64Data: string, maxSizeKB: number 
         // Check if compression was effective
         const compressedSizeKB = Math.round(compressedData.length * 3 / 4 / 1024)
         
-        console.log(`✅ Compressed image to ${compressedSizeKB}KB`)
-        
         if (compressedSizeKB <= maxSizeKB || compressedSizeKB >= currentSizeKB) {
           // Success or couldn't compress further
           resolve(compressedData)
         } else {
           // Try again with lower quality if still too large
-          console.log(`🔄 Still too large, trying with lower quality...`)
           const canvas2 = document.createElement('canvas')
           canvas2.width = maxWidth
           canvas2.height = maxHeight
@@ -67,18 +64,15 @@ export async function compressImageForAPI(base64Data: string, maxSizeKB: number 
           if (ctx2) {
             ctx2.drawImage(img, 0, 0, maxWidth, maxHeight)
             const finalCompressed = canvas2.toDataURL('image/jpeg', 0.5) // 50% quality
-            const finalSizeKB = Math.round(finalCompressed.length * 3 / 4 / 1024)
-            console.log(`✅ Final compressed image to ${finalSizeKB}KB`)
             resolve(finalCompressed)
           } else {
-            console.warn('⚠️ Second compression attempt failed, using first attempt')
-            resolve(compressedData) // Fallback
+            resolve(base64Data) // Fallback
           }
         }
       }
       
       img.onerror = () => {
-        console.warn('⚠️ Image compression failed, using original image')
+        console.warn('Image compression failed, using original image')
         resolve(base64Data)
       }
       
@@ -86,7 +80,7 @@ export async function compressImageForAPI(base64Data: string, maxSizeKB: number 
       img.src = createImageDataURL(base64Data)
       
     } catch (error) {
-      console.warn('⚠️ Image compression error, using original image:', error)
+      console.warn('Image compression error, using original image:', error)
       resolve(base64Data)
     }
   })

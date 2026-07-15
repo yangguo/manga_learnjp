@@ -1,15 +1,57 @@
+import type { JLPTClassification } from './jlpt-levels'
+import type { GrammarJLPTClassification } from './jlpt-levels'
+
 export interface WordAnalysis {
   word: string
   reading: string
   meaning: string
   partOfSpeech: string
-  difficulty: 'beginner' | 'intermediate' | 'advanced' | 'N5' | 'N4' | 'N3' | 'N2' | 'N1'
+  /** @deprecated Provider/legacy metadata; never use for JLPT behavior. */
+  difficulty?: string
+  jlpt?: JLPTClassification
+}
+
+export type CalibratedWordAnalysis = WordAnalysis & { jlpt: JLPTClassification }
+
+export interface JLPTCalibrationMeta {
+  status: 'ready' | 'error'
+  datasetVersion: string
+  persistable: boolean
+}
+
+export interface GrammarCalibrationMeta {
+  status: 'ready' | 'error'
+  datasetVersion: string
+  persistable: boolean
+}
+
+export interface SavedWord {
+  word: string
+  reading: string
+  meaning: string
+  partOfSpeech: string
+  /** @deprecated Legacy persisted metadata. */
+  difficulty?: string
+  jlpt?: JLPTClassification
+  sourceSentence: string | null
+  savedAt: string
 }
 
 export interface GrammarPattern {
   pattern: string
   explanation: string
   example: string
+  jlpt?: GrammarJLPTClassification
+}
+
+export interface SavedGrammar {
+  pattern: string
+  explanation: string
+  example: string
+  sourceSentence: string | null
+  language: AnalysisLanguage
+  savedAt: string
+  jlpt?: GrammarJLPTClassification
 }
 
 export interface OpenAIFormatSettings {
@@ -58,6 +100,8 @@ export interface ReadingModeResult {
   imageData: string
   overallSummary: string
   provider?: string
+  jlptCalibration?: JLPTCalibrationMeta
+  grammarCalibration?: GrammarCalibrationMeta
 }
 
 export interface AnalysisResult {
@@ -66,6 +110,32 @@ export interface AnalysisResult {
   translation: string
   summary: string
   provider: AIProvider
+  jlptCalibration?: JLPTCalibrationMeta
+  grammarCalibration?: GrammarCalibrationMeta
+}
+
+export type CalibratedGrammarPattern = GrammarPattern & { jlpt: GrammarJLPTClassification }
+
+export type CalibratedSentenceAnalysis = Omit<SentenceAnalysis, 'words' | 'grammar'> & {
+  words: CalibratedWordAnalysis[]
+  grammar: CalibratedGrammarPattern[]
+}
+
+export type CalibratedAnalysisResult = Omit<AnalysisResult, 'sentences' | 'jlptCalibration' | 'grammarCalibration'> & {
+  sentences: CalibratedSentenceAnalysis[]
+  jlptCalibration: JLPTCalibrationMeta
+  grammarCalibration: GrammarCalibrationMeta
+}
+
+export type CalibratedSentenceLocation = Omit<SentenceLocation, 'words' | 'grammar'> & {
+  words: CalibratedWordAnalysis[]
+  grammar: CalibratedGrammarPattern[]
+}
+
+export type CalibratedReadingModeResult = Omit<ReadingModeResult, 'sentences' | 'jlptCalibration' | 'grammarCalibration'> & {
+  sentences: CalibratedSentenceLocation[]
+  jlptCalibration: JLPTCalibrationMeta
+  grammarCalibration: GrammarCalibrationMeta
 }
 
 export interface OCRProgress {
@@ -121,6 +191,18 @@ export interface MangaAnalysisResult {
   overallSummary: string
   readingOrder?: number[]
   provider?: string
+  jlptCalibration?: JLPTCalibrationMeta
+  grammarCalibration?: GrammarCalibrationMeta
+}
+
+export type CalibratedMangaPanel = Omit<MangaPanel, 'sentences'> & {
+  sentences: CalibratedSentenceAnalysis[]
+}
+
+export type CalibratedMangaAnalysisResult = Omit<MangaAnalysisResult, 'panels' | 'jlptCalibration' | 'grammarCalibration'> & {
+  panels: CalibratedMangaPanel[]
+  jlptCalibration: JLPTCalibrationMeta
+  grammarCalibration: GrammarCalibrationMeta
 }
 
 export interface MokuroBlock {
@@ -149,7 +231,9 @@ export interface MokuroFile {
 }
 
 export interface MokuroAnalysisCacheFile {
-  version: 1
+  version: 1 | 2 | 3
+  jlptDatasetVersion?: string
+  grammarDatasetVersion?: string
   savedAt: string
   source: {
     title?: string
