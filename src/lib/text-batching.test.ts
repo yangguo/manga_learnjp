@@ -50,6 +50,40 @@ describe('createTextBatches', () => {
     const batches = createTextBatches(sentences, 10)
     expect(batches.flat()).toEqual(sentences)
   })
+
+  it('starts a new batch at the sentence cap even when under the char budget', () => {
+    // 6 short sentences total 12 chars, well under MAX_BATCH_CHARS (800), so
+    // only the 5-sentence cap forces the split into 5 + 1.
+    const sentences = ['あ。', 'い。', 'う。', 'え。', 'お。', 'か。']
+    expect(createTextBatches(sentences)).toEqual([
+      ['あ。', 'い。', 'う。', 'え。', 'お。'],
+      ['か。']
+    ])
+  })
+
+  it('splits a long run of short sentences into capped concurrent batches', () => {
+    // The regression case: 13 short sentences used to collapse into a single
+    // batch whose full analysis took >120s to generate. The sentence cap must
+    // break it into 5 + 5 + 3 so batches run concurrently and stay small.
+    const sentences = Array.from({ length: 13 }, (_, i) => `s${i}。`)
+    const batches = createTextBatches(sentences)
+    expect(batches).toHaveLength(3)
+    expect(batches[0]).toHaveLength(5)
+    expect(batches[1]).toHaveLength(5)
+    expect(batches[2]).toHaveLength(3)
+    expect(batches.flat()).toEqual(sentences)
+  })
+
+  it('still splits on the char budget when it trips before the sentence cap', () => {
+    // A tight char budget (5) trips before the 5-sentence cap, so batching is
+    // char-driven and each batch stays within budget.
+    const sentences = ['あ。', 'い。', 'う。', 'え。', 'お。', 'か。']
+    const batches = createTextBatches(sentences, 5)
+    expect(batches.flat()).toEqual(sentences)
+    for (const batch of batches) {
+      expect(batch.join('').length).toBeLessThanOrEqual(5)
+    }
+  })
 })
 
 const okBatch = (sentences: SentenceAnalysis[], translation: string): BatchResult => ({

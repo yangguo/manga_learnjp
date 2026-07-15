@@ -2,6 +2,17 @@ import type { AnalysisResult, SentenceAnalysis } from './types'
 
 export const MAX_BATCH_CHARS = 800
 
+// Cap sentences per batch. The char budget alone is not enough: many short
+// sentences can fit well under MAX_BATCH_CHARS yet require a large output
+// (each sentence yields sentence+translation+words+grammar+context), and the
+// output token count - not the input char count - drives generation time and
+// timeouts. Without this cap, 13 short sentences land in a single batch whose
+// full analysis takes >120s to generate on slower endpoints. 5 keeps each
+// batch's output bounded so a single request finishes well under the timeout,
+// and turns a long text into multiple concurrent batches (see
+// getTextBatchConcurrency) instead of one heavyweight call.
+export const MAX_BATCH_SENTENCES = 5
+
 // Cap concurrent batch analyses so a long text (many batches) does not fire
 // many simultaneous requests at the AI provider (rate limits, local Ollama
 // overload, retry thundering-herd). 3 (vs 4 for Mokuro blocks) because text
@@ -49,7 +60,8 @@ export const splitTextIntoSentences = (text: string): string[] => {
 
 export const createTextBatches = (
   sentences: string[],
-  maxBatchChars: number = MAX_BATCH_CHARS
+  maxBatchChars: number = MAX_BATCH_CHARS,
+  maxBatchSentences: number = MAX_BATCH_SENTENCES
 ): string[][] => {
   if (sentences.length === 0) return []
 
@@ -69,7 +81,13 @@ export const createTextBatches = (
       continue
     }
 
-    if (currentLen + sentence.length > maxBatchChars && current.length > 0) {
+    // Start a new batch when adding this sentence would exceed the char budget
+    // OR the sentence cap - whichever trips first. The sentence cap bounds
+    // output token count (and thus generation time), which the char budget
+    // alone cannot.
+    const wouldExceedChars = currentLen + sentence.length > maxBatchChars && current.length > 0
+    const wouldExceedSentences = current.length >= maxBatchSentences
+    if (wouldExceedChars || wouldExceedSentences) {
       batches.push(current)
       current = []
       currentLen = 0
