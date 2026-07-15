@@ -7,11 +7,12 @@ export const MAX_BATCH_CHARS = 800
 // (each sentence yields sentence+translation+words+grammar+context), and the
 // output token count - not the input char count - drives generation time and
 // timeouts. Without this cap, 13 short sentences land in a single batch whose
-// full analysis takes >120s to generate on slower endpoints. 5 keeps each
-// batch's output bounded so a single request finishes well under the timeout,
-// and turns a long text into multiple concurrent batches (see
-// getTextBatchConcurrency) instead of one heavyweight call.
-export const MAX_BATCH_SENTENCES = 5
+// full analysis takes >120s to generate on slower endpoints. 3 keeps each
+// batch's output tightly bounded so a single request finishes well under the
+// fetch timeout even on slow endpoints (ARK etc.), and turns a long text into
+// multiple concurrent batches (see getTextBatchConcurrency) instead of one
+// heavyweight call. 5 was still timing out on slow endpoints at ~120s+.
+export const MAX_BATCH_SENTENCES = 3
 
 // Cap concurrent batch analyses so a long text (many batches) does not fire
 // many simultaneous requests at the AI provider (rate limits, local Ollama

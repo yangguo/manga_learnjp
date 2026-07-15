@@ -76,7 +76,7 @@ describe('fetchWithTimeout', () => {
     expect(capturedSignal?.aborted).toBe(true)
   })
 
-  it('defaults the timeout to 120s', () => {
-    expect(DEFAULT_ANALYSIS_FETCH_TIMEOUT_MS).toBe(120_000)
+  it('defaults the timeout to 140s', () => {
+    expect(DEFAULT_ANALYSIS_FETCH_TIMEOUT_MS).toBe(140_000)
   })
 })
