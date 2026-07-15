@@ -130,4 +130,5 @@ Tests that lock shared behavior should live beside the library module, for examp
 - Import via the `@/` alias for app code.
 - Keep secrets in `.env.local` or deployment environment variables.
 - Refresh `.env.example` when adding env vars.
+- Non-trivial changes follow the spec-driven flow: write a design doc under `docs/superpowers/specs/`, then a plan under `docs/superpowers/plans/`, before implementing. Register every new spec/plan in `docs/superpowers/README.md` - CI (`npm run check:docs`) fails if a doc file is missing from the index.
 - Run `npm test`, `npm run lint`, and `npm run build` before handing off.

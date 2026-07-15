@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",
+    "check:docs": "node scripts/check-docs-index.mjs",
     "update:jlpt-data": "tsx scripts/update-jlpt-vocabulary.ts",
     "update:jlpt-grammar": "tsx scripts/update-jlpt-grammar.ts",
     "prepare": "bash scripts/install-hooks.sh || true"

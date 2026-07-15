@@ -32,6 +32,11 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check docs index
+        # Fails if a spec/plan file is added without being listed in
+        # docs/superpowers/README.md. See scripts/check-docs-index.mjs.
+        run: npm run check:docs
+
       - name: Test
         run: npm test
 
