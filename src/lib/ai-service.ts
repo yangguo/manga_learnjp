@@ -898,8 +898,12 @@ function extractPartialTextData(content: string): any | null {
     const extractedTextMatch = content.match(/"extractedText":\s*"([^"]*)"/)
     const extractedText = extractedTextMatch ? extractedTextMatch[1] : ''
     
-    // Try to extract complete sentences that were parsed
-    const sentencesMatch = content.match(/"sentences":\s*\[([\s\S]*?)(?:\]|$)/)
+    // Try to extract complete sentences that were parsed. Capture to end of
+    // string (greedy) rather than stopping at the first `]`: a sentence's
+    // nested arrays (words/grammar) contain `]` tokens that would prematurely
+    // terminate a non-greedy match. The brace-balanced parser below ignores
+    // non-brace characters and trailing junk, so over-capturing is safe.
+    const sentencesMatch = content.match(/"sentences":\s*\[([\s\S]*)/)
     const sentences: any[] = []
     
     if (sentencesMatch) {
@@ -1248,7 +1252,7 @@ export class OpenAIService {
           }
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
     })
 
@@ -1271,6 +1275,14 @@ export class OpenAIService {
       // Validate the structure of the analysis result
       const isValid = validateAnalysisResult(analysisResult, 'OpenAI analyzeSingleBatch')
       if (!isValid) {
+        // A truncated response (model hit max_tokens mid-stream) parses but is
+        // missing trailing fields like translation/summary. Salvage the
+        // sentences that completed rather than failing the whole batch.
+        const partial = extractPartialTextData(content)
+        if (partial) {
+          console.warn('OpenAI analyzeSingleBatch: validation failed, using partial result (likely truncated response).')
+          return { ...partial, provider: 'openai' as AIProvider }
+        }
         throw new Error('Invalid analysis result structure')
       }
       
@@ -1316,7 +1328,7 @@ export class OpenAIService {
           }
         ],
         temperature: 0.3,
-        max_tokens: 2000,
+        max_tokens: 4000,
       }),
     })
 
@@ -1339,6 +1351,14 @@ export class OpenAIService {
       // Validate the structure of the analysis result
       const isValid = validateAnalysisResult(analysisResult, 'OpenAI analyzeImage')
       if (!isValid) {
+        // A truncated response (model hit max_tokens mid-stream) parses but is
+        // missing trailing fields like translation/summary. Salvage the
+        // sentences that completed rather than failing the whole batch.
+        const partial = extractPartialTextData(content)
+        if (partial) {
+          console.warn('OpenAI analyzeImage: validation failed, using partial result (likely truncated response).')
+          return { ...partial, provider: 'openai' as AIProvider }
+        }
         throw new Error('Invalid analysis result structure')
       }
       
@@ -1754,6 +1774,14 @@ export class OpenAIFormatService {
       // Validate the structure of the analysis result
       const isValid = validateAnalysisResult(analysisResult, 'OpenAI-format analyzeSingleBatch')
       if (!isValid) {
+        // A truncated response (model hit max_tokens mid-stream) parses but is
+        // missing trailing fields like translation/summary. Salvage the
+        // sentences that completed rather than failing the whole batch.
+        const partial = extractPartialTextData(content)
+        if (partial) {
+          console.warn('OpenAI-format analyzeSingleBatch: validation failed, using partial result (likely truncated response).')
+          return { ...partial, provider: 'openai-format' as AIProvider }
+        }
         throw new Error('Invalid analysis result structure')
       }
       
@@ -1834,6 +1862,14 @@ export class OpenAIFormatService {
       // Validate the structure of the analysis result
       const isValid = validateAnalysisResult(analysisResult, 'OpenAI-format analyzeImage')
       if (!isValid) {
+        // A truncated response (model hit max_tokens mid-stream) parses but is
+        // missing trailing fields like translation/summary. Salvage the
+        // sentences that completed rather than failing the whole batch.
+        const partial = extractPartialTextData(content)
+        if (partial) {
+          console.warn('OpenAI-format analyzeImage: validation failed, using partial result (likely truncated response).')
+          return { ...partial, provider: 'openai-format' as AIProvider }
+        }
         throw new Error('Invalid analysis result structure')
       }
       
