@@ -1,28 +1,22 @@
 version: 2
 updates:
-  # npm dependencies — security updates only via grouped PRs to avoid noise.
+  # Root npm dependencies — security updates only, grouped to avoid noise.
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
       day: monday
-    # Group all security updates into a single PR so we get one review per
-      # week instead of dozens. Non-security updates are left to manual bumps.
+    # Disable scheduled version-update PRs. Security updates remain enabled
+    # and are grouped explicitly below.
+    open-pull-requests-limit: 0
     groups:
       security:
-        update-types:
-          - patch
-          - minor
-          - major
-    open-pull-requests-limit: 5
+        applies-to: security-updates
+        patterns:
+          - '*'
     commit-message:
       prefix: chore(deps)
       include: scope
-    # Only open PRs for security advisories, not routine version bumps.
-    # This keeps the queue short for a solo-maintained project.
-    allow:
-      - dependency-type: direct
-      - dependency-type: indirect
   # Netlify functions backend has its own lockfile — track it separately so its
   # security advisories get PRs too.
   - package-ecosystem: npm
@@ -30,19 +24,15 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    open-pull-requests-limit: 0
     groups:
       security:
-        update-types:
-          - patch
-          - minor
-          - major
-    open-pull-requests-limit: 5
+        applies-to: security-updates
+        patterns:
+          - '*'
     commit-message:
       prefix: chore(deps)
       include: scope
-    allow:
-      - dependency-type: direct
-      - dependency-type: indirect
   # GitHub Actions — keep workflow action versions current.
   - package-ecosystem: github-actions
     directory: /
