@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
-  getCandidateVoices,
+  getCandidateVoiceOptions,
+  getSpeechErrorPolicy,
   getJapaneseVoices,
-  getVerifiedVoices,
   hasVoiceForLang,
-  isSpeechFailure,
+  isSpeechCancellation,
   orderSpeechCandidates,
-  selectFallbackVoice,
-  selectVoice
+  selectVoice,
+  shouldProcessSpeechError,
+  shouldRemoveVoice,
+  shouldTrySpeechFallback
 } from './speech'
 import type { SpeechVoiceLike } from './speech'
 
@@ -73,28 +75,54 @@ describe('verified Japanese voices', () => {
     expect(getJapaneseVoices([english, ayumi, haruka])).toEqual([ayumi, haruka])
   })
 
-  it('keeps only verified voices that have not failed', () => {
-    expect(getVerifiedVoices(
-      [english, ayumi, haruka],
-      new Set(['ja-ayumi', 'ja-haruka']),
-      new Set(['ja-haruka'])
-    )).toEqual([ayumi])
+})
+
+describe('speech failure policy', () => {
+  it('ignores errors that arrive after a speech attempt has settled', () => {
+    expect(shouldProcessSpeechError(false)).toBe(true)
+    expect(shouldProcessSpeechError(true)).toBe(false)
   })
 
-  it('does not treat deliberate cancellation as a voice failure', () => {
-    expect(isSpeechFailure('canceled')).toBe(false)
-    expect(isSpeechFailure('interrupted')).toBe(false)
+  it('does not update speaking state for an error from a settled attempt', () => {
+    expect(getSpeechErrorPolicy(true, 1)).toEqual({
+      process: false,
+      stopSpeaking: false
+    })
+    expect(getSpeechErrorPolicy(false, 1)).toEqual({
+      process: true,
+      stopSpeaking: true
+    })
+    expect(getSpeechErrorPolicy(false, 0)).toEqual({
+      process: true,
+      stopSpeaking: false
+    })
   })
 
-  it('treats synthesis errors and start timeout as a voice failure', () => {
-    expect(isSpeechFailure('voice-unavailable')).toBe(true)
-    expect(isSpeechFailure('synthesis-unavailable')).toBe(true)
-    expect(isSpeechFailure('timeout')).toBe(true)
+  it('recognizes only deliberate cancellation reasons as cancellation', () => {
+    expect(isSpeechCancellation('canceled')).toBe(true)
+    expect(isSpeechCancellation('interrupted')).toBe(true)
+    expect(isSpeechCancellation('network')).toBe(false)
   })
 
-  it('keeps the chosen verified voice or falls back to a matching Japanese voice', () => {
-    expect(selectFallbackVoice([ayumi, haruka], 'ja-haruka', 'ja-JP')).toBe(haruka)
-    expect(selectFallbackVoice([ayumi, haruka], 'missing', 'ja-JP')).toBe(ayumi)
+  it('removes only failures that prove the selected voice is unavailable', () => {
+    expect(shouldRemoveVoice('voice-unavailable')).toBe(true)
+    expect(shouldRemoveVoice('language-unavailable')).toBe(true)
+    expect(shouldRemoveVoice('network')).toBe(false)
+    expect(shouldRemoveVoice('audio-busy')).toBe(false)
+    expect(shouldRemoveVoice('not-allowed')).toBe(false)
+    expect(shouldRemoveVoice('timeout')).toBe(false)
+  })
+
+  it('falls back only when another voice could reasonably succeed', () => {
+    expect(shouldTrySpeechFallback('voice-unavailable')).toBe(true)
+    expect(shouldTrySpeechFallback('network')).toBe(true)
+    expect(shouldTrySpeechFallback('synthesis-failed')).toBe(true)
+    expect(shouldTrySpeechFallback('timeout')).toBe(true)
+    expect(shouldTrySpeechFallback('audio-busy')).toBe(false)
+    expect(shouldTrySpeechFallback('audio-hardware')).toBe(false)
+    expect(shouldTrySpeechFallback('synthesis-unavailable')).toBe(false)
+    expect(shouldTrySpeechFallback('not-allowed')).toBe(false)
+    expect(shouldTrySpeechFallback('canceled')).toBe(false)
   })
 })
 
@@ -104,11 +132,52 @@ describe('lazy voice candidates', () => {
   const kyoko = namedVoice('ja-kyoko', 'ja')
   const english = namedVoice('en-ava', 'en-US')
 
-  it('shows Japanese candidates without requiring prior verification', () => {
-    expect(getCandidateVoices(
-      [english, ayumi, haruka],
-      new Set(['ja-haruka'])
-    )).toEqual([ayumi])
+  it('excludes candidates with a blank voice URI', () => {
+    expect(getCandidateVoiceOptions(
+      [namedVoice('', 'ja-JP'), namedVoice('   ', 'ja-JP'), ayumi],
+      new Set()
+    ).map(option => option.voice)).toEqual([ayumi])
+  })
+
+  it('keeps voices with the same URI independently available', () => {
+    const goodVoice = { voiceURI: 'shared-edge-uri', name: 'Working Natural', lang: 'ja-JP' }
+    const badVoice = { voiceURI: 'shared-edge-uri', name: 'Broken Natural', lang: 'ja-JP' }
+    const options = getCandidateVoiceOptions([goodVoice, badVoice], new Set())
+
+    expect(options.map(option => option.voice)).toEqual([goodVoice, badVoice])
+    expect(new Set(options.map(option => option.id)).size).toBe(2)
+    expect(getCandidateVoiceOptions(
+      [goodVoice, badVoice],
+      new Set([options[1].id])
+    ).map(option => option.voice)).toEqual([goodVoice])
+  })
+
+  it('labels otherwise identical voices separately', () => {
+    const duplicateA = { voiceURI: 'same', name: 'Microsoft Natural', lang: 'ja-JP' }
+    const duplicateB = { voiceURI: 'same', name: 'Microsoft Natural', lang: 'ja-JP' }
+    const options = getCandidateVoiceOptions(
+      [duplicateA, duplicateB, { voiceURI: '', name: 'Blank', lang: 'ja-JP' }],
+      new Set()
+    )
+
+    expect(options.map(option => option.label)).toEqual([
+      'Microsoft Natural (1)',
+      'Microsoft Natural (2)'
+    ])
+    expect(new Set(options.map(option => option.id)).size).toBe(2)
+  })
+
+  it('orders same-URI options by their independent IDs', () => {
+    const firstVoice = { voiceURI: 'shared', name: 'First', lang: 'ja-JP' }
+    const secondVoice = { voiceURI: 'shared', name: 'Second', lang: 'ja-JP' }
+    const options = getCandidateVoiceOptions([firstVoice, secondVoice], new Set())
+
+    expect(orderSpeechCandidates(
+      options,
+      options[1].id,
+      new Set([options[0].id]),
+      'ja-JP'
+    )).toEqual([options[1], options[0]])
   })
 
   it('orders a preferred voice before verified and remaining candidates', () => {

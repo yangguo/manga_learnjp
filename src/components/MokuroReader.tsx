@@ -28,6 +28,7 @@ import { calibrateAnalysisRecord, isPersistableAnalysis } from '@/lib/jlpt-calib
 import { getJLPTDictionary } from '@/lib/jlpt-dictionary'
 import { getJLPTGrammarDictionary } from '@/lib/jlpt-grammar-dictionary'
 import { GRAMMAR_JLPT_DATASET_VERSION, JLPT_DATASET_VERSION } from '@/lib/jlpt-levels'
+import { isSpeechCancellation, shouldRemoveVoice } from '@/lib/speech'
 import {
   createMokuroProgressKey,
   restoreMokuroProgress,
@@ -179,6 +180,8 @@ const UI_TEXT = {
     voiceLabel: '音色',
     voiceAuto: '自动',
     voiceUnavailable: '该音色当前不可用，已从列表移除。',
+    voiceValidationFailed: '无法验证该音色，请检查网络或浏览器语音权限后重试。',
+    speechFailed: '朗读失败，请检查网络、系统音频或浏览器语音权限后重试。',
     batchComplete: '本页批量分析完成',
     analyzeRange: '批量分析范围',
     analyzingRange: '正在分析范围...',
@@ -234,6 +237,8 @@ const UI_TEXT = {
     voiceLabel: 'Voice',
     voiceAuto: 'Auto',
     voiceUnavailable: 'This voice is unavailable and was removed from the list.',
+    voiceValidationFailed: 'Could not validate this voice. Check your network or browser speech permissions and try again.',
+    speechFailed: 'Speech failed. Check your network, system audio, or browser speech permissions and try again.',
     batchComplete: 'Page batch analysis complete',
     analyzeRange: 'Analyze range',
     analyzingRange: 'Analyzing range...',
@@ -348,41 +353,48 @@ export default function MokuroReader() {
   const analysisScrollRef = useRef<HTMLDivElement | null>(null)
   const batchAbortControllerRef = useRef<AbortController | null>(null)
   const { selectedProvider } = useAIProviderStore()
-  const [voiceURI, setVoiceURI] = useState<string | null>(null)
+  const [voiceId, setVoiceId] = useState<string | null>(null)
   const {
     speak,
     cancel: cancelSpeech,
     supported: speechSupported,
     ready: speechReady,
     candidateVoices,
-    validatingVoiceURI,
+    validatingVoiceId,
     validateVoice
-  } = useSpeech({ voiceURI })
+  } = useSpeech({ voiceId })
   const speakSelection = (text: string) => {
     if (!speechSupported || !text.trim()) return
     void speak(text).then(result => {
-      // Only hint at a missing voice once the browser has populated its list,
-      // so asynchronous loading never creates a false warning.
-      if (!result.started && speechReady && !validatingVoiceURI && !speechHintShownRef.current) {
-        speechHintShownRef.current = true
-        toast(UI_TEXT[analysisLanguage].noJapaneseVoice)
-      }
+      if (result.started || isSpeechCancellation(result.reason)) return
+      // Only hint once the browser has populated its list, so asynchronous
+      // loading never creates a false warning.
+      if (!speechReady || validatingVoiceId || speechHintShownRef.current) return
+
+      speechHintShownRef.current = true
+      toast(result.reason === 'no-voice'
+        ? UI_TEXT[analysisLanguage].noJapaneseVoice
+        : UI_TEXT[analysisLanguage].speechFailed)
     })
   }
 
   const t = UI_TEXT[analysisLanguage]
 
-  const handleVoiceChange = (nextVoiceURI: string) => {
-    if (!nextVoiceURI) {
-      setVoiceURI(null)
+  const handleVoiceChange = (nextVoiceId: string) => {
+    if (!nextVoiceId) {
+      setVoiceId(null)
       return
     }
 
-    void validateVoice(nextVoiceURI).then(valid => {
-      if (valid) {
-        setVoiceURI(nextVoiceURI)
-      } else {
+    void validateVoice(nextVoiceId).then(result => {
+      if (result.started) {
+        setVoiceId(nextVoiceId)
+      } else if (isSpeechCancellation(result.reason) || result.reason === 'validation-in-progress') {
+        return
+      } else if (shouldRemoveVoice(result.reason)) {
         toast(UI_TEXT[analysisLanguage].voiceUnavailable)
+      } else {
+        toast(UI_TEXT[analysisLanguage].voiceValidationFailed)
       }
     })
   }
@@ -440,11 +452,11 @@ export default function MokuroReader() {
   }, [currentPageIndex, mokuroFile, mokuroProgressKey, selectedBlock])
 
   useEffect(() => {
-    if (!voiceURI) return
-    if (!candidateVoices.some(voice => voice.voiceURI === voiceURI)) {
-      setVoiceURI(null)
+    if (!voiceId) return
+    if (!candidateVoices.some(option => option.id === voiceId)) {
+      setVoiceId(null)
     }
-  }, [candidateVoices, voiceURI])
+  }, [candidateVoices, voiceId])
 
   // Indices of blocks with text on the current page; empty blocks are skipped
   // so keyboard navigation never lands on an unanalyzable target.
@@ -1186,17 +1198,17 @@ export default function MokuroReader() {
                 <Volume2 size={16} className="text-cyan-300" />
                 <span className="text-xs text-gray-400">{t.voiceLabel}</span>
                 <select
-                  value={voiceURI ?? ''}
+                  value={voiceId ?? ''}
                   onChange={event => handleVoiceChange(event.target.value)}
                   aria-label={t.voiceLabel}
                   title={t.voiceLabel}
-                  disabled={Boolean(validatingVoiceURI) || candidateVoices.length === 0}
+                  disabled={Boolean(validatingVoiceId) || candidateVoices.length === 0}
                   className="h-7 rounded-md border border-white/10 bg-gray-950 px-2 text-sm text-white"
                 >
                   <option value="">{t.voiceAuto}</option>
-                  {candidateVoices.map(voice => (
-                    <option key={voice.voiceURI} value={voice.voiceURI}>
-                      {voice.name}
+                  {candidateVoices.map(option => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
                     </option>
                   ))}
                 </select>
