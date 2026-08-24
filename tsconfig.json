@@ -38,6 +38,8 @@
   ],
   "exclude": [
     "node_modules",
-    "netlify"
+    "netlify",
+    "**/*.test.ts",
+    "**/*.test.tsx"
   ]
 }
