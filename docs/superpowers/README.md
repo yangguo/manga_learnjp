@@ -43,3 +43,7 @@ CI 通过 `npm run check:docs`(`scripts/check-docs-index.mjs`)校验本索引列
 - **OPENAI_BASE_URL 修复** — OpenAIService 尊重 `OPENAI_BASE_URL`(ARK 等兼容端点)+ 真实错误透传。 [plan](plans/2026-07-13-openai-base-url.md)
 - **文本分析超时加固** — 修复超时重试放大、加有界批并发与逐批重试、超时 env 可调。 [spec](specs/2026-07-14-text-analysis-timeout-design.md) · [plan](plans/2026-07-14-text-analysis-timeout.md)
 - **文本阅读逐句分栏** - 文本结果改左右分栏:左侧逐句列表点击切换,右侧显示选中句的翻译/词汇/语法,复用 MokuroAnalysisPanel。 [plan](plans/2026-07-14-text-sentence-viewer.md)
+
+## 工程维护
+
+- **Dependabot 仅安全更新** — 禁止普通版本更新混入安全分组,保留根项目和 Netlify 的分组安全修复。 [plan](plans/2026-07-21-dependabot-security-only.md)
